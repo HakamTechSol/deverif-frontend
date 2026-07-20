@@ -19,6 +19,11 @@ import { Route as AppRequestsRouteImport } from './routes/_app.requests'
 import { Route as AppPaymentsRouteImport } from './routes/_app.payments'
 import { Route as AppInboxRouteImport } from './routes/_app.inbox'
 import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
+import { Route as AppAdminUsersRouteImport } from './routes/_app.admin.users'
+import { Route as AppAdminRequestsRouteImport } from './routes/_app.admin.requests'
+import { Route as AppAdminPaymentsRouteImport } from './routes/_app.admin.payments'
+import { Route as AppAdminOrganizationsRouteImport } from './routes/_app.admin.organizations'
+import { Route as AppAdminNullRequestsRouteImport } from './routes/_app.admin.null-requests'
 
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
@@ -69,6 +74,31 @@ const AppDashboardRoute = AppDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AppRoute,
 } as any)
+const AppAdminUsersRoute = AppAdminUsersRouteImport.update({
+  id: '/admin/users',
+  path: '/admin/users',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAdminRequestsRoute = AppAdminRequestsRouteImport.update({
+  id: '/admin/requests',
+  path: '/admin/requests',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAdminPaymentsRoute = AppAdminPaymentsRouteImport.update({
+  id: '/admin/payments',
+  path: '/admin/payments',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAdminOrganizationsRoute = AppAdminOrganizationsRouteImport.update({
+  id: '/admin/organizations',
+  path: '/admin/organizations',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAdminNullRequestsRoute = AppAdminNullRequestsRouteImport.update({
+  id: '/admin/null-requests',
+  path: '/admin/null-requests',
+  getParentRoute: () => AppRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -80,6 +110,11 @@ export interface FileRoutesByFullPath {
   '/payments': typeof AppPaymentsRoute
   '/requests': typeof AppRequestsRoute
   '/settings': typeof AppSettingsRoute
+  '/admin/null-requests': typeof AppAdminNullRequestsRoute
+  '/admin/organizations': typeof AppAdminOrganizationsRoute
+  '/admin/payments': typeof AppAdminPaymentsRoute
+  '/admin/requests': typeof AppAdminRequestsRoute
+  '/admin/users': typeof AppAdminUsersRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -91,6 +126,11 @@ export interface FileRoutesByTo {
   '/payments': typeof AppPaymentsRoute
   '/requests': typeof AppRequestsRoute
   '/settings': typeof AppSettingsRoute
+  '/admin/null-requests': typeof AppAdminNullRequestsRoute
+  '/admin/organizations': typeof AppAdminOrganizationsRoute
+  '/admin/payments': typeof AppAdminPaymentsRoute
+  '/admin/requests': typeof AppAdminRequestsRoute
+  '/admin/users': typeof AppAdminUsersRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -104,6 +144,11 @@ export interface FileRoutesById {
   '/_app/payments': typeof AppPaymentsRoute
   '/_app/requests': typeof AppRequestsRoute
   '/_app/settings': typeof AppSettingsRoute
+  '/_app/admin/null-requests': typeof AppAdminNullRequestsRoute
+  '/_app/admin/organizations': typeof AppAdminOrganizationsRoute
+  '/_app/admin/payments': typeof AppAdminPaymentsRoute
+  '/_app/admin/requests': typeof AppAdminRequestsRoute
+  '/_app/admin/users': typeof AppAdminUsersRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -117,6 +162,11 @@ export interface FileRouteTypes {
     | '/payments'
     | '/requests'
     | '/settings'
+    | '/admin/null-requests'
+    | '/admin/organizations'
+    | '/admin/payments'
+    | '/admin/requests'
+    | '/admin/users'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -128,6 +178,11 @@ export interface FileRouteTypes {
     | '/payments'
     | '/requests'
     | '/settings'
+    | '/admin/null-requests'
+    | '/admin/organizations'
+    | '/admin/payments'
+    | '/admin/requests'
+    | '/admin/users'
   id:
     | '__root__'
     | '/'
@@ -140,6 +195,11 @@ export interface FileRouteTypes {
     | '/_app/payments'
     | '/_app/requests'
     | '/_app/settings'
+    | '/_app/admin/null-requests'
+    | '/_app/admin/organizations'
+    | '/_app/admin/payments'
+    | '/_app/admin/requests'
+    | '/_app/admin/users'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -222,6 +282,41 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppDashboardRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/admin/users': {
+      id: '/_app/admin/users'
+      path: '/admin/users'
+      fullPath: '/admin/users'
+      preLoaderRoute: typeof AppAdminUsersRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/admin/requests': {
+      id: '/_app/admin/requests'
+      path: '/admin/requests'
+      fullPath: '/admin/requests'
+      preLoaderRoute: typeof AppAdminRequestsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/admin/payments': {
+      id: '/_app/admin/payments'
+      path: '/admin/payments'
+      fullPath: '/admin/payments'
+      preLoaderRoute: typeof AppAdminPaymentsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/admin/organizations': {
+      id: '/_app/admin/organizations'
+      path: '/admin/organizations'
+      fullPath: '/admin/organizations'
+      preLoaderRoute: typeof AppAdminOrganizationsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/admin/null-requests': {
+      id: '/_app/admin/null-requests'
+      path: '/admin/null-requests'
+      fullPath: '/admin/null-requests'
+      preLoaderRoute: typeof AppAdminNullRequestsRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
@@ -231,6 +326,11 @@ interface AppRouteChildren {
   AppPaymentsRoute: typeof AppPaymentsRoute
   AppRequestsRoute: typeof AppRequestsRoute
   AppSettingsRoute: typeof AppSettingsRoute
+  AppAdminNullRequestsRoute: typeof AppAdminNullRequestsRoute
+  AppAdminOrganizationsRoute: typeof AppAdminOrganizationsRoute
+  AppAdminPaymentsRoute: typeof AppAdminPaymentsRoute
+  AppAdminRequestsRoute: typeof AppAdminRequestsRoute
+  AppAdminUsersRoute: typeof AppAdminUsersRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
@@ -239,6 +339,11 @@ const AppRouteChildren: AppRouteChildren = {
   AppPaymentsRoute: AppPaymentsRoute,
   AppRequestsRoute: AppRequestsRoute,
   AppSettingsRoute: AppSettingsRoute,
+  AppAdminNullRequestsRoute: AppAdminNullRequestsRoute,
+  AppAdminOrganizationsRoute: AppAdminOrganizationsRoute,
+  AppAdminPaymentsRoute: AppAdminPaymentsRoute,
+  AppAdminRequestsRoute: AppAdminRequestsRoute,
+  AppAdminUsersRoute: AppAdminUsersRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
