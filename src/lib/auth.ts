@@ -1,0 +1,60 @@
+import { useSyncExternalStore } from "react";
+
+export type Role = "admin" | "user";
+export type AuthUser = {
+  uuid: string;
+  full_name: string;
+  email: string;
+  role: Role;
+  profile_image?: string | null;
+  phone?: string | null;
+};
+
+const listeners = new Set<() => void>();
+const emit = () => listeners.forEach((l) => l());
+
+function read(): { token: string | null; user: AuthUser | null } {
+  if (typeof window === "undefined") return { token: null, user: null };
+  const token = window.localStorage.getItem("dvarif_token");
+  const raw = window.localStorage.getItem("dvarif_user");
+  let user: AuthUser | null = null;
+  try {
+    user = raw ? (JSON.parse(raw) as AuthUser) : null;
+  } catch {
+    user = null;
+  }
+  return { token, user };
+}
+
+export const authStore = {
+  get: read,
+  subscribe(cb: () => void) {
+    listeners.add(cb);
+    return () => {
+      listeners.delete(cb);
+    };
+  },
+  setSession(token: string, user: AuthUser) {
+    window.localStorage.setItem("dvarif_token", token);
+    window.localStorage.setItem("dvarif_user", JSON.stringify(user));
+    emit();
+  },
+  updateUser(user: AuthUser) {
+    window.localStorage.setItem("dvarif_user", JSON.stringify(user));
+    emit();
+  },
+  clear() {
+    window.localStorage.removeItem("dvarif_token");
+    window.localStorage.removeItem("dvarif_user");
+    emit();
+  },
+};
+
+const serverSnap = { token: null as string | null, user: null as AuthUser | null };
+export function useAuth() {
+  return useSyncExternalStore(
+    authStore.subscribe,
+    authStore.get,
+    () => serverSnap,
+  );
+}

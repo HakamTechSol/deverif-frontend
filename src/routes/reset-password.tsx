@@ -1,0 +1,85 @@
+import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { useState } from "react";
+import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
+
+import logoFull from "@/assets/logo-full.png";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { authService } from "@/services";
+
+export const Route = createFileRoute("/reset-password")({
+  head: () => ({
+    meta: [
+      { title: "Reset password — Dvarif" },
+      { name: "description", content: "Choose a new password for your Dvarif account." },
+    ],
+  }),
+  component: ResetPasswordPage,
+});
+
+function ResetPasswordPage() {
+  const router = useRouter();
+  const [pw, setPw] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (pw.length < 8) return toast.error("Password must be at least 8 characters");
+    if (pw !== confirm) return toast.error("Passwords do not match");
+    const url = new URL(window.location.href);
+    const token = url.searchParams.get("token") ?? "";
+    if (!token) return toast.error("Missing or invalid reset token");
+    setLoading(true);
+    try {
+      await authService.resetPassword(token, pw);
+      toast.success("Password updated. Please sign in.");
+      router.navigate({ to: "/login" });
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message ?? "Reset failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+      <div className="w-full max-w-md">
+        <div className="mb-8 flex justify-center">
+          <img
+            src={logoFull}
+            alt="Dvarif"
+            className="h-12 w-auto object-contain dark:invert dark:brightness-0"
+          />
+        </div>
+        <div className="rounded-2xl border border-border bg-card p-8 shadow-sm">
+          <h1 className="text-xl font-semibold tracking-tight text-foreground">Set a new password</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Choose a strong password you haven't used before.
+          </p>
+          <form onSubmit={submit} className="mt-6 space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="pw">New password</Label>
+              <Input id="pw" type="password" required value={pw} onChange={(e) => setPw(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="cpw">Confirm password</Label>
+              <Input id="cpw" type="password" required value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+            </div>
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Updating…
+                </>
+              ) : (
+                "Update password"
+              )}
+            </Button>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+}
