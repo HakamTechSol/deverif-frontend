@@ -4,7 +4,9 @@ import { toast } from "sonner";
 import { Loader2, ShieldCheck, Building2, FileCheck2 } from "lucide-react";
 
 import logoFull from "@/assets/logo-full.png";
+import authCoverBg from "@/assets/auth-cover-login-bg.svg";
 import { Button } from "@/components/ui/button";
+import { PasswordInput } from "@/components/common/PasswordInput";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -33,14 +35,12 @@ function LoginPage() {
     setLoading(true);
     try {
       const res = await authService.login({ email, password, rememberMe });
-      const token: string | undefined = res?.token ?? res?.access_token ?? res?.data?.token;
-      const user: AuthUser | undefined = res?.user ?? res?.data?.user;
-      if (!token || !user) throw new Error("Invalid response from server");
-      authStore.setSession(token, user);
-      toast.success(`Welcome back, ${user.full_name.split(" ")[0]}`);
+      if (!res?.token || !res?.user) throw new Error("Invalid response from server");
+      authStore.setSession(res.token, res.user as AuthUser);
+      toast.success(`Welcome back, ${res.user.full_name.split(" ")[0]}`);
       router.navigate({ to: "/dashboard" });
     } catch (err: any) {
-      toast.error(err?.response?.data?.message ?? err?.message ?? "Sign in failed");
+      toast.error(err?.response?.data?.message ?? err?.message ?? "Invalid credentials");
     } finally {
       setLoading(false);
     }
@@ -91,9 +91,8 @@ function LoginPage() {
                   Forgot password?
                 </Link>
               </div>
-              <Input
+              <PasswordInput
                 id="password"
-                type="password"
                 autoComplete="current-password"
                 required
                 value={password}
@@ -128,8 +127,20 @@ function LoginPage() {
       </div>
 
       {/* Marketing column */}
-      <div className="relative hidden overflow-hidden border-l border-border bg-gradient-to-br from-primary/10 via-background to-background lg:block">
-        <div className="absolute inset-0 opacity-[0.06] [background-image:linear-gradient(to_right,var(--foreground)_1px,transparent_1px),linear-gradient(to_bottom,var(--foreground)_1px,transparent_1px)] [background-size:44px_44px]" />
+      <div className="relative hidden overflow-hidden border-l border-border bg-background lg:block">
+        <style>{`
+          @keyframes float {
+            0%, 100% { transform: translateY(0) scale(1.05); }
+            50% { transform: translateY(-18px) scale(1.05); }
+          }
+        `}</style>
+        <img
+          src={authCoverBg}
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover origin-center"
+          style={{ animation: "float 6s ease-in-out infinite" }}
+        />
+        <div className="absolute inset-0 bg-background/50 backdrop-blur-[2px]" />
         <div className="relative flex h-full flex-col justify-between p-12">
           <div>
             <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card/70 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur">

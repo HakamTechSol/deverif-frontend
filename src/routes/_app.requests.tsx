@@ -40,6 +40,7 @@ import {
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { requestsService, type VerificationRequest, type UUID } from "@/services";
+import { formatDate } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/requests")({
   head: () => ({ meta: [{ title: "My Requests — Dvarif" }] }),
@@ -132,7 +133,7 @@ function RequestsPage() {
                         {r.document_type}
                       </TableCell>
                       <TableCell className="text-muted-foreground">
-                        {r.issuing_organization?.name ?? (
+                        {r.issuing_org_name ?? (
                           <span className="italic">
                             {r.other_organization_name ?? "—"} (unmatched)
                           </span>
@@ -145,7 +146,7 @@ function RequestsPage() {
                         <PriorityBadge priority={r.priority} />
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">
-                        {new Date(r.submitted_at).toLocaleDateString()}
+                        {formatDate(r.submitted_at)}
                       </TableCell>
                       <TableCell className="text-xs uppercase text-muted-foreground">
                         {r.document_format ?? "PDF"}

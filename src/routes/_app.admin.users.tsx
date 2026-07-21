@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Pencil, Plus, Trash2, Users as UsersIcon } from "lucide-react";
+import { Pencil, Plus, Trash2, Users as UsersIcon, Mail } from "lucide-react";
 
 import { PageHeader } from "@/components/common/PageHeader";
 import { SearchInput } from "@/components/common/SearchInput";
@@ -39,7 +39,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { TableSkeleton } from "./_app.requests";
-import { adminService, type UserRecord, type UUID } from "@/services";
+import { adminService, type AdminUserRecord, type UUID } from "@/services";
+import { formatCNIC } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/admin/users")({
   head: () => ({ meta: [{ title: "Users — Dvarif Admin" }] }),
@@ -51,7 +52,7 @@ function AdminUsersPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [openForm, setOpenForm] = useState(false);
-  const [editing, setEditing] = useState<UserRecord | null>(null);
+  const [editing, setEditing] = useState<AdminUserRecord | null>(null);
   const [toDelete, setToDelete] = useState<UUID | null>(null);
 
   const list = useQuery({
@@ -66,6 +67,15 @@ function AdminUsersPage() {
       qc.invalidateQueries({ queryKey: ["admin-users"] });
     },
     onError: (e: any) => toast.error(e?.response?.data?.message ?? "Delete failed"),
+  });
+
+  const resendInvite = useMutation({
+    mutationFn: (uuid: UUID) => adminService.resendInvite(uuid),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-users"] });
+      toast.success("New invite link sent");
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.message ?? "Failed to resend invite"),
   });
 
   const items = list.data?.items ?? [];
@@ -114,7 +124,6 @@ function AdminUsersPage() {
                     <TableHead>Name</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Organization</TableHead>
-                    <TableHead>Role</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
@@ -125,26 +134,33 @@ function AdminUsersPage() {
                       <TableCell className="font-medium text-foreground">{u.full_name}</TableCell>
                       <TableCell className="text-muted-foreground">{u.email}</TableCell>
                       <TableCell className="text-muted-foreground">
-                        {u.organization?.name ?? "—"}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="rounded-full capitalize">
-                          {u.role}
-                        </Badge>
+                        {u.organization_name ?? "—"}
                       </TableCell>
                       <TableCell>
                         <Badge
                           variant="outline"
                           className={
-                            u.status === "suspended"
-                              ? "rounded-full border-destructive/30 bg-destructive/10 text-destructive"
+                            u.status === "inactive"
+                              ? "rounded-full border-amber-500/30 bg-amber-500/10 text-amber-600"
                               : "rounded-full border-success/30 bg-success/10 text-success"
                           }
                         >
-                          {u.status ?? "active"}
+                          {u.status === "inactive" ? "Invited" : "Active"}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
+                        {u.status === "inactive" && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                            title="Resend invite link"
+                            onClick={() => resendInvite.mutate(u.uuid)}
+                            disabled={resendInvite.isPending}
+                          >
+                            <Mail className="h-4 w-4" />
+                          </Button>
+                        )}
                         <Button
                           size="icon"
                           variant="ghost"
@@ -212,7 +228,7 @@ function UserFormDialog({
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
-  editing: UserRecord | null;
+  editing: AdminUserRecord | null;
   onDone: () => void;
 }) {
   const orgs = useQuery({
@@ -223,17 +239,17 @@ function UserFormDialog({
 
   const [fullName, setFullName] = useState(editing?.full_name ?? "");
   const [email, setEmail] = useState(editing?.email ?? "");
-  const [password, setPassword] = useState("");
+  const [cnic, setCnic] = useState(editing?.cnic ?? "");
   const [phone, setPhone] = useState(editing?.phone ?? "");
-  const [status, setStatus] = useState<"active" | "suspended">(editing?.status ?? "active");
+  const [status, setStatus] = useState<"active" | "inactive">(editing?.status ?? "active");
   const [orgMode, setOrgMode] = useState<"existing" | "new">("existing");
-  const [orgUuid, setOrgUuid] = useState<string>(editing?.organization?.uuid ?? "");
-  const [newOrgName, setNewOrgName] = useState("");
-  const [newOrgType, setNewOrgType] = useState<
-    "education" | "government" | "software_house"
-  >("software_house");
+  const [orgName, setOrgName] = useState(editing?.organization_name ?? "");
+  const [newOrgType, setNewOrgType] = useState<string>("software_house");
   const [newOrgVerified, setNewOrgVerified] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+
+  const orgList = orgs.data?.items ?? [];
+  const selectedOrg = orgList.find((o) => o.name === orgName);
 
   const submit = async () => {
     setSubmitting(true);
@@ -246,21 +262,29 @@ function UserFormDialog({
         });
         toast.success("User updated");
       } else {
+        if (!fullName || !email || !cnic) {
+          toast.error("Name, email and CNIC are required");
+          setSubmitting(false);
+          return;
+        }
+
+        const orgPayload =
+          orgMode === "existing" && selectedOrg
+            ? { name: selectedOrg.name }
+            : { name: orgName, verified: newOrgVerified ? "yes" : "no", organization_type: newOrgType };
+
         const form = new FormData();
-        form.append(
-          "organization",
-          JSON.stringify(
-            orgMode === "existing"
-              ? { uuid: orgUuid }
-              : { name: newOrgName, verified: newOrgVerified, organization_type: newOrgType },
-          ),
-        );
+        form.append("organization", JSON.stringify(orgPayload));
         form.append(
           "user",
-          JSON.stringify({ full_name: fullName, email, password, phone }),
+          JSON.stringify({ full_name: fullName, email, phone, cnic }),
         );
-        await adminService.createUser(form);
-        toast.success("User created");
+        const result = await adminService.createUser(form);
+        if (result._email_warning) {
+          toast.warning("User created but invite email failed. Use Resend Invite to retry.");
+        } else {
+          toast.success("User created. Invite email sent.");
+        }
       }
       onDone();
     } catch (e: any) {
@@ -292,14 +316,18 @@ function UserFormDialog({
               />
             </div>
             {!editing ? (
-              <div className="space-y-2 sm:col-span-2">
-                <Label>Password</Label>
-                <Input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-              </div>
+              <>
+                <div className="space-y-2">
+                  <Label>CNIC</Label>
+                  <Input
+                    value={cnic}
+                    onChange={(e) => setCnic(formatCNIC(e.target.value))}
+                    placeholder="35202-1234567-1"
+                    maxLength={15}
+                    inputMode="numeric"
+                  />
+                </div>
+              </>
             ) : null}
             <div className="space-y-2">
               <Label>Phone</Label>
@@ -314,7 +342,7 @@ function UserFormDialog({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="suspended">Suspended</SelectItem>
+                    <SelectItem value="inactive">Inactive</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -351,13 +379,13 @@ function UserFormDialog({
                   </button>
                 </div>
                 {orgMode === "existing" ? (
-                  <Select value={orgUuid} onValueChange={setOrgUuid}>
+                  <Select value={orgName} onValueChange={setOrgName}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select organization" />
                     </SelectTrigger>
                     <SelectContent>
-                      {(orgs.data?.items ?? []).map((o) => (
-                        <SelectItem key={o.uuid} value={o.uuid}>
+                      {orgList.map((o) => (
+                        <SelectItem key={o.uuid} value={o.name}>
                           {o.name}
                         </SelectItem>
                       ))}
@@ -368,15 +396,15 @@ function UserFormDialog({
                     <div className="space-y-2 sm:col-span-2">
                       <Label>Name</Label>
                       <Input
-                        value={newOrgName}
-                        onChange={(e) => setNewOrgName(e.target.value)}
+                        value={orgName}
+                        onChange={(e) => setOrgName(e.target.value)}
                       />
                     </div>
                     <div className="space-y-2">
                       <Label>Type</Label>
                       <Select
                         value={newOrgType}
-                        onValueChange={(v) => setNewOrgType(v as any)}
+                        onValueChange={(v) => setNewOrgType(v)}
                       >
                         <SelectTrigger>
                           <SelectValue />

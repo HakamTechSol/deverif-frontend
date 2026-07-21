@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/table";
 import { TableSkeleton } from "./_app.requests";
 import { requestsService, type VerificationRequest } from "@/services";
+import { formatDate, formatDateTime, resolveAssetUrl } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/inbox")({
   head: () => ({ meta: [{ title: "Inbox — Dvarif" }] }),
@@ -99,9 +100,9 @@ function InboxPage() {
                   {items.map((r) => (
                     <TableRow key={r.uuid}>
                       <TableCell className="font-medium text-foreground">
-                        <div>{r.submitted_by?.full_name ?? "—"}</div>
+                        <div>{r.requester_name ?? "—"}</div>
                         <div className="text-xs text-muted-foreground">
-                          {r.submitted_by?.organization?.name ?? r.submitted_by?.email}
+                          {r.requester_organization ?? r.requester_email}
                         </div>
                       </TableCell>
                       <TableCell className="text-muted-foreground">{r.document_type}</TableCell>
@@ -112,7 +113,7 @@ function InboxPage() {
                         <PriorityBadge priority={r.priority} />
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">
-                        {new Date(r.submitted_at).toLocaleDateString()}
+                        {formatDate(r.submitted_at)}
                       </TableCell>
                       <TableCell className="text-xs uppercase text-muted-foreground">
                         {r.document_format ?? "PDF"}
@@ -142,6 +143,7 @@ function InboxPage() {
         onClose={() => setActive(null)}
         onDone={() => {
           qc.invalidateQueries({ queryKey: ["inbox"] });
+          qc.invalidateQueries({ queryKey: ["inbox-count"] });
           setActive(null);
         }}
       />
@@ -197,9 +199,9 @@ function VerifyDialog({
                     {request.document_type}
                   </div>
                 </div>
-                {request.document_url ? (
+                {request.document_path ? (
                   <a
-                    href={request.document_url}
+                    href={resolveAssetUrl(request.document_path) ?? request.document_path}
                     target="_blank"
                     rel="noreferrer"
                     className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground hover:bg-accent"
@@ -212,9 +214,9 @@ function VerifyDialog({
                 Document preview
               </div>
               <dl className="mt-4 grid grid-cols-2 gap-3 text-xs">
-                <MetaRow label="Requester" value={request.submitted_by?.full_name ?? "—"} />
-                <MetaRow label="Company" value={request.submitted_by?.organization?.name ?? "—"} />
-                <MetaRow label="Submitted" value={new Date(request.submitted_at).toLocaleString()} />
+                <MetaRow label="Requester" value={request.requester_name ?? "—"} />
+                <MetaRow label="Company" value={request.requester_organization ?? "—"} />
+                <MetaRow label="Submitted" value={formatDateTime(request.submitted_at)} />
                 <MetaRow label="Priority" value={request.priority} />
               </dl>
             </div>

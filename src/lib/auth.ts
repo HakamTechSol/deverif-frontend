@@ -13,17 +13,25 @@ export type AuthUser = {
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((l) => l());
 
+let cachedToken: string | null = null;
+let cachedRaw: string | null = null;
+let cachedSnapshot: { token: string | null; user: AuthUser | null } = { token: null, user: null };
+
 function read(): { token: string | null; user: AuthUser | null } {
   if (typeof window === "undefined") return { token: null, user: null };
   const token = window.localStorage.getItem("dvarif_token");
   const raw = window.localStorage.getItem("dvarif_user");
+  if (token === cachedToken && raw === cachedRaw) return cachedSnapshot;
   let user: AuthUser | null = null;
   try {
     user = raw ? (JSON.parse(raw) as AuthUser) : null;
   } catch {
     user = null;
   }
-  return { token, user };
+  cachedToken = token;
+  cachedRaw = raw;
+  cachedSnapshot = { token, user };
+  return cachedSnapshot;
 }
 
 export const authStore = {

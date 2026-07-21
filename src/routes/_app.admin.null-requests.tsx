@@ -1,11 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
 
 import { PageHeader } from "@/components/common/PageHeader";
 import { EmptyState } from "@/components/common/EmptyState";
+import { Pagination } from "@/components/common/Pagination";
 import { PriorityBadge } from "@/components/common/StatusBadge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -28,22 +29,25 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { adminService, type VerificationRequest } from "@/services";
+import { formatDate } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/admin/null-requests")({
   head: () => ({ meta: [{ title: "Unmatched Organizations — Dvarif Admin" }] }),
   component: NullRequestsPage,
 });
 
+const PAGE_SIZE = 12;
+
 function NullRequestsPage() {
+  const [page, setPage] = useState(1);
+
   const q = useQuery({
-    queryKey: ["null-org-requests"],
-    queryFn: () => adminService.nullOrgRequests(),
+    queryKey: ["null-org-requests", page],
+    queryFn: () => adminService.nullOrgRequests({ page, limit: PAGE_SIZE }),
   });
 
-  const items = useMemo<VerificationRequest[]>(() => {
-    if (!q.data) return [];
-    return Array.isArray(q.data) ? q.data : (q.data.items ?? []);
-  }, [q.data]);
+  const items = q.data?.items ?? [];
+  const totalPages = q.data?.totalPages ?? 1;
 
   const [active, setActive] = useState<VerificationRequest | null>(null);
 
@@ -67,51 +71,58 @@ function NullRequestsPage() {
           description="Every submitted request is already matched to a verified organization."
         />
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {items.map((r) => (
-            <Card key={r.uuid} className="border-border/70 shadow-none">
-              <CardContent className="p-5">
-                <div className="flex items-start justify-between">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-md bg-warning/15 text-warning-foreground dark:text-warning">
-                    <AlertTriangle className="h-4 w-4" />
+        <>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {items.map((r) => (
+              <Card key={r.uuid} className="border-border/70 shadow-none">
+                <CardContent className="p-5">
+                  <div className="flex items-start justify-between">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-md bg-warning/15 text-warning-foreground dark:text-warning">
+                      <AlertTriangle className="h-4 w-4" />
+                    </div>
+                    <PriorityBadge priority={r.priority} />
                   </div>
-                  <PriorityBadge priority={r.priority} />
-                </div>
-                <div className="mt-4">
-                  <div className="text-xs font-medium uppercase text-muted-foreground">
-                    Claimed organization
+                  <div className="mt-4">
+                    <div className="text-xs font-medium uppercase text-muted-foreground">
+                      Claimed organization
+                    </div>
+                    <div className="mt-1 text-base font-semibold text-foreground">
+                      {r.other_organization_name ?? "Unnamed"}
+                    </div>
                   </div>
-                  <div className="mt-1 text-base font-semibold text-foreground">
-                    {r.other_organization_name ?? "Unnamed"}
-                  </div>
-                </div>
-                <dl className="mt-4 space-y-1.5 text-xs">
-                  <div className="flex justify-between">
-                    <dt className="text-muted-foreground">Document</dt>
-                    <dd className="font-medium text-foreground">{r.document_type}</dd>
-                  </div>
-                  <div className="flex justify-between">
-                    <dt className="text-muted-foreground">Requester</dt>
-                    <dd className="text-foreground">{r.submitted_by?.full_name ?? "—"}</dd>
-                  </div>
-                  <div className="flex justify-between">
-                    <dt className="text-muted-foreground">Submitted</dt>
-                    <dd className="text-foreground">
-                      {new Date(r.submitted_at).toLocaleDateString()}
-                    </dd>
-                  </div>
-                </dl>
-                <Button
-                  size="sm"
-                  className="mt-5 w-full"
-                  onClick={() => setActive(r)}
-                >
-                  Accept & assign organization
-                </Button>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+                  <dl className="mt-4 space-y-1.5 text-xs">
+                    <div className="flex justify-between">
+                      <dt className="text-muted-foreground">Document</dt>
+                      <dd className="font-medium text-foreground">{r.document_type}</dd>
+                    </div>
+                    <div className="flex justify-between">
+                      <dt className="text-muted-foreground">Requester</dt>
+                      <dd className="text-foreground">{r.requester_name ?? "—"}</dd>
+                    </div>
+                    <div className="flex justify-between">
+                      <dt className="text-muted-foreground">Submitted</dt>
+                      <dd className="text-foreground">
+                        {formatDate(r.submitted_at)}
+                      </dd>
+                    </div>
+                  </dl>
+                  <Button
+                    size="sm"
+                    className="mt-5 w-full"
+                    onClick={() => setActive(r)}
+                  >
+                    Accept & assign organization
+                  </Button>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          {totalPages > 1 && (
+            <div className="mt-6">
+              <Pagination page={page} totalPages={totalPages} total={q.data?.total ?? 0} onChange={setPage} />
+            </div>
+          )}
+        </>
       )}
 
       <AssignDialog request={active} onClose={() => setActive(null)} />

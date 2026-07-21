@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Building2, Pencil, Plus, ShieldCheck, Trash2, UploadCloud } from "lucide-react";
+import { Building2, Pencil, Plus, ShieldCheck, Trash2, UploadCloud, CreditCard } from "lucide-react";
 
 import { PageHeader } from "@/components/common/PageHeader";
 import { SearchInput } from "@/components/common/SearchInput";
@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/table";
 import { TableSkeleton } from "./_app.requests";
 import { adminService, type Organization, type UUID } from "@/services";
+import { formatDate, resolveAssetUrl } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/admin/organizations")({
   head: () => ({ meta: [{ title: "Organizations — Dvarif Admin" }] }),
@@ -112,6 +113,7 @@ function AdminOrgsPage() {
                     <TableHead>Name</TableHead>
                     <TableHead>Type</TableHead>
                     <TableHead>Verified</TableHead>
+                    <TableHead>Subscription</TableHead>
                     <TableHead>Added</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
@@ -123,7 +125,7 @@ function AdminOrgsPage() {
                         <div className="flex items-center gap-3">
                           {o.logo ? (
                             <img
-                              src={o.logo}
+                              src={resolveAssetUrl(o.logo)}
                               className="h-8 w-8 rounded-md border border-border object-cover"
                               alt={o.name}
                             />
@@ -139,7 +141,7 @@ function AdminOrgsPage() {
                         {o.organization_type?.replace("_", " ")}
                       </TableCell>
                       <TableCell>
-                        {o.verified ? (
+                        {o.verified === "yes" ? (
                           <Badge className="rounded-full border-success/30 bg-success/10 text-success" variant="outline">
                             <ShieldCheck className="mr-1 h-3 w-3" /> Verified
                           </Badge>
@@ -149,8 +151,11 @@ function AdminOrgsPage() {
                           </Badge>
                         )}
                       </TableCell>
+                      <TableCell>
+                        <OrgSubscriptionBadge org={o} />
+                      </TableCell>
                       <TableCell className="text-xs text-muted-foreground">
-                        {o.created_at ? new Date(o.created_at).toLocaleDateString() : "—"}
+                        {formatDate(o.created_at)}
                       </TableCell>
                       <TableCell className="text-right">
                         <Button
@@ -233,7 +238,7 @@ function OrgFormDialog({
     if (open) {
       setName(editing?.name ?? "");
       setType((editing?.organization_type as any) ?? "software_house");
-      setVerified(editing?.verified ?? true);
+      setVerified(editing?.verified === "yes");
       setLogo(null);
     }
   }, [open, editing]);
@@ -243,7 +248,7 @@ function OrgFormDialog({
     try {
       const form = new FormData();
       form.append("name", name);
-      form.append("verified", String(verified));
+      form.append("verified", verified ? "yes" : "no");
       form.append("organization_type", type);
       if (logo) form.append("logo", logo);
       if (editing) {
@@ -299,22 +304,45 @@ function OrgFormDialog({
           </div>
           <div className="space-y-2">
             <Label>Logo</Label>
-            <label
-              htmlFor="org-logo"
-              className="flex cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-border bg-muted/40 px-4 py-5 text-center hover:bg-muted/60"
-            >
-              <UploadCloud className="mb-1.5 h-5 w-5 text-muted-foreground" />
-              <span className="text-sm text-foreground">
-                {logo ? logo.name : "Upload logo (PNG or JPG)"}
-              </span>
-              <input
-                id="org-logo"
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => setLogo(e.target.files?.[0] ?? null)}
-              />
-            </label>
+            {(editing?.logo && !logo) ? (
+              <div className="relative flex flex-col items-center justify-center rounded-lg border border-border bg-muted/40 px-4 py-5 text-center">
+                <img
+                  src={resolveAssetUrl(editing.logo)}
+                  alt={editing.name}
+                  className="mb-2 h-16 w-16 rounded-md border border-border object-cover"
+                />
+                <label
+                  htmlFor="org-logo"
+                  className="cursor-pointer text-xs font-medium text-primary hover:underline"
+                >
+                  Replace logo
+                </label>
+                <input
+                  id="org-logo"
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => setLogo(e.target.files?.[0] ?? null)}
+                />
+              </div>
+            ) : (
+              <label
+                htmlFor="org-logo"
+                className="flex cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-border bg-muted/40 px-4 py-5 text-center hover:bg-muted/60"
+              >
+                <UploadCloud className="mb-1.5 h-5 w-5 text-muted-foreground" />
+                <span className="text-sm text-foreground">
+                  {logo ? logo.name : "Upload logo (PNG or JPG)"}
+                </span>
+                <input
+                  id="org-logo"
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => setLogo(e.target.files?.[0] ?? null)}
+                />
+              </label>
+            )}
           </div>
         </div>
 
@@ -328,5 +356,32 @@ function OrgFormDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function OrgSubscriptionBadge({ org }: { org: Organization }) {
+  if (org.subscription_status === "active" && org.subscription_expiry) {
+    const expiryDate = new Date(String(org.subscription_expiry).replace(" ", "T"));
+    const now = new Date();
+    const daysLeft = Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    return (
+      <Badge className="rounded-full border-success/30 bg-success/10 text-success" variant="outline">
+        <CreditCard className="mr-1 h-3 w-3" />
+        Active
+        <span className="ml-1 text-xs font-normal">({daysLeft}d)</span>
+      </Badge>
+    );
+  }
+  if (org.subscription_status === "expired") {
+    return (
+      <Badge className="rounded-full border-destructive/30 bg-destructive/10 text-destructive" variant="outline">
+        <CreditCard className="mr-1 h-3 w-3" /> Expired
+      </Badge>
+    );
+  }
+  return (
+    <Badge variant="outline" className="rounded-full text-muted-foreground">
+      No subscription
+    </Badge>
   );
 }

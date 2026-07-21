@@ -1,5 +1,6 @@
 import { Link, useRouter, useRouterState } from "@tanstack/react-router";
-import { useState, type ReactNode } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
   LayoutDashboard,
@@ -19,6 +20,8 @@ import {
   Sun,
   ChevronDown,
   UserCircle2,
+  Bell,
+  CheckCheck,
 } from "lucide-react";
 import { Logo } from "@/components/common/Logo";
 import { Button } from "@/components/ui/button";
@@ -33,13 +36,13 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { authStore, useAuth } from "@/lib/auth";
 import { useTheme } from "@/lib/theme";
-import { authService } from "@/services";
-import { cn } from "@/lib/utils";
+import { authService, requestsService, notificationService } from "@/services";
+import { cn, resolveAssetUrl, formatDateTime } from "@/lib/utils";
 import type { LucideIcon } from "lucide-react";
 
-type NavItem = { to: string; label: string; icon: LucideIcon };
+type NavItem = { to: string; label: string; icon: LucideIcon; badge?: number };
 
-const userNav: NavItem[] = [
+const userNavItems: NavItem[] = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/requests", label: "My Requests", icon: Send },
   { to: "/inbox", label: "Inbox", icon: Inbox },
@@ -59,9 +62,28 @@ const adminNav: NavItem[] = [
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  const items = user?.role === "admin" ? adminNav : userNav;
+  const isAdmin = user?.role === "admin";
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+
+  useEffect(() => setMounted(true), []);
+
+  const inboxCount = useQuery({
+    queryKey: ["inbox-count"],
+    queryFn: () => requestsService.myInboxCount(),
+    enabled: mounted && !!user && !isAdmin,
+    refetchInterval: 30_000,
+    retry: false,
+  });
+
+  const items: NavItem[] = isAdmin
+    ? adminNav
+    : userNavItems.map((it) =>
+        it.to === "/inbox"
+          ? { ...it, badge: inboxCount.data ?? 0 }
+          : it,
+      );
 
   return (
     <div className="min-h-screen bg-background">
@@ -141,6 +163,11 @@ function SidebarInner({
                 )}
               />
               {it.label}
+              {it.badge && it.badge > 0 ? (
+                <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-bold text-destructive-foreground">
+                  {it.badge > 99 ? "99+" : it.badge}
+                </span>
+              ) : null}
             </Link>
           );
         })}
@@ -156,6 +183,41 @@ function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
   const { theme, toggle } = useTheme();
   const { user } = useAuth();
   const router = useRouter();
+  const qc = useQueryClient();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => setMounted(true), []);
+
+  const isAdmin = user?.role === "admin";
+
+  const unreadCount = useQuery({
+    queryKey: ["notifications-unread"],
+    queryFn: () => notificationService.unreadCount(),
+    enabled: mounted && !!user && !isAdmin,
+    refetchInterval: 15_000,
+    retry: false,
+  });
+
+  const [notifOpen, setNotifOpen] = useState(false);
+
+  const notifs = useQuery({
+    queryKey: ["notifications", 1],
+    queryFn: () => notificationService.list({ page: 1, limit: 10 }),
+    enabled: mounted && !!user && !isAdmin && notifOpen,
+    retry: false,
+  });
+
+  const markRead = async (id: number) => {
+    await notificationService.markRead(id);
+    qc.invalidateQueries({ queryKey: ["notifications-unread"] });
+    qc.invalidateQueries({ queryKey: ["notifications"] });
+  };
+
+  const markAllRead = async () => {
+    await notificationService.markAllRead();
+    qc.invalidateQueries({ queryKey: ["notifications-unread"] });
+    qc.invalidateQueries({ queryKey: ["notifications"] });
+  };
 
   const initials = (user?.full_name ?? "U")
     .split(" ")
@@ -175,6 +237,9 @@ function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
     toast.success("Signed out");
     router.navigate({ to: "/login" });
   };
+
+  const notifItems = notifs.data?.items ?? [];
+  const unread = unreadCount.data ?? 0;
 
   return (
     <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-border bg-background/85 px-4 backdrop-blur sm:px-6 lg:px-8">
@@ -198,11 +263,90 @@ function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
         {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
       </Button>
 
+      {!isAdmin ? (
+        <div className="relative">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="relative text-muted-foreground"
+            onClick={() => setNotifOpen(!notifOpen)}
+          >
+            <Bell className="h-4 w-4" />
+            {unread > 0 ? (
+              <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-destruct-foreground">
+                {unread > 99 ? "99+" : unread}
+              </span>
+            ) : null}
+          </Button>
+
+          {notifOpen ? (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setNotifOpen(false)} />
+              <div className="absolute right-0 top-full z-50 mt-2 w-80 rounded-lg border border-border bg-card shadow-lg">
+                <div className="flex items-center justify-between border-b border-border px-4 py-3">
+                  <span className="text-sm font-semibold text-foreground">Notifications</span>
+                  {unread > 0 ? (
+                    <button
+                      onClick={markAllRead}
+                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                    >
+                      <CheckCheck className="h-3.5 w-3.5" /> Mark all read
+                    </button>
+                  ) : null}
+                </div>
+                <div className="max-h-80 overflow-y-auto">
+                  {notifItems.length === 0 ? (
+                    <div className="px-4 py-8 text-center text-sm text-muted-foreground">
+                      No notifications yet
+                    </div>
+                  ) : (
+                    notifItems.map((n) => (
+                      <button
+                        key={n.id}
+                        className={`flex w-full flex-col gap-0.5 border-b border-border/50 px-4 py-3 text-left transition-colors hover:bg-accent/50 ${
+                          !n.read_at ? "bg-primary/5" : ""
+                        }`}
+                        onClick={() => {
+                          markRead(n.id);
+                          if (n.link) {
+                            router.navigate({ to: n.link as any });
+                            setNotifOpen(false);
+                          }
+                        }}
+                      >
+                        <div className="flex items-start gap-2">
+                          {!n.read_at ? (
+                            <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-primary" />
+                          ) : (
+                            <span className="mt-1.5 h-2 w-2 shrink-0" />
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <div className="text-sm font-medium text-foreground">{n.title}</div>
+                            {n.message ? (
+                              <div className="mt-0.5 text-xs text-muted-foreground line-clamp-2">
+                                {n.message}
+                              </div>
+                            ) : null}
+                            <div className="mt-1 text-[10px] text-muted-foreground">
+                              {formatDateTime(n.created_at)}
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            </>
+          ) : null}
+        </div>
+      ) : null}
+
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button className="flex items-center gap-2 rounded-full border border-border bg-card px-2 py-1 pr-3 text-sm transition-colors hover:bg-accent">
             <Avatar className="h-7 w-7">
-              <AvatarImage src={user?.profile_image ?? undefined} alt={user?.full_name} />
+              <AvatarImage src={resolveAssetUrl(user?.profile_image) ?? undefined} alt={user?.full_name} />
               <AvatarFallback className="bg-primary/10 text-xs font-medium text-primary">
                 {initials}
               </AvatarFallback>

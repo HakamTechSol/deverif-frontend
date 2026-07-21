@@ -9,21 +9,22 @@ import { PasswordInput } from "@/components/common/PasswordInput";
 import { Label } from "@/components/ui/label";
 import { authService } from "@/services";
 
-export const Route = createFileRoute("/reset-password")({
+export const Route = createFileRoute("/set-password")({
   head: () => ({
     meta: [
-      { title: "Reset password — Dvarif" },
-      { name: "description", content: "Choose a new password for your Dvarif account." },
+      { title: "Set your password — Dvarif" },
+      { name: "description", content: "Set your password to activate your Dvarif account." },
     ],
   }),
-  component: ResetPasswordPage,
+  component: SetPasswordPage,
 });
 
-function ResetPasswordPage() {
+function SetPasswordPage() {
   const router = useRouter();
   const [pw, setPw] = useState("");
   const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
+  const [done, setDone] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,18 +36,42 @@ function ResetPasswordPage() {
     if (pw !== confirm) return toast.error("Passwords do not match");
     const url = new URL(window.location.href);
     const token = url.searchParams.get("token") ?? "";
-    if (!token) return toast.error("Missing or invalid reset token");
+    if (!token) return toast.error("Missing or invalid invite link");
     setLoading(true);
     try {
-      await authService.resetPassword(token, pw);
-      toast.success("Password updated. Please sign in.");
-      router.navigate({ to: "/login" });
+      await authService.setPassword(token, pw);
+      setDone(true);
     } catch (err: any) {
-      toast.error(err?.response?.data?.message ?? "Reset failed");
+      toast.error(err?.response?.data?.message ?? "Failed to set password");
     } finally {
       setLoading(false);
     }
   };
+
+  if (done) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+        <div className="w-full max-w-md text-center">
+          <div className="mb-8 flex justify-center">
+            <img
+              src={logoFull}
+              alt="Dvarif"
+              className="h-12 w-auto object-contain dark:invert dark:brightness-0"
+            />
+          </div>
+          <div className="rounded-2xl border border-border bg-card p-8 shadow-sm">
+            <h1 className="text-xl font-semibold tracking-tight text-foreground">Password set!</h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Your account is now active. You can sign in with your new password.
+            </p>
+            <Button className="mt-6 w-full" onClick={() => router.navigate({ to: "/login" })}>
+              Go to sign in
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -59,9 +84,9 @@ function ResetPasswordPage() {
           />
         </div>
         <div className="rounded-2xl border border-border bg-card p-8 shadow-sm">
-          <h1 className="text-xl font-semibold tracking-tight text-foreground">Set a new password</h1>
+          <h1 className="text-xl font-semibold tracking-tight text-foreground">Set your password</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Choose a strong password you haven't used before.
+            Choose a strong password to activate your account.
           </p>
           <form onSubmit={submit} className="mt-6 space-y-4">
             <div className="space-y-2">
@@ -75,10 +100,10 @@ function ResetPasswordPage() {
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Updating…
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Setting password…
                 </>
               ) : (
-                "Update password"
+                "Set password"
               )}
             </Button>
           </form>

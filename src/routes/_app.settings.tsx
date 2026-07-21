@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Camera, Save } from "lucide-react";
+import { Camera, Save, Lock } from "lucide-react";
 
 import { PageHeader } from "@/components/common/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,9 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { authService } from "@/services";
+import { PasswordInput } from "@/components/common/PasswordInput";
 import { authStore, useAuth } from "@/lib/auth";
+import { resolveAssetUrl } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/settings")({
   head: () => ({ meta: [{ title: "Settings — Dvarif" }] }),
@@ -23,9 +25,12 @@ function SettingsPage() {
   const qc = useQueryClient();
   const { user } = useAuth();
 
+  type ProfileData = { full_name?: string; phone?: string | null; profile_image?: string | null; email?: string };
+
   const me = useQuery({
     queryKey: ["me"],
-    queryFn: () => (user?.role === "admin" ? authService.adminMe() : authService.me()),
+    queryFn: (): Promise<ProfileData> =>
+      user?.role === "admin" ? authService.adminMe() : authService.me(),
   });
 
   const [fullName, setFullName] = useState("");
@@ -34,28 +39,35 @@ function SettingsPage() {
   const [preview, setPreview] = useState<string | null>(null);
 
   useEffect(() => {
-    const src = me.data ?? user;
+    const src = me.data;
     if (src) {
       setFullName(src.full_name ?? "");
       setPhone(src.phone ?? "");
       setPreview(src.profile_image ?? null);
     }
-  }, [me.data, user]);
+  }, [me.data]);
 
   const save = useMutation({
     mutationFn: async () => {
-      if (user?.role === "admin") {
-        return authService.updateAdminProfile({ full_name: fullName, phone });
-      }
       const form = new FormData();
       form.append("full_name", fullName);
       form.append("phone", phone);
       if (image) form.append("profile_image", image);
+      if (user?.role === "admin") {
+        return authService.updateAdminProfile(form);
+      }
       return authService.updateProfile(form);
     },
     onSuccess: (u) => {
       toast.success("Profile updated");
-      if (u && user) authStore.updateUser({ ...user, ...u });
+      if (u && user) {
+        authStore.updateUser({
+          ...user,
+          full_name: (u as any).full_name ?? fullName,
+          phone: (u as any).phone ?? phone,
+          profile_image: (u as any).profile_image ?? user.profile_image,
+        });
+      }
       qc.invalidateQueries({ queryKey: ["me"] });
     },
     onError: (e: any) => toast.error(e?.response?.data?.message ?? "Update failed"),
@@ -86,7 +98,7 @@ function SettingsPage() {
             <div className="mt-6 flex items-center gap-5">
               <div className="relative">
                 <Avatar className="h-20 w-20">
-                  <AvatarImage src={preview ?? undefined} alt={fullName} />
+                  <AvatarImage src={resolveAssetUrl(preview) ?? undefined} alt={fullName} />
                   <AvatarFallback className="bg-primary/10 text-lg font-semibold text-primary">
                     {initials}
                   </AvatarFallback>
@@ -142,32 +154,157 @@ function SettingsPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-border/70 shadow-none">
-          <CardContent className="p-6">
-            <h2 className="text-sm font-semibold text-foreground">Security</h2>
-            <p className="text-xs text-muted-foreground">
-              Update your password. You'll be signed out on other devices.
-            </p>
-            <div className="mt-5 space-y-3">
-              <div className="space-y-2">
-                <Label>Current password</Label>
-                <Input type="password" placeholder="••••••••" />
+        {user?.role !== "admin" ? (
+          <Card className="border-border/70 shadow-none">
+            <CardContent className="p-6">
+              <h2 className="text-sm font-semibold text-foreground">Security</h2>
+              <p className="text-xs text-muted-foreground">
+                Request a password reset link sent to your email.
+              </p>
+              <div className="mt-5">
+                <PasswordChangeCard />
               </div>
-              <div className="space-y-2">
-                <Label>New password</Label>
-                <Input type="password" placeholder="••••••••" />
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="border-border/70 shadow-none">
+            <CardContent className="p-6">
+              <h2 className="text-sm font-semibold text-foreground">Security</h2>
+              <p className="text-xs text-muted-foreground">
+                Update your admin password.
+              </p>
+              <div className="mt-5">
+                <AdminPasswordChangeCard />
               </div>
-              <div className="space-y-2">
-                <Label>Confirm new password</Label>
-                <Input type="password" placeholder="••••••••" />
-              </div>
-              <Button variant="outline" className="w-full">
-                Update password
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
       </div>
+    </div>
+  );
+}
+
+function PasswordChangeCard() {
+  const [sent, setSent] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const { user } = useAuth();
+
+  const sendReset = async () => {
+    setLoading(true);
+    try {
+      await authService.forgotPassword(user?.email ?? "");
+      setSent(true);
+      toast.success("Reset link sent to your email");
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message ?? "Failed to send reset email");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (sent) {
+    return (
+      <div className="rounded-md border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
+        A password reset link has been sent to your email. Check your inbox.
+      </div>
+    );
+  }
+
+  return (
+    <Button variant="outline" className="w-full" onClick={sendReset} disabled={loading}>
+      <Lock className="mr-2 h-4 w-4" />
+      {loading ? "Sending..." : "Send password reset link"}
+    </Button>
+  );
+}
+
+function AdminPasswordChangeCard() {
+  const [oldPassword, setOldPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+
+  const pwValidations = [
+    { label: "At least 8 characters", ok: newPassword.length >= 8 },
+    { label: "One uppercase letter", ok: /[A-Z]/.test(newPassword) },
+    { label: "One lowercase letter", ok: /[a-z]/.test(newPassword) },
+    { label: "One number", ok: /[0-9]/.test(newPassword) },
+    { label: "One special character", ok: /[^A-Za-z0-9]/.test(newPassword) },
+  ];
+  const passwordsMatch = newPassword.length > 0 && newPassword === confirmPassword;
+
+  const changePw = useMutation({
+    mutationFn: () => {
+      if (newPassword.length < 8) throw new Error("Password must be at least 8 characters");
+      if (!/[A-Z]/.test(newPassword)) throw new Error("Password must contain at least one uppercase letter");
+      if (!/[a-z]/.test(newPassword)) throw new Error("Password must contain at least one lowercase letter");
+      if (!/[0-9]/.test(newPassword)) throw new Error("Password must contain at least one number");
+      if (!/[^A-Za-z0-9]/.test(newPassword)) throw new Error("Password must contain at least one special character");
+      if (newPassword !== confirmPassword) throw new Error("Passwords do not match");
+      return authService.updateAdminProfile({
+        password: newPassword,
+        old_password: oldPassword,
+      });
+    },
+    onSuccess: () => {
+      toast.success("Password updated");
+      setOldPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    },
+    onError: (e: any) => {
+      toast.error(e?.response?.data?.message ?? e?.message ?? "Failed to update password");
+    },
+  });
+
+  return (
+    <div className="space-y-3">
+      <div className="space-y-2">
+        <Label>Current password</Label>
+        <PasswordInput
+          placeholder="••••••••"
+          value={oldPassword}
+          onChange={(e) => setOldPassword(e.target.value)}
+        />
+      </div>
+      <div className="space-y-2">
+        <Label>New password</Label>
+        <PasswordInput
+          placeholder="••••••••"
+          value={newPassword}
+          onChange={(e) => setNewPassword(e.target.value)}
+        />
+      </div>
+      {newPassword.length > 0 && (
+        <ul className="space-y-1 text-[11px]">
+          {pwValidations.map((v) => (
+            <li key={v.label} className={v.ok ? "text-emerald-600" : "text-muted-foreground"}>
+              {v.ok ? "\u2713" : "\u2022"} {v.label}
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="space-y-2">
+        <Label>Confirm new password</Label>
+        <PasswordInput
+          placeholder="••••••••"
+          value={confirmPassword}
+          onChange={(e) => setConfirmPassword(e.target.value)}
+        />
+      </div>
+      {confirmPassword.length > 0 && (
+        <p className={`text-[11px] ${passwordsMatch ? "text-emerald-600" : "text-destructive"}`}>
+          {passwordsMatch ? "\u2713 Passwords match" : "Passwords do not match"}
+        </p>
+      )}
+      <Button
+        variant="outline"
+        className="w-full"
+        onClick={() => changePw.mutate()}
+        disabled={changePw.isPending || !oldPassword || !newPassword || !passwordsMatch}
+      >
+        <Lock className="mr-2 h-4 w-4" />
+        {changePw.isPending ? "Updating..." : "Update password"}
+      </Button>
     </div>
   );
 }

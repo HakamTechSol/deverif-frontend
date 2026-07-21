@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   ArrowUpRight,
@@ -9,22 +10,12 @@ import {
   Send,
   Users,
   AlertTriangle,
-  Clock3,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/common/PageHeader";
-import { StatusBadge, PriorityBadge } from "@/components/common/StatusBadge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { dashboardService } from "@/services";
 import { useAuth } from "@/lib/auth";
 
@@ -45,25 +36,32 @@ type Stat = {
 function DashboardPage() {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const q = useQuery({
     queryKey: ["dashboard", user?.role],
     queryFn: () => dashboardService.auto(),
+    enabled: mounted,
+    retry: false,
   });
 
-  const totals = q.data?.totals ?? {};
+  const data = q.data;
   const adminStats: Stat[] = [
-    { label: "Total Users", value: totals.users ?? 0, icon: Users, href: "/admin/users", progress: 72 },
-    { label: "Organizations", value: totals.organizations ?? 0, icon: Building2, href: "/admin/organizations", progress: 54 },
-    { label: "Verification Requests", value: totals.requests ?? 0, icon: FileCheck2, href: "/admin/requests", progress: 88 },
-    { label: "Unmatched Orgs", value: totals.null_org_pending ?? 0, icon: AlertTriangle, href: "/admin/null-requests", progress: 40, hint: "Pending admin review" },
+    { label: "Total Users", value: data?.total_users ?? 0, icon: Users, href: "/admin/users", progress: data?.users_progress ?? 0 },
+    { label: "Organizations", value: data?.total_organizations ?? 0, icon: Building2, href: "/admin/organizations", progress: data?.organizations_progress ?? 0 },
+    { label: "Verification Requests", value: data?.total_verification_requests ?? 0, icon: FileCheck2, href: "/admin/requests", progress: data?.requests_progress ?? 0 },
+    { label: "Unmatched Orgs", value: data?.total_admin_requests ?? 0, icon: AlertTriangle, href: "/admin/null-requests", progress: data?.unmatched_progress ?? 100, hint: "Pending admin review" },
   ];
   const userStats: Stat[] = [
-    { label: "My Organizations", value: totals.my_organizations ?? 0, icon: Building2, href: "/settings", progress: 60 },
-    { label: "My Requests Sent", value: totals.my_requests ?? 0, icon: Send, href: "/requests", progress: 74 },
-    { label: "Inbox Requests", value: totals.inbox_requests ?? 0, icon: Inbox, href: "/inbox", progress: 45 },
+    { label: "Organizations", value: data?.total_organizations ?? 0, icon: Building2, href: "/settings", progress: data?.organizations_progress ?? 0 },
+    { label: "My Requests Sent", value: data?.total_verification_requests ?? 0, icon: Send, href: "/requests", progress: data?.requests_progress ?? 0 },
+    { label: "Unmatched Requests", value: data?.total_admin_requests ?? 0, icon: Inbox, href: "/inbox", progress: data?.unmatched_progress ?? 100 },
   ];
   const stats = isAdmin ? adminStats : userStats;
-  const recent = q.data?.recent ?? [];
 
   return (
     <div>
@@ -72,7 +70,7 @@ function DashboardPage() {
         description={
           isAdmin
             ? "Platform-wide activity across every organization in the network."
-            : "Track requests you've submitted and act on ones assigned to your team."
+            : "Track requests you've submitted and view unmatched requests."
         }
       />
 
@@ -101,7 +99,7 @@ function DashboardPage() {
                       </div>
                       <div className="mt-0.5 text-sm text-muted-foreground">{s.label}</div>
                     </div>
-                    <Progress value={s.progress ?? 60} className="mt-4 h-1.5" />
+                    <Progress value={s.progress ?? 0} className="mt-4 h-1.5" />
                     {s.hint ? (
                       <p className="mt-2 text-[11px] text-muted-foreground">{s.hint}</p>
                     ) : null}
@@ -120,111 +118,55 @@ function DashboardPage() {
         })}
       </div>
 
-      <div className="mt-8 grid gap-6 lg:grid-cols-3">
-        <Card className="border-border/70 shadow-none lg:col-span-2">
-          <CardContent className="p-0">
-            <div className="flex items-center justify-between border-b border-border px-5 py-4">
-              <div>
-                <h2 className="text-sm font-semibold text-foreground">Recent activity</h2>
-                <p className="text-xs text-muted-foreground">
-                  Latest verification requests across the workspace.
-                </p>
-              </div>
-              <Link
-                to={isAdmin ? "/admin/requests" : "/requests"}
-                className="text-xs font-medium text-primary hover:underline"
-              >
-                See all
-              </Link>
-            </div>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Document</TableHead>
-                  <TableHead>Organization</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Priority</TableHead>
-                  <TableHead className="text-right">Submitted</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {q.isLoading ? (
-                  Array.from({ length: 4 }).map((_, i) => (
-                    <TableRow key={i}>
-                      <TableCell colSpan={5}>
-                        <Skeleton className="h-6 w-full" />
-                      </TableCell>
-                    </TableRow>
-                  ))
-                ) : recent.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="py-12 text-center text-sm text-muted-foreground">
-                      No recent activity yet.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  recent.map((r) => (
-                    <TableRow key={r.uuid}>
-                      <TableCell className="font-medium text-foreground">
-                        {r.document_type}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {r.issuing_organization?.name ?? r.other_organization_name ?? "—"}
-                      </TableCell>
-                      <TableCell>
-                        <StatusBadge status={r.status} />
-                      </TableCell>
-                      <TableCell>
-                        <PriorityBadge priority={r.priority} />
-                      </TableCell>
-                      <TableCell className="text-right text-xs text-muted-foreground">
-                        {new Date(r.submitted_at).toLocaleDateString()}
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-
-        <Card className="border-border/70 shadow-none">
-          <CardContent className="p-5">
-            <div className="flex items-center gap-2">
-              <Clock3 className="h-4 w-4 text-primary" />
-              <h2 className="text-sm font-semibold text-foreground">SLA & throughput</h2>
-            </div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Median time-to-verify across the last 30 days.
-            </p>
-            <div className="mt-6 space-y-4">
-              <MiniMetric label="Median response" value="4h 12m" progress={68} />
-              <MiniMetric label="Verified rate" value="94%" progress={94} />
-              <MiniMetric label="Escalations" value="6" progress={22} />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <Card className="mt-8 border-border/70 shadow-none">
+        <CardContent className="p-5">
+          <div className="flex items-center gap-2">
+            <FileCheck2 className="h-4 w-4 text-primary" />
+            <h2 className="text-sm font-semibold text-foreground">Quick actions</h2>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Jump to key areas of the platform.
+          </p>
+          <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            {isAdmin ? (
+              <>
+                <QuickLink to="/admin/users" label="Manage users" icon={Users} />
+                <QuickLink to="/admin/organizations" label="Organizations" icon={Building2} />
+                <QuickLink to="/admin/requests" label="All requests" icon={FileCheck2} />
+                <QuickLink to="/admin/null-requests" label="Unmatched orgs" icon={AlertTriangle} />
+              </>
+            ) : (
+              <>
+                <QuickLink to="/requests" label="New request" icon={Send} />
+                <QuickLink to="/inbox" label="Check inbox" icon={Inbox} />
+                <QuickLink to="/payments" label="View plan" icon={ArrowUpRight} />
+                <QuickLink to="/settings" label="Settings" icon={ArrowUpRight} />
+              </>
+            )}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
 
-function MiniMetric({
+function QuickLink({
+  to,
   label,
-  value,
-  progress,
+  icon: Icon,
 }: {
+  to: string;
   label: string;
-  value: string;
-  progress: number;
+  icon: LucideIcon;
 }) {
   return (
-    <div>
-      <div className="flex items-center justify-between text-xs">
-        <span className="text-muted-foreground">{label}</span>
-        <span className="font-medium text-foreground">{value}</span>
-      </div>
-      <Progress value={progress} className="mt-2 h-1.5" />
-    </div>
+    <Link
+      to={to}
+      className="flex items-center gap-3 rounded-lg border border-border bg-card/50 px-4 py-3 text-sm font-medium text-foreground transition-colors hover:bg-accent"
+    >
+      <Icon className="h-4 w-4 text-muted-foreground" />
+      {label}
+      <ArrowUpRight className="ml-auto h-3 w-3 text-muted-foreground" />
+    </Link>
   );
 }

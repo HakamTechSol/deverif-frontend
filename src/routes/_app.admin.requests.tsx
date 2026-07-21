@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/table";
 import { TableSkeleton } from "./_app.requests";
 import { adminService, type UUID } from "@/services";
+import { formatDate } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/admin/requests")({
   head: () => ({ meta: [{ title: "Verification Requests — Dvarif Admin" }] }),
@@ -94,9 +95,9 @@ function AdminRequestsPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All statuses</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="under_review">Under review</SelectItem>
                 <SelectItem value="verified">Verified</SelectItem>
-                <SelectItem value="rejected">Rejected</SelectItem>
+                <SelectItem value="unverified">Unverified</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -127,10 +128,10 @@ function AdminRequestsPage() {
                         {r.document_type}
                       </TableCell>
                       <TableCell className="text-muted-foreground">
-                        {r.submitted_by?.full_name ?? "—"}
+                        {r.requester_name ?? "—"}
                       </TableCell>
                       <TableCell className="text-muted-foreground">
-                        {r.issuing_organization?.name ?? (
+                        {r.issuing_org_name ?? (
                           <span className="italic">
                             {r.other_organization_name ?? "—"}
                           </span>
@@ -143,7 +144,7 @@ function AdminRequestsPage() {
                         <PriorityBadge priority={r.priority} />
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">
-                        {new Date(r.submitted_at).toLocaleDateString()}
+                        {formatDate(r.submitted_at)}
                       </TableCell>
                       <TableCell className="text-right">
                         <Button

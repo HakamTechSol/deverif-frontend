@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Plus, Wallet } from "lucide-react";
+import { Plus, Wallet, CreditCard, RefreshCw, Ban } from "lucide-react";
 
 import { PageHeader } from "@/components/common/PageHeader";
 import { SearchInput } from "@/components/common/SearchInput";
@@ -13,6 +13,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -36,7 +37,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { TableSkeleton } from "./_app.requests";
-import { adminService } from "@/services";
+import { adminService, type Organization } from "@/services";
+import { formatDate } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/admin/payments")({
   head: () => ({ meta: [{ title: "Payments — Dvarif Admin" }] }),
@@ -44,47 +46,85 @@ export const Route = createFileRoute("/_app/admin/payments")({
 });
 
 function AdminPaymentsPage() {
+  return (
+    <div>
+      <PageHeader
+        title="Payments"
+        description="Review platform payments, record manual receipts, and manage organization subscriptions."
+      />
+
+      <Tabs defaultValue="history">
+        <TabsList className="mb-4">
+          <TabsTrigger value="history">
+            <Wallet className="mr-1.5 h-4 w-4" /> Payment History
+          </TabsTrigger>
+          <TabsTrigger value="subscriptions">
+            <CreditCard className="mr-1.5 h-4 w-4" /> Organization Subscriptions
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="history">
+          <PaymentHistoryTab />
+        </TabsContent>
+
+        <TabsContent value="subscriptions">
+          <OrgSubscriptionsTab />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+/* ─────────── Payment History Tab ─────────── */
+function PaymentHistoryTab() {
   const qc = useQueryClient();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [method, setMethod] = useState("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [openForm, setOpenForm] = useState(false);
 
   const list = useQuery({
-    queryKey: ["admin-payments", page, search, method],
+    queryKey: ["admin-payments", page, search, method, dateFrom, dateTo],
     queryFn: () =>
       adminService.payments({
         page,
         limit: 10,
         search,
         method: method === "all" ? undefined : method,
+        date_from: dateFrom || undefined,
+        date_to: dateTo || undefined,
       }),
   });
 
   const items = list.data?.items ?? [];
 
   return (
-    <div>
-      <PageHeader
-        title="Payments"
-        description="Review platform payments and record manual receipts."
-        actions={
-          <Button onClick={() => setOpenForm(true)}>
-            <Plus className="mr-2 h-4 w-4" /> Add manual payment
-          </Button>
-        }
-      />
-
-      <Card className="border-border/70 shadow-none">
-        <CardContent className="p-0">
-          <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between">
-            <SearchInput
-              value={search}
-              onChange={(v) => {
-                setSearch(v);
-                setPage(1);
-              }}
-              placeholder="Search reference or user…"
+    <Card className="border-border/70 shadow-none">
+      <CardContent className="p-0">
+        <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between">
+          <SearchInput
+            value={search}
+            onChange={(v) => {
+              setSearch(v);
+              setPage(1);
+            }}
+            placeholder="Search reference or user…"
+          />
+          <div className="flex items-center gap-2">
+            <Input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => { setDateFrom(e.target.value); setPage(1); }}
+              className="w-40"
+            />
+            <span className="text-xs text-muted-foreground">to</span>
+            <Input
+              type="date"
+              value={dateTo}
+              onChange={(e) => { setDateTo(e.target.value); setPage(1); }}
+              className="w-40"
             />
             <Select value={method} onValueChange={setMethod}>
               <SelectTrigger className="w-40">
@@ -97,57 +137,61 @@ function AdminPaymentsPage() {
                 <SelectItem value="manual">Manual</SelectItem>
               </SelectContent>
             </Select>
+            <Button onClick={() => setOpenForm(true)}>
+              <Plus className="mr-2 h-4 w-4" /> Add manual payment
+            </Button>
           </div>
-          {list.isLoading ? (
-            <TableSkeleton />
-          ) : items.length === 0 ? (
-            <div className="p-6">
-              <EmptyState icon={Wallet} title="No payments yet" />
-            </div>
-          ) : (
-            <>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Reference</TableHead>
-                    <TableHead>User</TableHead>
-                    <TableHead>Method</TableHead>
-                    <TableHead>Purpose</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
+        </div>
+        {list.isLoading ? (
+          <TableSkeleton />
+        ) : items.length === 0 ? (
+          <div className="p-6">
+            <EmptyState icon={Wallet} title="No payments yet" />
+          </div>
+        ) : (
+          <>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Reference</TableHead>
+                  <TableHead>User</TableHead>
+                  <TableHead>Method</TableHead>
+                  <TableHead>Purpose</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {items.map((p) => (
+                  <TableRow key={p.uuid}>
+                    <TableCell className="font-mono text-xs">{p.transaction_reference}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {p.full_name ?? "—"}
+                      <div className="text-xs">{p.email}</div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="rounded-full capitalize">
+                        {p.payment_method}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{p.purpose}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {formatDate(p.paid_at ?? p.created_at)}
+                    </TableCell>
+                    <TableCell className="text-right font-medium">Rs. {p.amount.toLocaleString()}</TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {items.map((p) => (
-                    <TableRow key={p.uuid}>
-                      <TableCell className="font-mono text-xs">{p.transaction_reference}</TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {p.user?.full_name ?? "—"}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="rounded-full capitalize">
-                          {p.payment_method}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">{p.purpose}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {new Date(p.created_at).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell className="text-right font-medium">${p.amount}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-              <Pagination
-                page={page}
-                total={list.data?.total ?? 0}
-                totalPages={list.data?.totalPages ?? 1}
-                onChange={setPage}
-              />
-            </>
-          )}
-        </CardContent>
-      </Card>
+                ))}
+              </TableBody>
+            </Table>
+            <Pagination
+              page={page}
+              total={list.data?.total ?? 0}
+              totalPages={list.data?.totalPages ?? 1}
+              onChange={setPage}
+            />
+          </>
+        )}
+      </CardContent>
 
       <PaymentFormDialog
         open={openForm}
@@ -157,10 +201,235 @@ function AdminPaymentsPage() {
           qc.invalidateQueries({ queryKey: ["admin-payments"] });
         }}
       />
-    </div>
+    </Card>
   );
 }
 
+/* ─────────── Organization Subscriptions Tab ─────────── */
+function OrgSubscriptionsTab() {
+  const qc = useQueryClient();
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState("");
+  const [confirmOrg, setConfirmOrg] = useState<{ org: Organization; plan: "monthly" | "yearly" } | null>(null);
+  const [cancelOrg, setCancelOrg] = useState<Organization | null>(null);
+
+  const list = useQuery({
+    queryKey: ["admin-orgs-subs", page, search],
+    queryFn: () => adminService.organizations({ page, limit: 10, search }),
+  });
+
+  const setSub = useMutation({
+    mutationFn: ({ uuid, plan }: { uuid: string; plan: "monthly" | "yearly" }) =>
+      adminService.setOrganizationSubscription(uuid, plan),
+    onSuccess: (_, vars) => {
+      const label = vars.plan === "monthly" ? "Monthly" : "Yearly";
+      toast.success(`Subscription set to ${label}`);
+      qc.invalidateQueries({ queryKey: ["admin-orgs-subs"] });
+      qc.invalidateQueries({ queryKey: ["admin-orgs"] });
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.message ?? "Failed to set subscription"),
+  });
+
+  const cancelSub = useMutation({
+    mutationFn: (uuid: string) => adminService.cancelOrganizationSubscription(uuid),
+    onSuccess: () => {
+      toast.success("Subscription cancelled");
+      setCancelOrg(null);
+      qc.invalidateQueries({ queryKey: ["admin-orgs-subs"] });
+      qc.invalidateQueries({ queryKey: ["admin-orgs"] });
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.message ?? "Failed to cancel subscription"),
+  });
+
+  const items = list.data?.items ?? [];
+
+  const subscriptionBadge = (org: Organization) => {
+    if (org.subscription_status === "active" && org.subscription_expiry) {
+      const expiryDate = new Date(String(org.subscription_expiry).replace(" ", "T"));
+      const now = new Date();
+      const daysLeft = Math.max(0, Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+      return (
+        <Badge className="rounded-full border-success/30 bg-success/10 text-success" variant="outline">
+          Active
+          <span className="ml-1 text-xs font-normal">({daysLeft}d left)</span>
+        </Badge>
+      );
+    }
+    if (org.subscription_status === "expired") {
+      return (
+        <Badge className="rounded-full border-destructive/30 bg-destructive/10 text-destructive" variant="outline">
+          Expired
+        </Badge>
+      );
+    }
+    return (
+      <Badge variant="outline" className="rounded-full text-muted-foreground">
+        None
+      </Badge>
+    );
+  };
+
+  const isActive = (org: Organization) => org.subscription_status === "active";
+
+  const handleSetSubscription = (org: Organization, plan: "monthly" | "yearly") => {
+    setConfirmOrg({ org, plan });
+  };
+
+  const confirmSet = () => {
+    if (!confirmOrg) return;
+    setSub.mutate({ uuid: confirmOrg.org.uuid, plan: confirmOrg.plan });
+    setConfirmOrg(null);
+  };
+
+  return (
+    <Card className="border-border/70 shadow-none">
+      <CardContent className="p-0">
+        <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between">
+          <SearchInput
+            value={search}
+            onChange={(v) => {
+              setSearch(v);
+              setPage(1);
+            }}
+            placeholder="Search organizations…"
+          />
+        </div>
+        {list.isLoading ? (
+          <TableSkeleton />
+        ) : items.length === 0 ? (
+          <div className="p-6">
+            <EmptyState icon={CreditCard} title="No organizations" />
+          </div>
+        ) : (
+          <>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Organization</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Plan</TableHead>
+                  <TableHead>Expiry Date</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {items.map((org) => (
+                  <TableRow key={org.uuid}>
+                    <TableCell className="font-medium text-foreground">{org.name}</TableCell>
+                    <TableCell>{subscriptionBadge(org)}</TableCell>
+                    <TableCell className="capitalize text-muted-foreground">
+                      {org.subscription_plan ?? "—"}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {org.subscription_expiry ? formatDate(org.subscription_expiry) : "—"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          size="sm"
+                          variant={isActive(org) ? "default" : "outline"}
+                          className="h-7 text-xs"
+                          disabled={setSub.isPending || isActive(org)}
+                          onClick={() => handleSetSubscription(org, "monthly")}
+                        >
+                          <RefreshCw className="mr-1 h-3 w-3" />
+                          Monthly
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={isActive(org) ? "default" : "outline"}
+                          className="h-7 text-xs"
+                          disabled={setSub.isPending || isActive(org)}
+                          onClick={() => handleSetSubscription(org, "yearly")}
+                        >
+                          <RefreshCw className="mr-1 h-3 w-3" />
+                          Yearly
+                        </Button>
+                        {isActive(org) && (
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            className="h-7 text-xs"
+                            disabled={cancelSub.isPending}
+                            onClick={() => setCancelOrg(org)}
+                          >
+                            <Ban className="mr-1 h-3 w-3" />
+                            Cancel
+                          </Button>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            <Pagination
+              page={page}
+              total={list.data?.total ?? 0}
+              totalPages={list.data?.totalPages ?? 1}
+              onChange={setPage}
+            />
+          </>
+        )}
+      </CardContent>
+
+      {/* Set subscription dialog */}
+      <Dialog open={!!confirmOrg} onOpenChange={(o) => !o && setConfirmOrg(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Confirm subscription</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Set <span className="font-medium text-foreground">{confirmOrg?.org.name}</span> to a{" "}
+            <span className="font-medium text-foreground">
+              {confirmOrg?.plan === "monthly" ? "Monthly" : "Yearly"}
+            </span>{" "}
+            subscription? This will <span className="font-medium text-foreground">restart from today</span> and
+            create a payment record.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmOrg(null)}>
+              Cancel
+            </Button>
+            <Button onClick={confirmSet} disabled={setSub.isPending}>
+              {setSub.isPending ? "Setting…" : "Confirm"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cancel subscription dialog */}
+      <Dialog open={!!cancelOrg} onOpenChange={(o) => !o && setCancelOrg(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Cancel subscription?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            This will cancel the subscription for{" "}
+            <span className="font-medium text-foreground">{cancelOrg?.name}</span>. Their access will end
+            immediately and they will need a new subscription to create or verify requests.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCancelOrg(null)}>
+              Go back
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (cancelOrg) cancelSub.mutate(cancelOrg.uuid);
+              }}
+              disabled={cancelSub.isPending}
+            >
+              {cancelSub.isPending ? "Cancelling…" : "Cancel subscription"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </Card>
+  );
+}
+
+/* ─────────── Add Manual Payment Dialog ─────────── */
 function PaymentFormDialog({
   open,
   onOpenChange,
@@ -220,7 +489,8 @@ function PaymentFormDialog({
               <SelectContent>
                 {(users.data?.items ?? []).map((u) => (
                   <SelectItem key={u.uuid} value={u.uuid}>
-                    {u.full_name} · {u.email}
+                    {u.organization_name ?? u.full_name}
+                    <span className="ml-1 text-muted-foreground">({u.full_name})</span>
                   </SelectItem>
                 ))}
               </SelectContent>
