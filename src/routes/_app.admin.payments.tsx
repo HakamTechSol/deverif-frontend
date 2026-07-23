@@ -226,6 +226,8 @@ function OrgSubscriptionsTab() {
       toast.success(`Subscription set to ${label}`);
       qc.invalidateQueries({ queryKey: ["admin-orgs-subs"] });
       qc.invalidateQueries({ queryKey: ["admin-orgs"] });
+      qc.invalidateQueries({ queryKey: ["org-subscription"] });
+      qc.invalidateQueries({ queryKey: ["plan"] });
     },
     onError: (e: any) => toast.error(e?.response?.data?.message ?? "Failed to set subscription"),
   });
@@ -237,6 +239,8 @@ function OrgSubscriptionsTab() {
       setCancelOrg(null);
       qc.invalidateQueries({ queryKey: ["admin-orgs-subs"] });
       qc.invalidateQueries({ queryKey: ["admin-orgs"] });
+      qc.invalidateQueries({ queryKey: ["org-subscription"] });
+      qc.invalidateQueries({ queryKey: ["plan"] });
     },
     onError: (e: any) => toast.error(e?.response?.data?.message ?? "Failed to cancel subscription"),
   });
@@ -246,6 +250,13 @@ function OrgSubscriptionsTab() {
   const subscriptionBadge = (org: Organization) => {
     if (org.subscription_status === "active" && org.subscription_expiry) {
       const expiryDate = new Date(String(org.subscription_expiry).replace(" ", "T"));
+      if (isNaN(expiryDate.getTime())) {
+        return (
+          <Badge className="rounded-full border-success/30 bg-success/10 text-success" variant="outline">
+            Active
+          </Badge>
+        );
+      }
       const now = new Date();
       const daysLeft = Math.max(0, Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
       return (

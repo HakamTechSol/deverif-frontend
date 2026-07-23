@@ -10,6 +10,7 @@ import {
   Send,
   Users,
   AlertTriangle,
+  Clock,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/common/PageHeader";
@@ -18,6 +19,10 @@ import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { dashboardService } from "@/services";
 import { useAuth } from "@/lib/auth";
+import { formatDate } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
+import { useOrgSubscription } from "@/hooks/useOrgSubscription";
+import { Lock } from "lucide-react";
 
 export const Route = createFileRoute("/_app/dashboard")({
   head: () => ({ meta: [{ title: "Dashboard — Dvarif" }] }),
@@ -36,6 +41,7 @@ type Stat = {
 function DashboardPage() {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
+  const { isLocked } = useOrgSubscription();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -70,15 +76,18 @@ function DashboardPage() {
         description={
           isAdmin
             ? "Platform-wide activity across every organization in the network."
-            : "Track requests you've submitted and view unmatched requests."
+            : isLocked
+              ? "Your organization subscription is not active. Some features are restricted."
+              : "Track requests you've submitted and view unmatched requests."
         }
       />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {(q.isLoading ? Array.from({ length: stats.length }) : stats).map((raw, i) => {
           const s = raw as Stat | undefined;
+          const cardLocked = !isAdmin && isLocked;
           return (
-            <Card key={i} className="border-border/70 shadow-none">
+            <Card key={i} className={`border-border/70 shadow-none ${cardLocked ? "opacity-60" : ""}`}>
               <CardContent className="p-5">
                 {s ? (
                   <>
@@ -86,12 +95,21 @@ function DashboardPage() {
                       <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary">
                         <s.icon className="h-4 w-4" />
                       </div>
-                      <Link
-                        to={s.href}
-                        className="inline-flex items-center gap-0.5 text-xs font-medium text-muted-foreground hover:text-foreground"
-                      >
-                        View all <ArrowUpRight className="h-3 w-3" />
-                      </Link>
+                      {cardLocked ? (
+                        <Link
+                          to="/payments"
+                          className="inline-flex items-center gap-0.5 text-xs font-medium text-destructive hover:text-destructive"
+                        >
+                          <Lock className="h-3 w-3" /> Locked
+                        </Link>
+                      ) : (
+                        <Link
+                          to={s.href}
+                          className="inline-flex items-center gap-0.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+                        >
+                          View all <ArrowUpRight className="h-3 w-3" />
+                        </Link>
+                      )}
                     </div>
                     <div className="mt-5">
                       <div className="text-2xl font-semibold tracking-tight text-foreground">
@@ -118,6 +136,50 @@ function DashboardPage() {
         })}
       </div>
 
+      {isAdmin && data?.upcoming_expirations && data.upcoming_expirations.length > 0 && (
+        <Card className="mt-6 border-border/70 shadow-none">
+          <CardContent className="p-5">
+            <div className="flex items-center gap-2">
+              <Clock className="h-4 w-4 text-amber-500" />
+              <h2 className="text-sm font-semibold text-foreground">Upcoming Expirations</h2>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Organizations with subscriptions expiring within 7 days.
+            </p>
+            <div className="mt-4 space-y-2">
+              {data.upcoming_expirations.map((exp) => {
+                const expiryDate = new Date(String(exp.subscription_expiry).replace(" ", "T"));
+                const now = new Date();
+                const hoursLeft = Math.max(0, Math.round((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60)));
+                const isUrgent = hoursLeft <= 2;
+                return (
+                  <div key={exp.uuid} className="flex items-center justify-between rounded-lg border border-border bg-card/50 px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <div className={`flex h-8 w-8 items-center justify-center rounded-md ${isUrgent ? "bg-red-500/10 text-red-500" : "bg-amber-500/10 text-amber-500"}`}>
+                        <Clock className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium text-foreground">{exp.name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          Expires: {formatDate(exp.subscription_expiry)}
+                          {exp.subscription_plan ? ` (${exp.subscription_plan})` : ""}
+                        </div>
+                      </div>
+                    </div>
+                    <Badge
+                      variant="outline"
+                      className={isUrgent ? "border-red-500/30 bg-red-500/10 text-red-500" : "border-amber-500/30 bg-amber-500/10 text-amber-500"}
+                    >
+                      {isUrgent ? `${hoursLeft}h left` : `${Math.ceil(hoursLeft / 24)}d left`}
+                    </Badge>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Card className="mt-8 border-border/70 shadow-none">
         <CardContent className="p-5">
           <div className="flex items-center gap-2">
@@ -134,6 +196,11 @@ function DashboardPage() {
                 <QuickLink to="/admin/organizations" label="Organizations" icon={Building2} />
                 <QuickLink to="/admin/requests" label="All requests" icon={FileCheck2} />
                 <QuickLink to="/admin/null-requests" label="Unmatched orgs" icon={AlertTriangle} />
+              </>
+            ) : isLocked ? (
+              <>
+                <QuickLink to="/payments" label="Renew subscription" icon={Lock} locked />
+                <QuickLink to="/settings" label="Settings" icon={ArrowUpRight} />
               </>
             ) : (
               <>
@@ -154,19 +221,29 @@ function QuickLink({
   to,
   label,
   icon: Icon,
+  locked,
 }: {
   to: string;
   label: string;
   icon: LucideIcon;
+  locked?: boolean;
 }) {
   return (
     <Link
       to={to}
-      className="flex items-center gap-3 rounded-lg border border-border bg-card/50 px-4 py-3 text-sm font-medium text-foreground transition-colors hover:bg-accent"
+      className={`flex items-center gap-3 rounded-lg border bg-card/50 px-4 py-3 text-sm font-medium transition-colors ${
+        locked
+          ? "border-destructive/30 text-destructive hover:bg-destructive/5"
+          : "border-border text-foreground hover:bg-accent"
+      }`}
     >
       <Icon className="h-4 w-4 text-muted-foreground" />
       {label}
-      <ArrowUpRight className="ml-auto h-3 w-3 text-muted-foreground" />
+      {locked ? (
+        <Lock className="ml-auto h-3.5 w-3.5 text-destructive" />
+      ) : (
+        <ArrowUpRight className="ml-auto h-3 w-3 text-muted-foreground" />
+      )}
     </Link>
   );
 }

@@ -33,6 +33,8 @@ import {
 import { TableSkeleton } from "./_app.requests";
 import { requestsService, type VerificationRequest } from "@/services";
 import { formatDate, formatDateTime, resolveAssetUrl } from "@/lib/utils";
+import { useOrgSubscription } from "@/hooks/useOrgSubscription";
+import { Lock } from "lucide-react";
 
 export const Route = createFileRoute("/_app/inbox")({
   head: () => ({ meta: [{ title: "Inbox — Dvarif" }] }),
@@ -41,6 +43,7 @@ export const Route = createFileRoute("/_app/inbox")({
 
 function InboxPage() {
   const qc = useQueryClient();
+  const { isLocked } = useOrgSubscription();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [active, setActive] = useState<VerificationRequest | null>(null);
@@ -56,7 +59,7 @@ function InboxPage() {
     <div>
       <PageHeader
         title="Inbox"
-        description="Verification requests other organizations have sent to your team."
+        description={isLocked ? "Verification actions are locked. Renew your subscription to continue." : "Verification requests other organizations have sent to your team."}
       />
 
       <Card className="border-border/70 shadow-none">
@@ -119,9 +122,19 @@ function InboxPage() {
                         {r.document_format ?? "PDF"}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button size="sm" variant="outline" onClick={() => setActive(r)}>
-                          Review
-                        </Button>
+                        {isLocked ? (
+                          <Button size="sm" variant="outline" disabled>
+                            <Lock className="mr-1 h-3 w-3" /> Locked
+                          </Button>
+                        ) : r.status === "under_review" ? (
+                          <Button size="sm" variant="outline" onClick={() => setActive(r)}>
+                            Review
+                          </Button>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">
+                            {r.status === "verified" ? "Approved" : "Processed"}
+                          </span>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}

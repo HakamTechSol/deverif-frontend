@@ -362,15 +362,17 @@ function OrgFormDialog({
 function OrgSubscriptionBadge({ org }: { org: Organization }) {
   if (org.subscription_status === "active" && org.subscription_expiry) {
     const expiryDate = new Date(String(org.subscription_expiry).replace(" ", "T"));
-    const now = new Date();
-    const daysLeft = Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    return (
-      <Badge className="rounded-full border-success/30 bg-success/10 text-success" variant="outline">
-        <CreditCard className="mr-1 h-3 w-3" />
-        Active
-        <span className="ml-1 text-xs font-normal">({daysLeft}d)</span>
-      </Badge>
-    );
+    if (!isNaN(expiryDate.getTime())) {
+      const now = new Date();
+      const daysLeft = Math.max(0, Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+      return (
+        <Badge className="rounded-full border-success/30 bg-success/10 text-success" variant="outline">
+          <CreditCard className="mr-1 h-3 w-3" />
+          Active
+          <span className="ml-1 text-xs font-normal">({daysLeft}d)</span>
+        </Badge>
+      );
+    }
   }
   if (org.subscription_status === "expired") {
     return (

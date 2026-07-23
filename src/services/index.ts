@@ -102,6 +102,12 @@ export type DashboardStats = {
   organizations_progress?: number;
   requests_progress?: number;
   unmatched_progress?: number;
+  upcoming_expirations?: Array<{
+    uuid: string;
+    name: string;
+    subscription_expiry: string;
+    subscription_plan: string | null;
+  }>;
 };
 
 /* ─────────── AUTH ─────────── */
@@ -139,6 +145,8 @@ export const requestsService = {
       .then((r) => r.data),
   deleteSent: (uuid: UUID) =>
     api.delete(`/verification-requests/my/sent/${uuid}`).then((r) => r.data),
+  updateSent: (uuid: UUID, form: FormData) =>
+    api.put<{ request: VerificationRequest }>(`/verification-requests/my/sent/${uuid}`, form).then((r) => r.data.request),
   myInbox: (params: { page?: number; limit?: number; search?: string } = {}) =>
     api
       .get<Paginated<VerificationRequest>>("/verification-requests/my/inbox", { params })

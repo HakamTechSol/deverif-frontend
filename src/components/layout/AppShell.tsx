@@ -38,6 +38,8 @@ import { authStore, useAuth } from "@/lib/auth";
 import { useTheme } from "@/lib/theme";
 import { authService, requestsService, notificationService } from "@/services";
 import { cn, resolveAssetUrl, formatDateTime } from "@/lib/utils";
+import { useOrgSubscription } from "@/hooks/useOrgSubscription";
+import { SubscriptionBanner } from "@/components/common/SubscriptionLocked";
 import type { LucideIcon } from "lucide-react";
 
 type NavItem = { to: string; label: string; icon: LucideIcon; badge?: number };
@@ -63,6 +65,7 @@ const adminNav: NavItem[] = [
 export function AppShell({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
+  const { isLocked } = useOrgSubscription();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -112,6 +115,8 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className="lg:pl-64">
         <TopBar onMenuClick={() => setMobileOpen(true)} />
         <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+          {isAdmin && <div className="sr-only">admin</div>}
+          {!isAdmin && isLocked && <SubscriptionBanner />}
           {children}
         </main>
       </div>
