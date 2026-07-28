@@ -210,7 +210,7 @@ function OrgSubscriptionsTab() {
   const qc = useQueryClient();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
-  const [confirmOrg, setConfirmOrg] = useState<{ org: Organization; plan: "monthly" | "yearly" } | null>(null);
+  const [confirmOrg, setConfirmOrg] = useState<{ org: Organization; plan: "monthly" | "yearly"; amount: string } | null>(null);
   const [cancelOrg, setCancelOrg] = useState<Organization | null>(null);
 
   const list = useQuery({
@@ -219,8 +219,8 @@ function OrgSubscriptionsTab() {
   });
 
   const setSub = useMutation({
-    mutationFn: ({ uuid, plan }: { uuid: string; plan: "monthly" | "yearly" }) =>
-      adminService.setOrganizationSubscription(uuid, plan),
+    mutationFn: ({ uuid, plan, amount }: { uuid: string; plan: "monthly" | "yearly"; amount: number }) =>
+      adminService.setOrganizationSubscription(uuid, plan, amount),
     onSuccess: (_, vars) => {
       const label = vars.plan === "monthly" ? "Monthly" : "Yearly";
       toast.success(`Subscription set to ${label}`);
@@ -283,12 +283,13 @@ function OrgSubscriptionsTab() {
   const isActive = (org: Organization) => org.subscription_status === "active";
 
   const handleSetSubscription = (org: Organization, plan: "monthly" | "yearly") => {
-    setConfirmOrg({ org, plan });
+    setConfirmOrg({ org, plan, amount: "" });
   };
 
   const confirmSet = () => {
     if (!confirmOrg) return;
-    setSub.mutate({ uuid: confirmOrg.org.uuid, plan: confirmOrg.plan });
+    const amt = Number(confirmOrg.amount) || 0;
+    setSub.mutate({ uuid: confirmOrg.org.uuid, plan: confirmOrg.plan, amount: amt });
     setConfirmOrg(null);
   };
 
@@ -395,9 +396,20 @@ function OrgSubscriptionsTab() {
             <span className="font-medium text-foreground">
               {confirmOrg?.plan === "monthly" ? "Monthly" : "Yearly"}
             </span>{" "}
-            subscription? This will <span className="font-medium text-foreground">restart from today</span> and
-            create a payment record.
+            subscription? This will <span className="font-medium text-foreground">restart from today</span>.
           </p>
+          <div className="space-y-2">
+            <Label htmlFor="sub-amount">Amount received (Rs.) — optional</Label>
+            <Input
+              id="sub-amount"
+              type="number"
+              min="0"
+              placeholder="Leave empty if no payment"
+              value={confirmOrg?.amount ?? ""}
+              onChange={(e) => setConfirmOrg((prev) => prev ? { ...prev, amount: e.target.value } : null)}
+              autoFocus
+            />
+          </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmOrg(null)}>
               Cancel

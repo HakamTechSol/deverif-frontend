@@ -38,19 +38,4 @@ export function StatusBadge({ status }: { status: Status }) {
   );
 }
 
-export function PriorityBadge({ priority }: { priority: "normal" | "urgent" | string }) {
-  const urgent = priority === "urgent";
-  return (
-    <Badge
-      variant="outline"
-      className={cn(
-        "rounded-full px-2.5 py-0.5 text-xs font-medium capitalize",
-        urgent
-          ? "bg-destructive/10 text-destructive border-destructive/25"
-          : "bg-muted text-muted-foreground border-border",
-      )}
-    >
-      {priority}
-    </Badge>
-  );
-}
+

@@ -29,6 +29,7 @@ export type UserRecord = {
   created_at?: string;
   organization_uuid?: string | null;
   organization_name?: string | null;
+  organization_logo?: string | null;
 };
 
 export type VerificationRequest = {
@@ -36,21 +37,58 @@ export type VerificationRequest = {
   document_type: string;
   issuing_organization_uuid?: string | null;
   issuing_org_name?: string | null;
-  other_organization_name?: string | null;
+  unmatched_org_uuid?: string | null;
+  unmatched_org_name?: string | null;
   submission_remarks?: string | null;
   verification_remarks?: string | null;
-  priority: "normal" | "urgent";
   status: "under_review" | "verified" | "unverified";
   document_path?: string;
   document_format?: string;
   submitted_at: string;
+  verified_at?: string | null;
   organization_conserned_for_future?: "yes" | "no";
   verification_method?: string;
+  locked_by?: number | null;
+  locked_at?: string | null;
+  locked_by_uuid?: string | null;
+  locked_by_name?: string | null;
   requester_uuid?: string;
   requester_name?: string;
   requester_email?: string;
   requester_organization_uuid?: string | null;
   requester_organization?: string | null;
+};
+
+export type UnmatchedOrganization = {
+  uuid: UUID;
+  name: string;
+  email?: string | null;
+  phone?: string | null;
+  website?: string | null;
+  status: "pending" | "contacted" | "converted" | "ignored";
+  request_count: number;
+  created_at: string;
+};
+
+export type UnmatchedOrgDetail = {
+  organization: UnmatchedOrganization;
+  requests: Array<{
+    uuid: UUID;
+    document_type: string;
+    document_format?: string;
+    document_path?: string;
+    status: "under_review" | "verified" | "unverified";
+    submitted_at: string;
+    verified_at?: string | null;
+    submission_remarks?: string | null;
+    verification_remarks?: string | null;
+    verification_method?: string;
+    locked_by?: number | null;
+    locked_at?: string | null;
+    locked_by_name?: string | null;
+    requester_name?: string;
+    requester_email?: string;
+  }>;
 };
 
 export type AdminUserRecord = UserRecord;
@@ -98,6 +136,8 @@ export type DashboardStats = {
   active_users?: number;
   verified_organizations?: number;
   verified_requests?: number;
+  unverified_requests?: number;
+  under_review_requests?: number;
   users_progress?: number;
   organizations_progress?: number;
   requests_progress?: number;
@@ -113,9 +153,9 @@ export type DashboardStats = {
 /* ─────────── AUTH ─────────── */
 export const authService = {
   login: (data: { email: string; password: string; rememberMe?: boolean }) =>
-    api.post<{ token: string; user: { uuid: string; full_name: string; email: string; role: "admin" | "user" } }>("/auth/login", data).then((r) => r.data),
+    api.post<{ token: string; user: { uuid: string; full_name: string; email: string; profile_image?: string | null; role: "admin" | "user" } }>("/auth/login", data).then((r) => r.data),
   adminLogin: (data: { email: string; password: string }) =>
-    api.post<{ token: string; admin: { uuid: string; email: string; full_name: string } }>("/admin/auth/login", data).then((r) => r.data),
+    api.post<{ token: string; admin: { uuid: string; email: string; full_name: string; profile_image?: string | null } }>("/admin/auth/login", data).then((r) => r.data),
   refresh: () => api.post<{ accessToken: string }>("/auth/refresh").then((r) => r.data),
   userLogout: () => api.post("/auth/user/logout").then((r) => r.data),
   adminLogout: () => api.post("/admin/auth/logout").then((r) => r.data),
@@ -158,7 +198,6 @@ export const requestsService = {
     data: {
       status: "verified" | "unverified";
       verification_remarks: string;
-      organization_conserned_for_future: "yes" | "no";
     },
   ) => api.patch<{ request: VerificationRequest }>(`/verification-requests/${uuid}/verify`, data).then((r) => r.data.request),
 };
@@ -192,8 +231,8 @@ export const adminService = {
     api.put<{ organization: Organization }>(`/admin/organizations/${uuid}`, form).then((r) => r.data.organization),
   deleteOrganization: (uuid: UUID) =>
     api.delete(`/admin/organizations/${uuid}`).then((r) => r.data),
-  setOrganizationSubscription: (uuid: UUID, plan: "monthly" | "yearly") =>
-    api.patch<{ organization: Organization }>(`/admin/organizations/${uuid}/subscription`, { plan }).then((r) => r.data),
+  setOrganizationSubscription: (uuid: UUID, plan: "monthly" | "yearly", amount: number) =>
+    api.patch<{ organization: Organization }>(`/admin/organizations/${uuid}/subscription`, { plan, amount }).then((r) => r.data),
   cancelOrganizationSubscription: (uuid: UUID) =>
     api.delete<{ organization: Organization }>(`/admin/organizations/${uuid}/subscription`).then((r) => r.data),
 
@@ -203,17 +242,29 @@ export const adminService = {
     api
       .get<Paginated<VerificationRequest>>("/admin/verification-requests", { params })
       .then((r) => r.data),
-  nullOrgRequests: (params: { page?: number; limit?: number } = {}) =>
+  nullOrgRequests: (params: { page?: number; limit?: number; search?: string } = {}) =>
     api
-      .get<Paginated<VerificationRequest>>("/admin/verification-requests/null-organization", { params })
+      .get<Paginated<UnmatchedOrganization>>("/admin/verification-requests/null-organization", { params })
       .then((r) => r.data),
+  unmatchedOrgDetail: (uuid: UUID) =>
+    api
+      .get<UnmatchedOrgDetail>(`/admin/verification-requests/null-organization/${uuid}`)
+      .then((r) => r.data),
+  adminVerifyUnmatchedRequest: (uuid: UUID, data: { status: "verified" | "unverified"; verification_remarks: string }) =>
+    api
+      .patch<{ request: VerificationRequest }>(`/admin/verification-requests/null-organization/${uuid}/verify`, data)
+      .then((r) => r.data.request),
   acceptRequest: (
     uuid: UUID,
-    data: { verification_remarks: string; issuing_organization_uuid?: UUID },
+    data: { verification_remarks: string; issuing_organization_uuid: UUID },
   ) =>
     api
-      .patch<{ request: VerificationRequest }>(`/admin/verification-requests/${uuid}/accept`, data)
-      .then((r) => r.data.request),
+      .patch<{ unmatched_org: UnmatchedOrganization }>(`/admin/verification-requests/${uuid}/accept`, data)
+      .then((r) => r.data.unmatched_org),
+  lockRequest: (uuid: UUID) =>
+    api.patch<{ request: VerificationRequest }>(`/admin/verification-requests/${uuid}/lock`).then((r) => r.data.request),
+  unlockRequest: (uuid: UUID) =>
+    api.patch<{ request: VerificationRequest }>(`/admin/verification-requests/${uuid}/unlock`).then((r) => r.data.request),
   deleteRequest: (uuid: UUID) =>
     api.delete(`/admin/verification-requests/${uuid}`).then((r) => r.data),
 
@@ -256,6 +307,8 @@ export const notificationService = {
     api.get<{ count: number }>("/notifications/unread-count").then((r) => r.data.count),
   markRead: (id: number) =>
     api.post(`/notifications/${id}/read`).then((r) => r.data),
+  markReadByReference: (referenceId: string) =>
+    api.post(`/notifications/read-by-reference/${referenceId}`).then((r) => r.data),
   markAllRead: () =>
     api.post("/notifications/read-all").then((r) => r.data),
 };

@@ -13,14 +13,15 @@ export function useOrgSubscription() {
     queryFn: () => paymentService.plan(),
     enabled: mounted && !!user && user.role !== "admin",
     retry: false,
-    staleTime: 60_000,
+    refetchOnWindowFocus: true,
+    refetchInterval: 30_000,
   });
 
   const orgSub = (q.data?.org_subscription as OrgSubscription) ?? null;
   const isActive = orgSub?.status === "active";
   const isExpired = orgSub?.status === "expired";
   const isNone = orgSub?.status === "none" || orgSub === null;
-  const isLocked = !isActive; // locked if expired OR no subscription
+  const isLocked = q.isFetched && !isActive;
 
   return { orgSub, isActive, isExpired, isNone, isLocked, isLoading: q.isLoading };
 }

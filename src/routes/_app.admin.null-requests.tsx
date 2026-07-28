@@ -2,13 +2,15 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, CheckCircle2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Building2, ExternalLink, Eye, XCircle, Lock, Unlock } from "lucide-react";
 
 import { PageHeader } from "@/components/common/PageHeader";
+import { SearchInput } from "@/components/common/SearchInput";
 import { EmptyState } from "@/components/common/EmptyState";
 import { Pagination } from "@/components/common/Pagination";
-import { PriorityBadge } from "@/components/common/StatusBadge";
+import { StatusBadge } from "@/components/common/StatusBadge";
 import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -28,8 +30,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { adminService, type VerificationRequest } from "@/services";
-import { formatDate } from "@/lib/utils";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { adminService, type UnmatchedOrganization, type UnmatchedOrgDetail } from "@/services";
+import { formatDate, formatDateTime, resolveAssetUrl } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/admin/null-requests")({
   head: () => ({ meta: [{ title: "Unmatched Organizations — Dvarif Admin" }] }),
@@ -38,30 +48,56 @@ export const Route = createFileRoute("/_app/admin/null-requests")({
 
 const PAGE_SIZE = 12;
 
+const statusStyles: Record<string, string> = {
+  pending: "bg-warning/15 text-warning-foreground border-warning/30",
+  contacted: "bg-primary/10 text-primary border-primary/20",
+  converted: "bg-success/12 text-success border-success/25",
+  ignored: "bg-muted text-muted-foreground border-border",
+};
+
+function formatWebsiteUrl(url: string): string {
+  if (!url) return url;
+  if (/^https?:\/\//i.test(url)) return url;
+  return `https://${url}`;
+}
+
 function NullRequestsPage() {
   const [page, setPage] = useState(1);
+  const [search, setSearch] = useState("");
 
   const q = useQuery({
-    queryKey: ["null-org-requests", page],
-    queryFn: () => adminService.nullOrgRequests({ page, limit: PAGE_SIZE }),
+    queryKey: ["null-org-requests", page, search],
+    queryFn: () => adminService.nullOrgRequests({ page, limit: PAGE_SIZE, search }),
   });
 
   const items = q.data?.items ?? [];
   const totalPages = q.data?.totalPages ?? 1;
 
-  const [active, setActive] = useState<VerificationRequest | null>(null);
+  const [detailUuid, setDetailUuid] = useState<string | null>(null);
+  const [assignOrg, setAssignOrg] = useState<UnmatchedOrganization | null>(null);
 
   return (
     <div>
       <PageHeader
         title="Unmatched organizations"
-        description="Requests where the issuing organization isn't yet in the network. Assign or onboard them here."
+        description="Organizations referenced in requests but not yet in the network. Assign them to a verified org or mark as handled."
       />
+
+      <div className="mb-4">
+        <SearchInput
+          value={search}
+          onChange={(v) => {
+            setSearch(v);
+            setPage(1);
+          }}
+          placeholder="Search by organization name, email, or phone…"
+        />
+      </div>
 
       {q.isLoading ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-40 rounded-xl" />
+            <Skeleton key={i} className="h-48 rounded-xl" />
           ))}
         </div>
       ) : items.length === 0 ? (
@@ -73,46 +109,71 @@ function NullRequestsPage() {
       ) : (
         <>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {items.map((r) => (
-              <Card key={r.uuid} className="border-border/70 shadow-none">
+            {items.map((org) => (
+              <Card key={org.uuid} className="border-border/70 shadow-none">
                 <CardContent className="p-5">
                   <div className="flex items-start justify-between">
                     <div className="flex h-9 w-9 items-center justify-center rounded-md bg-warning/15 text-warning-foreground dark:text-warning">
-                      <AlertTriangle className="h-4 w-4" />
+                      <Building2 className="h-4 w-4" />
                     </div>
-                    <PriorityBadge priority={r.priority} />
+                    <Badge
+                      variant="outline"
+                      className={`rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${statusStyles[org.status] ?? statusStyles.pending}`}
+                    >
+                      {org.status}
+                    </Badge>
                   </div>
                   <div className="mt-4">
                     <div className="text-xs font-medium uppercase text-muted-foreground">
-                      Claimed organization
+                      Organization
                     </div>
                     <div className="mt-1 text-base font-semibold text-foreground">
-                      {r.other_organization_name ?? "Unnamed"}
+                      {org.name}
                     </div>
                   </div>
                   <dl className="mt-4 space-y-1.5 text-xs">
+                    {org.email ? (
+                      <div className="flex justify-between">
+                        <dt className="text-muted-foreground">Email</dt>
+                        <dd className="text-foreground">{org.email}</dd>
+                      </div>
+                    ) : null}
+                    {org.phone ? (
+                      <div className="flex justify-between">
+                        <dt className="text-muted-foreground">Phone</dt>
+                        <dd className="text-foreground">{org.phone}</dd>
+                      </div>
+                    ) : null}
                     <div className="flex justify-between">
-                      <dt className="text-muted-foreground">Document</dt>
-                      <dd className="font-medium text-foreground">{r.document_type}</dd>
+                      <dt className="text-muted-foreground">Requests</dt>
+                      <dd className="font-medium text-foreground">{org.request_count}</dd>
                     </div>
                     <div className="flex justify-between">
-                      <dt className="text-muted-foreground">Requester</dt>
-                      <dd className="text-foreground">{r.requester_name ?? "—"}</dd>
-                    </div>
-                    <div className="flex justify-between">
-                      <dt className="text-muted-foreground">Submitted</dt>
+                      <dt className="text-muted-foreground">First seen</dt>
                       <dd className="text-foreground">
-                        {formatDate(r.submitted_at)}
+                        {formatDate(org.created_at)}
                       </dd>
                     </div>
                   </dl>
-                  <Button
-                    size="sm"
-                    className="mt-5 w-full"
-                    onClick={() => setActive(r)}
-                  >
-                    Accept & assign organization
-                  </Button>
+                  <div className="mt-5 flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => setDetailUuid(org.uuid)}
+                    >
+                      <Eye className="mr-1 h-3 w-3" /> Details
+                    </Button>
+                    {org.status === "pending" && (
+                      <Button
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => setAssignOrg(org)}
+                      >
+                        Accept & assign
+                      </Button>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
             ))}
@@ -125,52 +186,352 @@ function NullRequestsPage() {
         </>
       )}
 
-      <AssignDialog request={active} onClose={() => setActive(null)} />
+      <UnmatchedOrgDetailDialog uuid={detailUuid} onClose={() => setDetailUuid(null)} onAssign={(org) => { setDetailUuid(null); setAssignOrg(org); }} />
+      <AssignDialog unmatchedOrg={assignOrg} onClose={() => setAssignOrg(null)} />
     </div>
   );
 }
 
+function UnmatchedOrgDetailDialog({
+  uuid,
+  onClose,
+  onAssign,
+}: {
+  uuid: string | null;
+  onClose: () => void;
+  onAssign: (org: UnmatchedOrganization) => void;
+}) {
+  const qc = useQueryClient();
+  const detail = useQuery({
+    queryKey: ["null-org-detail", uuid],
+    queryFn: () => adminService.unmatchedOrgDetail(uuid!),
+    enabled: !!uuid,
+  });
+
+  const org = detail.data?.organization;
+  const requests = detail.data?.requests ?? [];
+
+  const [reviewing, setReviewing] = useState<UnmatchedOrgDetail["requests"][number] | null>(null);
+  const [remarks, setRemarks] = useState("");
+
+  const lockMut = useMutation({
+    mutationFn: (reqUuid: string) => adminService.lockRequest(reqUuid),
+    onSuccess: () => {
+      toast.success("Request locked");
+      qc.invalidateQueries({ queryKey: ["null-org-detail", uuid] });
+      qc.invalidateQueries({ queryKey: ["myRequests"] });
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.message ?? "Failed to lock"),
+  });
+
+  const unlockMut = useMutation({
+    mutationFn: (reqUuid: string) => adminService.unlockRequest(reqUuid),
+    onSuccess: () => {
+      toast.success("Request unlocked");
+      qc.invalidateQueries({ queryKey: ["null-org-detail", uuid] });
+      qc.invalidateQueries({ queryKey: ["myRequests"] });
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.message ?? "Failed to unlock"),
+  });
+
+  const verify = useMutation({
+    mutationFn: ({ reqUuid, status }: { reqUuid: string; status: "verified" | "unverified" }) =>
+      adminService.adminVerifyUnmatchedRequest(reqUuid, { status, verification_remarks: remarks }),
+    onSuccess: () => {
+      toast.success("Request updated");
+      qc.invalidateQueries({ queryKey: ["null-org-detail", uuid] });
+      qc.invalidateQueries({ queryKey: ["null-org-requests"] });
+      setReviewing(null);
+      setRemarks("");
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.message ?? "Failed"),
+  });
+
+  return (
+    <Dialog open={!!uuid} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Unmatched organization details</DialogTitle>
+          <DialogDescription>
+            All information and linked requests for this unmatched organization.
+          </DialogDescription>
+        </DialogHeader>
+
+        {detail.isLoading ? (
+          <div className="space-y-3">
+            <Skeleton className="h-5 w-48" />
+            <Skeleton className="h-5 w-64" />
+            <Skeleton className="h-5 w-40" />
+          </div>
+        ) : org ? (
+          <div className="space-y-5">
+            <div className="rounded-lg border border-border">
+              <Table>
+                <TableBody>
+                  <TableRow>
+                    <TableCell className="w-40 font-medium text-muted-foreground">Name</TableCell>
+                    <TableCell className="font-medium text-foreground">{org.name}</TableCell>
+                  </TableRow>
+                  {org.email && (
+                    <TableRow>
+                      <TableCell className="font-medium text-muted-foreground">Email</TableCell>
+                      <TableCell className="text-foreground">{org.email}</TableCell>
+                    </TableRow>
+                  )}
+                  {org.phone && (
+                    <TableRow>
+                      <TableCell className="font-medium text-muted-foreground">Phone</TableCell>
+                      <TableCell className="text-foreground">{org.phone}</TableCell>
+                    </TableRow>
+                  )}
+                  {org.website && (
+                    <TableRow>
+                      <TableCell className="font-medium text-muted-foreground">Website</TableCell>
+                      <TableCell>
+                        <a
+                          href={formatWebsiteUrl(org.website)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 text-foreground underline underline-offset-2 hover:text-primary"
+                        >
+                          {org.website} <ExternalLink className="h-3 w-3" />
+                        </a>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  <TableRow>
+                    <TableCell className="font-medium text-muted-foreground">Status</TableCell>
+                    <TableCell>
+                      <Badge
+                        variant="outline"
+                        className={`rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${statusStyles[org.status] ?? statusStyles.pending}`}
+                      >
+                        {org.status}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell className="font-medium text-muted-foreground">First seen</TableCell>
+                    <TableCell className="text-foreground">{formatDate(org.created_at)}</TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </div>
+
+            {requests.length > 0 && (
+              <div>
+                <h4 className="mb-2 text-sm font-semibold text-foreground">
+                  Linked requests ({requests.length})
+                </h4>
+                <div className="rounded-lg border border-border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Requester</TableHead>
+                        <TableHead>Document</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Locked</TableHead>
+                        <TableHead>Submitted</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {requests.map((r) => {
+                        const docUrl = r.document_path
+                          ? resolveAssetUrl(r.document_path) ?? r.document_path
+                          : null;
+                        const isLocked = !!r.locked_by;
+                        return (
+                          <TableRow key={r.uuid}>
+                            <TableCell>
+                              <div className="text-sm font-medium text-foreground">{r.requester_name ?? "—"}</div>
+                              <div className="text-xs text-muted-foreground">{r.requester_email ?? ""}</div>
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground">{r.document_type}</TableCell>
+                            <TableCell><StatusBadge status={r.status} /></TableCell>
+                            <TableCell>
+                              {isLocked ? (
+                                <span className="inline-flex items-center gap-1 text-xs text-warning-foreground">
+                                  <Lock className="h-3 w-3" /> {r.locked_by_name ?? "Locked"}
+                                </span>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">—</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground">{formatDate(r.submitted_at)}</TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex items-center justify-end gap-1">
+                                {docUrl && (
+                                  <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-foreground" asChild>
+                                    <a href={docUrl} target="_blank" rel="noreferrer">
+                                      <ExternalLink className="h-4 w-4" />
+                                    </a>
+                                  </Button>
+                                )}
+                                {r.status === "under_review" && (
+                                  <>
+                                    {isLocked ? (
+                                      <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        className="h-8 w-8 text-warning-foreground hover:text-warning"
+                                        title="Unlock request"
+                                        onClick={() => unlockMut.mutate(r.uuid)}
+                                        disabled={unlockMut.isPending}
+                                      >
+                                        <Unlock className="h-4 w-4" />
+                                      </Button>
+                                    ) : (
+                                      <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                                        title="Lock request"
+                                        onClick={() => lockMut.mutate(r.uuid)}
+                                        disabled={lockMut.isPending}
+                                      >
+                                        <Lock className="h-4 w-4" />
+                                      </Button>
+                                    )}
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-7 text-xs"
+                                      onClick={() => { setReviewing(r); setRemarks(""); }}
+                                    >
+                                      <Eye className="mr-1 h-3 w-3" /> Review
+                                    </Button>
+                                  </>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : null}
+
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={onClose}>
+            Close
+          </Button>
+          {org?.status === "pending" && (
+            <Button onClick={() => onAssign(org)}>
+              Accept & assign
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+
+      {/* Inline review dialog for unmatched requests */}
+      <Dialog open={!!reviewing} onOpenChange={(o) => { if (!o) { setReviewing(null); setRemarks(""); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Review request</DialogTitle>
+            <DialogDescription>
+              Approve or reject this document submitted against an unmatched organization.
+            </DialogDescription>
+          </DialogHeader>
+          {reviewing && (
+            <div className="space-y-4">
+              <div className="rounded-md border border-border bg-muted/40 p-3 text-sm">
+                <div className="font-medium text-foreground">{reviewing.document_type}</div>
+                <div className="text-xs text-muted-foreground">
+                  by {reviewing.requester_name ?? "—"} · {formatDateTime(reviewing.submitted_at)}
+                </div>
+              </div>
+              {reviewing.submission_remarks && (
+                <div>
+                  <Label>Requester's remarks</Label>
+                  <div className="mt-1 rounded-md border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
+                    {reviewing.submission_remarks}
+                  </div>
+                </div>
+              )}
+              <div className="space-y-2">
+                <Label htmlFor="admin-remarks">Your verification remarks</Label>
+                <Textarea
+                  id="admin-remarks"
+                  rows={3}
+                  value={remarks}
+                  onChange={(e) => setRemarks(e.target.value)}
+                  placeholder="Reason for your decision…"
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => { setReviewing(null); setRemarks(""); }} disabled={verify.isPending}>
+              Cancel
+            </Button>
+            <Button
+              variant="outline"
+              className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+              onClick={() => reviewing && verify.mutate({ reqUuid: reviewing.uuid, status: "unverified" })}
+              disabled={verify.isPending}
+            >
+              <XCircle className="mr-2 h-4 w-4" /> Reject
+            </Button>
+            <Button
+              onClick={() => reviewing && verify.mutate({ reqUuid: reviewing.uuid, status: "verified" })}
+              disabled={verify.isPending}
+            >
+              <CheckCircle2 className="mr-2 h-4 w-4" /> Approve
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </Dialog>
+  );
+}
+
 function AssignDialog({
-  request,
+  unmatchedOrg,
   onClose,
 }: {
-  request: VerificationRequest | null;
+  unmatchedOrg: UnmatchedOrganization | null;
   onClose: () => void;
 }) {
   const qc = useQueryClient();
   const orgs = useQuery({
     queryKey: ["admin-orgs-lookup"],
     queryFn: () => adminService.organizations({ page: 1, limit: 100 }),
-    enabled: !!request,
+    enabled: !!unmatchedOrg,
   });
   const [orgUuid, setOrgUuid] = useState<string>("");
   const [remarks, setRemarks] = useState("");
 
   const accept = useMutation({
     mutationFn: () =>
-      adminService.acceptRequest(request!.uuid, {
+      adminService.acceptRequest(unmatchedOrg!.uuid, {
         verification_remarks: remarks,
-        issuing_organization_uuid: orgUuid || undefined,
+        issuing_organization_uuid: orgUuid as any,
       }),
     onSuccess: () => {
-      toast.success("Request accepted and routed");
+      toast.success("Organization assigned and requests routed");
       qc.invalidateQueries({ queryKey: ["null-org-requests"] });
+      qc.invalidateQueries({ queryKey: ["null-org-detail"] });
       onClose();
     },
     onError: (e: any) => toast.error(e?.response?.data?.message ?? "Failed"),
   });
 
   return (
-    <Dialog open={!!request} onOpenChange={(o) => !o && onClose()}>
+    <Dialog open={!!unmatchedOrg} onOpenChange={(o) => !o && onClose()}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Assign organization</DialogTitle>
           <DialogDescription>
-            The requester typed{" "}
+            Route requests from{" "}
             <span className="font-medium text-foreground">
-              "{request?.other_organization_name}"
-            </span>
-            . Route this to an existing verified organization.
+              "{unmatchedOrg?.name}"
+            </span>{" "}
+            to an existing verified organization.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
@@ -203,7 +564,7 @@ function AssignDialog({
           <Button variant="outline" onClick={onClose} disabled={accept.isPending}>
             Cancel
           </Button>
-          <Button onClick={() => accept.mutate()} disabled={accept.isPending}>
+          <Button onClick={() => accept.mutate()} disabled={accept.isPending || !orgUuid}>
             Accept & assign
           </Button>
         </DialogFooter>

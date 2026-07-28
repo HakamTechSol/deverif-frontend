@@ -2,14 +2,15 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
-import { FileCheck2, Trash2 } from "lucide-react";
+import { Eye, FileCheck2, Trash2, Lock } from "lucide-react";
 
 import { PageHeader } from "@/components/common/PageHeader";
 import { SearchInput } from "@/components/common/SearchInput";
 import { Pagination } from "@/components/common/Pagination";
 import { EmptyState } from "@/components/common/EmptyState";
-import { StatusBadge, PriorityBadge } from "@/components/common/StatusBadge";
+import { StatusBadge } from "@/components/common/StatusBadge";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
+import { RequestDetailModal } from "@/components/common/RequestDetailModal";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -28,7 +29,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { TableSkeleton } from "./_app.requests";
-import { adminService, type UUID } from "@/services";
+import { adminService, type UUID, type VerificationRequest } from "@/services";
 import { formatDate } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/admin/requests")({
@@ -42,6 +43,7 @@ function AdminRequestsPage() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<string>("all");
   const [toDelete, setToDelete] = useState<UUID | null>(null);
+  const [viewing, setViewing] = useState<VerificationRequest | null>(null);
 
   const list = useQuery({
     queryKey: ["admin-requests", page, search, status],
@@ -116,8 +118,9 @@ function AdminRequestsPage() {
                     <TableHead>Requester</TableHead>
                     <TableHead>Issuing org</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Priority</TableHead>
+                    <TableHead>Locked</TableHead>
                     <TableHead>Submitted</TableHead>
+                    <TableHead>Verified date</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -133,7 +136,7 @@ function AdminRequestsPage() {
                       <TableCell className="text-muted-foreground">
                         {r.issuing_org_name ?? (
                           <span className="italic">
-                            {r.other_organization_name ?? "—"}
+                            {r.unmatched_org_name ?? "—"}
                           </span>
                         )}
                       </TableCell>
@@ -141,20 +144,41 @@ function AdminRequestsPage() {
                         <StatusBadge status={r.status} />
                       </TableCell>
                       <TableCell>
-                        <PriorityBadge priority={r.priority} />
+                        {r.locked_by_name ? (
+                          <span className="inline-flex items-center gap-1 text-xs text-warning-foreground">
+                            <Lock className="h-3 w-3" /> {r.locked_by_name}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">
                         {formatDate(r.submitted_at)}
                       </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {r.status === "under_review" ? "—" : formatDate(r.verified_at)}
+                      </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                          onClick={() => setToDelete(r.uuid)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                            onClick={() => setViewing(r)}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          {r.status !== "verified" && !r.locked_by && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                            onClick={() => setToDelete(r.uuid)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -180,6 +204,8 @@ function AdminRequestsPage() {
           setToDelete(null);
         }}
       />
+
+      <RequestDetailModal request={viewing} onClose={() => setViewing(null)} />
     </div>
   );
 }

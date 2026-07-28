@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Building2, Pencil, Plus, ShieldCheck, Trash2, UploadCloud, CreditCard } from "lucide-react";
+import { Building2, Pencil, Plus, Trash2, UploadCloud, CreditCard } from "lucide-react";
 
 import { PageHeader } from "@/components/common/PageHeader";
 import { SearchInput } from "@/components/common/SearchInput";
@@ -28,7 +28,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import {
   Table,
   TableBody,
@@ -112,7 +111,6 @@ function AdminOrgsPage() {
                   <TableRow>
                     <TableHead>Name</TableHead>
                     <TableHead>Type</TableHead>
-                    <TableHead>Verified</TableHead>
                     <TableHead>Subscription</TableHead>
                     <TableHead>Added</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
@@ -139,17 +137,6 @@ function AdminOrgsPage() {
                       </TableCell>
                       <TableCell className="capitalize text-muted-foreground">
                         {o.organization_type?.replace("_", " ")}
-                      </TableCell>
-                      <TableCell>
-                        {o.verified === "yes" ? (
-                          <Badge className="rounded-full border-success/30 bg-success/10 text-success" variant="outline">
-                            <ShieldCheck className="mr-1 h-3 w-3" /> Verified
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="rounded-full">
-                            Unverified
-                          </Badge>
-                        )}
                       </TableCell>
                       <TableCell>
                         <OrgSubscriptionBadge org={o} />
@@ -230,7 +217,6 @@ function OrgFormDialog({
 }) {
   const [name, setName] = useState("");
   const [type, setType] = useState<Organization["organization_type"]>("software_house");
-  const [verified, setVerified] = useState(true);
   const [logo, setLogo] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -238,7 +224,6 @@ function OrgFormDialog({
     if (open) {
       setName(editing?.name ?? "");
       setType((editing?.organization_type as any) ?? "software_house");
-      setVerified(editing?.verified === "yes");
       setLogo(null);
     }
   }, [open, editing]);
@@ -248,7 +233,6 @@ function OrgFormDialog({
     try {
       const form = new FormData();
       form.append("name", name);
-      form.append("verified", verified ? "yes" : "no");
       form.append("organization_type", type);
       if (logo) form.append("logo", logo);
       if (editing) {
@@ -292,15 +276,6 @@ function OrgFormDialog({
                 <SelectItem value="software_house">Software house</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-          <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
-            <div>
-              <Label className="mb-0">Verified</Label>
-              <p className="text-xs text-muted-foreground">
-                Visible in the requester's organization dropdown.
-              </p>
-            </div>
-            <Switch checked={verified} onCheckedChange={setVerified} />
           </div>
           <div className="space-y-2">
             <Label>Logo</Label>

@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Pencil, Plus, Trash2, Users as UsersIcon, Mail } from "lucide-react";
+import { Pencil, Plus, Trash2, Users as UsersIcon, Mail, UploadCloud } from "lucide-react";
 
 import { PageHeader } from "@/components/common/PageHeader";
 import { SearchInput } from "@/components/common/SearchInput";
@@ -28,7 +28,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import {
   Table,
@@ -40,7 +39,7 @@ import {
 } from "@/components/ui/table";
 import { TableSkeleton } from "./_app.requests";
 import { adminService, type AdminUserRecord, type UUID } from "@/services";
-import { formatCNIC } from "@/lib/utils";
+import { formatCNIC, resolveAssetUrl } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/admin/users")({
   head: () => ({ meta: [{ title: "Users — Dvarif Admin" }] }),
@@ -245,7 +244,7 @@ function UserFormDialog({
   const [orgMode, setOrgMode] = useState<"existing" | "new">("existing");
   const [orgName, setOrgName] = useState(editing?.organization_name ?? "");
   const [newOrgType, setNewOrgType] = useState<string>("software_house");
-  const [newOrgVerified, setNewOrgVerified] = useState(true);
+  const [newOrgLogo, setNewOrgLogo] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const orgList = orgs.data?.items ?? [];
@@ -271,7 +270,7 @@ function UserFormDialog({
         const orgPayload =
           orgMode === "existing" && selectedOrg
             ? { name: selectedOrg.name }
-            : { name: orgName, verified: newOrgVerified ? "yes" : "no", organization_type: newOrgType };
+            : { name: orgName, organization_type: newOrgType };
 
         const form = new FormData();
         form.append("organization", JSON.stringify(orgPayload));
@@ -279,6 +278,9 @@ function UserFormDialog({
           "user",
           JSON.stringify({ full_name: fullName, email, phone, cnic }),
         );
+        if (orgMode === "new" && newOrgLogo) {
+          form.append("org_logo", newOrgLogo);
+        }
         const result = await adminService.createUser(form);
         if (result._email_warning) {
           toast.warning("User created but invite email failed. Use Resend Invite to retry.");
@@ -416,12 +418,24 @@ function UserFormDialog({
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="flex items-center justify-between rounded-md border border-border px-3">
-                      <Label className="mb-0">Verified</Label>
-                      <Switch
-                        checked={newOrgVerified}
-                        onCheckedChange={setNewOrgVerified}
-                      />
+                    <div className="space-y-2 sm:col-span-2">
+                      <Label>Logo</Label>
+                      <label
+                        htmlFor="org-logo"
+                        className="flex cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-border bg-muted/40 px-4 py-4 text-center hover:bg-muted/60"
+                      >
+                        <UploadCloud className="mb-1.5 h-5 w-5 text-muted-foreground" />
+                        <span className="text-sm text-foreground">
+                          {newOrgLogo ? newOrgLogo.name : "Upload logo (PNG or JPG)"}
+                        </span>
+                        <input
+                          id="org-logo"
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => setNewOrgLogo(e.target.files?.[0] ?? null)}
+                        />
+                      </label>
                     </div>
                   </div>
                 )}

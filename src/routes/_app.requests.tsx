@@ -2,14 +2,15 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { FileText, Plus, Trash2, UploadCloud, FileCheck2, Pencil, ExternalLink } from "lucide-react";
+import { FileText, Plus, Trash2, UploadCloud, FileCheck2, Pencil, ExternalLink, Eye, Lock, Unlock } from "lucide-react";
 
 import { PageHeader } from "@/components/common/PageHeader";
 import { SearchInput } from "@/components/common/SearchInput";
 import { Pagination } from "@/components/common/Pagination";
 import { EmptyState } from "@/components/common/EmptyState";
-import { StatusBadge, PriorityBadge } from "@/components/common/StatusBadge";
+import { StatusBadge } from "@/components/common/StatusBadge";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
+import { RequestDetailModal } from "@/components/common/RequestDetailModal";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -42,7 +43,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { requestsService, type VerificationRequest, type UUID } from "@/services";
 import { formatDate, resolveAssetUrl } from "@/lib/utils";
 import { useOrgSubscription } from "@/hooks/useOrgSubscription";
-import { Lock } from "lucide-react";
 
 export const Route = createFileRoute("/_app/requests")({
   head: () => ({ meta: [{ title: "My Requests — Dvarif" }] }),
@@ -57,6 +57,7 @@ function RequestsPage() {
   const [openCreate, setOpenCreate] = useState(false);
   const [editing, setEditing] = useState<VerificationRequest | null>(null);
   const [toDelete, setToDelete] = useState<UUID | null>(null);
+  const [viewing, setViewing] = useState<VerificationRequest | null>(null);
 
   const list = useQuery({
     queryKey: ["myRequests", page, search],
@@ -136,8 +137,9 @@ function RequestsPage() {
                     <TableHead>Document type</TableHead>
                     <TableHead>Organization</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Priority</TableHead>
+                    <TableHead>Locked</TableHead>
                     <TableHead>Submitted</TableHead>
+                    <TableHead>Verified date</TableHead>
                     <TableHead>Format</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
@@ -151,7 +153,7 @@ function RequestsPage() {
                       <TableCell className="text-muted-foreground">
                         {r.issuing_org_name ?? (
                           <span className="italic">
-                            {r.other_organization_name ?? "—"} (unmatched)
+                            {r.unmatched_org_name ?? "—"} (unmatched)
                           </span>
                         )}
                       </TableCell>
@@ -159,17 +161,34 @@ function RequestsPage() {
                         <StatusBadge status={r.status} />
                       </TableCell>
                       <TableCell>
-                        <PriorityBadge priority={r.priority} />
+                        {r.locked_by_name ? (
+                          <span className="inline-flex items-center gap-1 text-xs text-warning-foreground">
+                            <Lock className="h-3 w-3" /> {r.locked_by_name}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">
                         {formatDate(r.submitted_at)}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {r.status === "under_review" ? "—" : formatDate(r.verified_at)}
                       </TableCell>
                       <TableCell className="text-xs uppercase text-muted-foreground">
                         {r.document_format ?? "PDF"}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
-                          {r.status === "under_review" && !isLocked && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                            onClick={() => setViewing(r)}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          {r.status === "under_review" && !isLocked && !r.locked_by && (
                             <Button
                               size="icon"
                               variant="ghost"
@@ -179,14 +198,16 @@ function RequestsPage() {
                               <Pencil className="h-4 w-4" />
                             </Button>
                           )}
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                            onClick={() => setToDelete(r.uuid)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          {r.status !== "verified" && !r.locked_by && (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                              onClick={() => setToDelete(r.uuid)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -232,6 +253,8 @@ function RequestsPage() {
           setEditing(null);
         }}
       />
+
+      <RequestDetailModal request={viewing} onClose={() => setViewing(null)} />
     </div>
   );
 }
@@ -264,7 +287,9 @@ function CreateRequestDialog({
   const [documentType, setDocumentType] = useState("");
   const [orgUuid, setOrgUuid] = useState<string>("");
   const [otherOrgName, setOtherOrgName] = useState("");
-  const [priority, setPriority] = useState<"normal" | "urgent">("normal");
+  const [otherOrgEmail, setOtherOrgEmail] = useState("");
+  const [otherOrgPhone, setOtherOrgPhone] = useState("");
+  const [otherOrgWebsite, setOtherOrgWebsite] = useState("");
   const [remarks, setRemarks] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -279,16 +304,20 @@ function CreateRequestDialog({
     if (!orgUuid) return toast.error("Select an issuing organization");
     if (isOther && !otherOrgName.trim())
       return toast.error("Enter the organization name");
+    if (otherOrgEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(otherOrgEmail))
+      return toast.error("Enter a valid email address");
     setSubmitting(true);
     try {
       const form = new FormData();
       form.append("document_type", documentType);
-      form.append("priority", priority);
       form.append("submission_remarks", remarks);
       form.append("document", file);
       if (isOther) {
         form.append("issuing_organization_uuid", "");
         form.append("other_organization_name", otherOrgName);
+        if (otherOrgEmail) form.append("other_organization_email", otherOrgEmail);
+        if (otherOrgPhone) form.append("other_organization_phone", otherOrgPhone);
+        if (otherOrgWebsite) form.append("other_organization_website", otherOrgWebsite);
       } else {
         form.append("issuing_organization_uuid", orgUuid);
       }
@@ -297,7 +326,9 @@ function CreateRequestDialog({
       setDocumentType("");
       setOrgUuid("");
       setOtherOrgName("");
-      setPriority("normal");
+      setOtherOrgEmail("");
+      setOtherOrgPhone("");
+      setOtherOrgWebsite("");
       setRemarks("");
       setFile(null);
       onCreated();
@@ -346,31 +377,47 @@ function CreateRequestDialog({
           </div>
 
           {isOther ? (
-            <div className="space-y-2">
-              <Label>Organization name</Label>
-              <Input
-                value={otherOrgName}
-                onChange={(e) => setOtherOrgName(e.target.value)}
-                placeholder="Enter organization name"
-              />
+            <>
+              <div className="space-y-2">
+                <Label>Organization name</Label>
+                <Input
+                  value={otherOrgName}
+                  onChange={(e) => setOtherOrgName(e.target.value)}
+                  placeholder="Enter organization name"
+                />
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Email (optional)</Label>
+                  <Input
+                    type="email"
+                    value={otherOrgEmail}
+                    onChange={(e) => setOtherOrgEmail(e.target.value)}
+                    placeholder="org@example.com"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Phone (optional)</Label>
+                  <Input
+                    value={otherOrgPhone}
+                    onChange={(e) => setOtherOrgPhone(e.target.value)}
+                    placeholder="+92 300 1234567"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Website (optional)</Label>
+                <Input
+                  value={otherOrgWebsite}
+                  onChange={(e) => setOtherOrgWebsite(e.target.value)}
+                  placeholder="https://example.com"
+                />
+              </div>
               <p className="text-xs text-muted-foreground">
                 Our admin team will attempt to onboard this organization for review.
               </p>
-            </div>
+            </>
           ) : null}
-
-          <div className="space-y-2">
-            <Label>Priority</Label>
-            <Select value={priority} onValueChange={(v) => setPriority(v as any)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="normal">Normal</SelectItem>
-                <SelectItem value="urgent">Urgent</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
 
           <div className="space-y-2">
             <Label>Document</Label>
@@ -438,7 +485,9 @@ function EditRequestDialog({
   const [documentType, setDocumentType] = useState("");
   const [orgUuid, setOrgUuid] = useState<string>("");
   const [otherOrgName, setOtherOrgName] = useState("");
-  const [priority, setPriority] = useState<"normal" | "urgent">("normal");
+  const [otherOrgEmail, setOtherOrgEmail] = useState("");
+  const [otherOrgPhone, setOtherOrgPhone] = useState("");
+  const [otherOrgWebsite, setOtherOrgWebsite] = useState("");
   const [remarks, setRemarks] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -452,13 +501,15 @@ function EditRequestDialog({
   useMemo(() => {
     if (request) {
       setDocumentType(request.document_type);
-      setPriority(request.priority as "normal" | "urgent");
       setRemarks(request.submission_remarks ?? "");
-      setOtherOrgName(request.other_organization_name ?? "");
+      setOtherOrgName(request.unmatched_org_name ?? "");
+      setOtherOrgEmail("");
+      setOtherOrgPhone("");
+      setOtherOrgWebsite("");
       setFile(null);
       if (request.issuing_organization_uuid) {
         setOrgUuid(request.issuing_organization_uuid);
-      } else if (request.other_organization_name) {
+      } else if (request.unmatched_org_name) {
         setOrgUuid("__other__");
       } else {
         setOrgUuid("");
@@ -472,16 +523,20 @@ function EditRequestDialog({
     if (!orgUuid) return toast.error("Select an issuing organization");
     if (isOther && !otherOrgName.trim())
       return toast.error("Enter the organization name");
+    if (otherOrgEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(otherOrgEmail))
+      return toast.error("Enter a valid email address");
 
     setSubmitting(true);
     try {
       const form = new FormData();
       form.append("document_type", documentType);
-      form.append("priority", priority);
       form.append("submission_remarks", remarks);
       if (isOther) {
         form.append("issuing_organization_uuid", "");
         form.append("other_organization_name", otherOrgName);
+        if (otherOrgEmail) form.append("other_organization_email", otherOrgEmail);
+        if (otherOrgPhone) form.append("other_organization_phone", otherOrgPhone);
+        if (otherOrgWebsite) form.append("other_organization_website", otherOrgWebsite);
       } else {
         form.append("issuing_organization_uuid", orgUuid);
       }
@@ -536,28 +591,44 @@ function EditRequestDialog({
           </div>
 
           {isOther ? (
-            <div className="space-y-2">
-              <Label>Organization name</Label>
-              <Input
-                value={otherOrgName}
-                onChange={(e) => setOtherOrgName(e.target.value)}
-                placeholder="Enter organization name"
-              />
-            </div>
+            <>
+              <div className="space-y-2">
+                <Label>Organization name</Label>
+                <Input
+                  value={otherOrgName}
+                  onChange={(e) => setOtherOrgName(e.target.value)}
+                  placeholder="Enter organization name"
+                />
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Email (optional)</Label>
+                  <Input
+                    type="email"
+                    value={otherOrgEmail}
+                    onChange={(e) => setOtherOrgEmail(e.target.value)}
+                    placeholder="org@example.com"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Phone (optional)</Label>
+                  <Input
+                    value={otherOrgPhone}
+                    onChange={(e) => setOtherOrgPhone(e.target.value)}
+                    placeholder="+92 300 1234567"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Website (optional)</Label>
+                <Input
+                  value={otherOrgWebsite}
+                  onChange={(e) => setOtherOrgWebsite(e.target.value)}
+                  placeholder="https://example.com"
+                />
+              </div>
+            </>
           ) : null}
-
-          <div className="space-y-2">
-            <Label>Priority</Label>
-            <Select value={priority} onValueChange={(v) => setPriority(v as any)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="normal">Normal</SelectItem>
-                <SelectItem value="urgent">Urgent</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
 
           <div className="space-y-2">
             <Label>Document{file ? "" : " (optional — re-upload to replace)"}</Label>

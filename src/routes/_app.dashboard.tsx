@@ -11,6 +11,9 @@ import {
   Users,
   AlertTriangle,
   Clock,
+  ShieldCheck,
+  ShieldX,
+  Eye,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/common/PageHeader";
@@ -59,13 +62,16 @@ function DashboardPage() {
   const adminStats: Stat[] = [
     { label: "Total Users", value: data?.total_users ?? 0, icon: Users, href: "/admin/users", progress: data?.users_progress ?? 0 },
     { label: "Organizations", value: data?.total_organizations ?? 0, icon: Building2, href: "/admin/organizations", progress: data?.organizations_progress ?? 0 },
-    { label: "Verification Requests", value: data?.total_verification_requests ?? 0, icon: FileCheck2, href: "/admin/requests", progress: data?.requests_progress ?? 0 },
+    { label: "Verified Requests", value: data?.verified_requests ?? 0, icon: ShieldCheck, href: "/admin/requests", progress: data?.requests_progress ?? 0 },
+    { label: "Unverified Requests", value: data?.unverified_requests ?? 0, icon: ShieldX, href: "/admin/requests" },
+    { label: "Under Review", value: data?.under_review_requests ?? 0, icon: Eye, href: "/admin/requests" },
     { label: "Unmatched Orgs", value: data?.total_admin_requests ?? 0, icon: AlertTriangle, href: "/admin/null-requests", progress: data?.unmatched_progress ?? 100, hint: "Pending admin review" },
   ];
   const userStats: Stat[] = [
-    { label: "Organizations", value: data?.total_organizations ?? 0, icon: Building2, href: "/settings", progress: data?.organizations_progress ?? 0 },
     { label: "My Requests Sent", value: data?.total_verification_requests ?? 0, icon: Send, href: "/requests", progress: data?.requests_progress ?? 0 },
-    { label: "Unmatched Requests", value: data?.total_admin_requests ?? 0, icon: Inbox, href: "/inbox", progress: data?.unmatched_progress ?? 100 },
+    { label: "Verified", value: data?.verified_requests ?? 0, icon: ShieldCheck, href: "/requests" },
+    { label: "Unverified", value: data?.unverified_requests ?? 0, icon: ShieldX, href: "/requests" },
+    { label: "Under Review", value: data?.under_review_requests ?? 0, icon: Eye, href: "/requests" },
   ];
   const stats = isAdmin ? adminStats : userStats;
 
@@ -180,70 +186,6 @@ function DashboardPage() {
         </Card>
       )}
 
-      <Card className="mt-8 border-border/70 shadow-none">
-        <CardContent className="p-5">
-          <div className="flex items-center gap-2">
-            <FileCheck2 className="h-4 w-4 text-primary" />
-            <h2 className="text-sm font-semibold text-foreground">Quick actions</h2>
-          </div>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Jump to key areas of the platform.
-          </p>
-          <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-            {isAdmin ? (
-              <>
-                <QuickLink to="/admin/users" label="Manage users" icon={Users} />
-                <QuickLink to="/admin/organizations" label="Organizations" icon={Building2} />
-                <QuickLink to="/admin/requests" label="All requests" icon={FileCheck2} />
-                <QuickLink to="/admin/null-requests" label="Unmatched orgs" icon={AlertTriangle} />
-              </>
-            ) : isLocked ? (
-              <>
-                <QuickLink to="/payments" label="Renew subscription" icon={Lock} locked />
-                <QuickLink to="/settings" label="Settings" icon={ArrowUpRight} />
-              </>
-            ) : (
-              <>
-                <QuickLink to="/requests" label="New request" icon={Send} />
-                <QuickLink to="/inbox" label="Check inbox" icon={Inbox} />
-                <QuickLink to="/payments" label="View plan" icon={ArrowUpRight} />
-                <QuickLink to="/settings" label="Settings" icon={ArrowUpRight} />
-              </>
-            )}
-          </div>
-        </CardContent>
-      </Card>
     </div>
-  );
-}
-
-function QuickLink({
-  to,
-  label,
-  icon: Icon,
-  locked,
-}: {
-  to: string;
-  label: string;
-  icon: LucideIcon;
-  locked?: boolean;
-}) {
-  return (
-    <Link
-      to={to}
-      className={`flex items-center gap-3 rounded-lg border bg-card/50 px-4 py-3 text-sm font-medium transition-colors ${
-        locked
-          ? "border-destructive/30 text-destructive hover:bg-destructive/5"
-          : "border-border text-foreground hover:bg-accent"
-      }`}
-    >
-      <Icon className="h-4 w-4 text-muted-foreground" />
-      {label}
-      {locked ? (
-        <Lock className="ml-auto h-3.5 w-3.5 text-destructive" />
-      ) : (
-        <ArrowUpRight className="ml-auto h-3 w-3 text-muted-foreground" />
-      )}
-    </Link>
   );
 }

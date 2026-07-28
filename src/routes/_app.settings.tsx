@@ -25,7 +25,7 @@ function SettingsPage() {
   const qc = useQueryClient();
   const { user } = useAuth();
 
-  type ProfileData = { full_name?: string; phone?: string | null; profile_image?: string | null; email?: string };
+  type ProfileData = { full_name?: string; phone?: string | null; profile_image?: string | null; email?: string; organization_uuid?: string | null; organization_name?: string | null; organization_logo?: string | null };
 
   const me = useQuery({
     queryKey: ["me"],
@@ -95,6 +95,23 @@ function SettingsPage() {
               This is how others in the network will see you.
             </p>
 
+            {user?.role !== "admin" && me.data?.organization_name && (
+              <div className="mt-4 flex items-center gap-2">
+                {me.data.organization_logo ? (
+                  <img
+                    src={resolveAssetUrl(me.data.organization_logo) ?? undefined}
+                    alt={me.data.organization_name}
+                    className="h-5 w-5 rounded object-cover"
+                  />
+                ) : (
+                  <span className="flex h-5 w-5 items-center justify-center rounded bg-primary/10 text-[9px] font-bold text-primary">
+                    {me.data.organization_name[0].toUpperCase()}
+                  </span>
+                )}
+                <span className="text-sm text-foreground">{me.data.organization_name}</span>
+              </div>
+            )}
+
             <div className="mt-6 flex items-center gap-5">
               <div className="relative">
                 <Avatar className="h-20 w-20">
@@ -103,8 +120,7 @@ function SettingsPage() {
                     {initials}
                   </AvatarFallback>
                 </Avatar>
-                {user?.role !== "admin" ? (
-                  <label className="absolute -bottom-1 -right-1 flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-sm hover:text-foreground">
+                <label className="absolute -bottom-1 -right-1 flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-sm hover:text-foreground">
                     <Camera className="h-3.5 w-3.5" />
                     <input
                       type="file"
@@ -117,7 +133,6 @@ function SettingsPage() {
                       }}
                     />
                   </label>
-                ) : null}
               </div>
               <div>
                 <div className="text-sm font-medium text-foreground">{fullName || "—"}</div>

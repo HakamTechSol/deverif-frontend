@@ -1,17 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { CheckCircle2, ExternalLink, Inbox as InboxIcon, XCircle } from "lucide-react";
+import { CheckCircle2, ExternalLink, Eye, Inbox as InboxIcon, XCircle } from "lucide-react";
 
 import { PageHeader } from "@/components/common/PageHeader";
 import { SearchInput } from "@/components/common/SearchInput";
 import { Pagination } from "@/components/common/Pagination";
 import { EmptyState } from "@/components/common/EmptyState";
-import { StatusBadge, PriorityBadge } from "@/components/common/StatusBadge";
+import { RequestDetailModal } from "@/components/common/RequestDetailModal";
+import { StatusBadge } from "@/components/common/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -31,7 +31,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { TableSkeleton } from "./_app.requests";
-import { requestsService, type VerificationRequest } from "@/services";
+import { requestsService, notificationService, type VerificationRequest } from "@/services";
 import { formatDate, formatDateTime, resolveAssetUrl } from "@/lib/utils";
 import { useOrgSubscription } from "@/hooks/useOrgSubscription";
 import { Lock } from "lucide-react";
@@ -47,6 +47,7 @@ function InboxPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [active, setActive] = useState<VerificationRequest | null>(null);
+  const [viewing, setViewing] = useState<VerificationRequest | null>(null);
 
   const list = useQuery({
     queryKey: ["inbox", page, search],
@@ -54,6 +55,20 @@ function InboxPage() {
   });
 
   const items = list.data?.items ?? [];
+
+  const markNotifRead = (reqUuid: string) => {
+    notificationService.markReadByReference(reqUuid).then(() => {
+      qc.invalidateQueries({ queryKey: ["notifications-unread"] });
+    });
+  };
+
+  useEffect(() => {
+    if (active?.uuid) markNotifRead(active.uuid);
+  }, [active?.uuid]);
+
+  useEffect(() => {
+    if (viewing?.uuid) markNotifRead(viewing.uuid);
+  }, [viewing?.uuid]);
 
   return (
     <div>
@@ -93,8 +108,8 @@ function InboxPage() {
                     <TableHead>Requester</TableHead>
                     <TableHead>Document type</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Priority</TableHead>
                     <TableHead>Submitted</TableHead>
+                    <TableHead>Verified date</TableHead>
                     <TableHead>Format</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
@@ -112,29 +127,39 @@ function InboxPage() {
                       <TableCell>
                         <StatusBadge status={r.status} />
                       </TableCell>
-                      <TableCell>
-                        <PriorityBadge priority={r.priority} />
-                      </TableCell>
                       <TableCell className="text-xs text-muted-foreground">
                         {formatDate(r.submitted_at)}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {r.status === "under_review" ? "—" : formatDate(r.verified_at)}
                       </TableCell>
                       <TableCell className="text-xs uppercase text-muted-foreground">
                         {r.document_format ?? "PDF"}
                       </TableCell>
                       <TableCell className="text-right">
-                        {isLocked ? (
-                          <Button size="sm" variant="outline" disabled>
-                            <Lock className="mr-1 h-3 w-3" /> Locked
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                            onClick={() => setViewing(r)}
+                          >
+                            <Eye className="h-4 w-4" />
                           </Button>
-                        ) : r.status === "under_review" ? (
-                          <Button size="sm" variant="outline" onClick={() => setActive(r)}>
-                            Review
-                          </Button>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">
-                            {r.status === "verified" ? "Approved" : "Processed"}
-                          </span>
-                        )}
+                          {isLocked ? (
+                            <Button size="sm" variant="outline" disabled>
+                              <Lock className="mr-1 h-3 w-3" /> Locked
+                            </Button>
+                          ) : r.status === "under_review" ? (
+                            <Button size="sm" variant="outline" onClick={() => setActive(r)}>
+                              Review
+                            </Button>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">
+                              {r.status === "verified" ? "Approved" : "Processed"}
+                            </span>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -160,6 +185,8 @@ function InboxPage() {
           setActive(null);
         }}
       />
+
+      <RequestDetailModal request={viewing} onClose={() => setViewing(null)} />
     </div>
   );
 }
@@ -174,14 +201,13 @@ function VerifyDialog({
   onDone: () => void;
 }) {
   const [remarks, setRemarks] = useState("");
-  const [futureConcern, setFutureConcern] = useState(false);
+  const isFinalized = request && request.status !== "under_review";
 
   const verify = useMutation({
     mutationFn: (status: "verified" | "unverified") =>
       requestsService.verify(request!.uuid, {
         status,
         verification_remarks: remarks,
-        organization_conserned_for_future: futureConcern ? "yes" : "no",
       }),
     onSuccess: () => {
       toast.success("Decision recorded");
@@ -194,100 +220,124 @@ function VerifyDialog({
     <Dialog open={!!request} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-3xl">
         <DialogHeader>
-          <DialogTitle>Review verification request</DialogTitle>
+          <DialogTitle>
+            {isFinalized ? "Request details" : "Review verification request"}
+          </DialogTitle>
           <DialogDescription>
-            Approve or reject the document with an explanatory remark.
+            {isFinalized
+              ? "This request has already been finalized."
+              : "Approve or reject the document with an explanatory remark."}
           </DialogDescription>
         </DialogHeader>
 
         {request ? (
-          <div className="grid gap-6 md:grid-cols-[1.2fr_1fr]">
-            <div className="rounded-lg border border-border bg-muted/40 p-4">
-              <div className="mb-3 flex items-center justify-between">
+          <>
+            {isFinalized && (
+              <div
+                className={`flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium ${
+                  request.status === "verified"
+                    ? "border-success/30 bg-success/10 text-success"
+                    : "border-destructive/30 bg-destructive/10 text-destructive"
+                }`}
+              >
+                {request.status === "verified" ? (
+                  <><CheckCircle2 className="h-4 w-4" /> Verified</>
+                ) : (
+                  <><XCircle className="h-4 w-4" /> Unverified</>
+                )}
+                {request.verified_at && (
+                  <span className="ml-auto text-xs font-normal opacity-70">
+                    {formatDateTime(request.verified_at)}
+                  </span>
+                )}
+              </div>
+            )}
+
+            <div className="grid gap-6 md:grid-cols-[1.2fr_1fr]">
+              <div className="rounded-lg border border-border bg-muted/40 p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <div>
+                    <div className="text-xs font-medium uppercase text-muted-foreground">
+                      Document
+                    </div>
+                    <div className="text-sm font-semibold text-foreground">
+                      {request.document_type}
+                    </div>
+                  </div>
+                  {request.document_path ? (
+                    <a
+                      href={resolveAssetUrl(request.document_path) ?? request.document_path}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground hover:bg-accent"
+                    >
+                      Open <ExternalLink className="h-3 w-3" />
+                    </a>
+                  ) : null}
+                </div>
+                <dl className="grid grid-cols-2 gap-3 text-xs">
+                  <MetaRow label="Requester" value={request.requester_name ?? "—"} />
+                  <MetaRow label="Company" value={request.requester_organization ?? "—"} />
+                  <MetaRow label="Submitted" value={formatDateTime(request.submitted_at)} />
+                </dl>
+              </div>
+
+              <div className="flex flex-col gap-4">
                 <div>
-                  <div className="text-xs font-medium uppercase text-muted-foreground">
-                    Document
-                  </div>
-                  <div className="text-sm font-semibold text-foreground">
-                    {request.document_type}
+                  <Label>Requester's remarks</Label>
+                  <div className="mt-1.5 rounded-md border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
+                    {request.submission_remarks || "No remarks provided."}
                   </div>
                 </div>
-                {request.document_path ? (
-                  <a
-                    href={resolveAssetUrl(request.document_path) ?? request.document_path}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground hover:bg-accent"
-                  >
-                    Open <ExternalLink className="h-3 w-3" />
-                  </a>
-                ) : null}
+
+                {isFinalized ? (
+                  <div className="space-y-2">
+                    <Label>Verification remarks</Label>
+                    <div className="rounded-md border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
+                      {request.verification_remarks || "No remarks provided."}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Label htmlFor="vrem">Your verification remarks</Label>
+                    <Textarea
+                      id="vrem"
+                      rows={4}
+                      value={remarks}
+                      onChange={(e) => setRemarks(e.target.value)}
+                      placeholder="Explain the reasoning for your decision…"
+                    />
+                  </div>
+                )}
               </div>
-              <div className="flex h-64 items-center justify-center rounded-md border border-dashed border-border bg-background text-xs text-muted-foreground">
-                Document preview
-              </div>
-              <dl className="mt-4 grid grid-cols-2 gap-3 text-xs">
-                <MetaRow label="Requester" value={request.requester_name ?? "—"} />
-                <MetaRow label="Company" value={request.requester_organization ?? "—"} />
-                <MetaRow label="Submitted" value={formatDateTime(request.submitted_at)} />
-                <MetaRow label="Priority" value={request.priority} />
-              </dl>
             </div>
-
-            <div className="flex flex-col gap-4">
-              <div>
-                <Label>Requester's remarks</Label>
-                <div className="mt-1.5 rounded-md border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
-                  {request.submission_remarks || "No remarks provided."}
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="vrem">Your verification remarks</Label>
-                <Textarea
-                  id="vrem"
-                  rows={4}
-                  value={remarks}
-                  onChange={(e) => setRemarks(e.target.value)}
-                  placeholder="Explain the reasoning for your decision…"
-                />
-              </div>
-
-              <label className="flex items-start gap-2 rounded-md border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
-                <Checkbox
-                  className="mt-0.5"
-                  checked={futureConcern}
-                  onCheckedChange={(v) => setFutureConcern(Boolean(v))}
-                />
-                <span>
-                  Flag this requester's organization for future concern. Admins will be
-                  notified when new requests arrive from them.
-                </span>
-              </label>
-            </div>
-          </div>
+          </>
         ) : null}
 
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={onClose} disabled={verify.isPending}>
-            Cancel
+            {isFinalized ? "Close" : "Cancel"}
           </Button>
-          <Button
-            variant="outline"
-            className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
-            onClick={() => verify.mutate("unverified")}
-            disabled={verify.isPending}
-          >
-            <XCircle className="mr-2 h-4 w-4" />
-            Reject
-          </Button>
-          <Button
-            onClick={() => verify.mutate("verified")}
-            disabled={verify.isPending}
-          >
-            <CheckCircle2 className="mr-2 h-4 w-4" />
-            Approve
-          </Button>
+          {!isFinalized && (
+            <>
+              <Button
+                variant="outline"
+                className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                onClick={() => verify.mutate("unverified")}
+                disabled={verify.isPending}
+              >
+                <XCircle className="mr-2 h-4 w-4" />
+                Reject
+              </Button>
+              <Button
+                onClick={() => verify.mutate("verified")}
+                disabled={verify.isPending}
+              >
+                <CheckCircle2 className="mr-2 h-4 w-4" />
+                Approve
+              </Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
