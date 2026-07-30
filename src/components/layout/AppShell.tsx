@@ -20,6 +20,7 @@ import {
   Sun,
   Bell,
   CheckCheck,
+  MessageSquare,
 } from "lucide-react";
 import { Logo } from "@/components/common/Logo";
 import { Button } from "@/components/ui/button";
@@ -49,6 +50,7 @@ const adminNav: NavItem[] = [
   { to: "/admin/requests", label: "Verification Requests", icon: FileCheck2 },
   { to: "/admin/null-requests", label: "Unmatched Orgs", icon: AlertTriangle },
   { to: "/admin/payments", label: "Payments", icon: Wallet },
+  { to: "/admin/leads", label: "Leads", icon: MessageSquare },
   { to: "/settings", label: "Settings", icon: Settings },
 ];
 

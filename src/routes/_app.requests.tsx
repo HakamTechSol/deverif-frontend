@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { FileText, Plus, Trash2, UploadCloud, FileCheck2, Pencil, ExternalLink, Eye, Lock, Unlock } from "lucide-react";
+import { FileText, Plus, Trash2, UploadCloud, FileCheck2, Pencil, ExternalLink, Eye, Lock, Unlock, Building2 } from "lucide-react";
 
 import { PageHeader } from "@/components/common/PageHeader";
 import { SearchInput } from "@/components/common/SearchInput";
@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
@@ -54,14 +55,16 @@ function RequestsPage() {
   const { isLocked } = useOrgSubscription();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [openCreate, setOpenCreate] = useState(false);
   const [editing, setEditing] = useState<VerificationRequest | null>(null);
   const [toDelete, setToDelete] = useState<UUID | null>(null);
   const [viewing, setViewing] = useState<VerificationRequest | null>(null);
 
   const list = useQuery({
-    queryKey: ["myRequests", page, search],
-    queryFn: () => requestsService.mySent({ page, limit: 10, search }),
+    queryKey: ["myRequests", page, search, dateFrom, dateTo],
+    queryFn: () => requestsService.mySent({ page, limit: 10, search, dateFrom: dateFrom || undefined, dateTo: dateTo || undefined }),
   });
 
   const del = useMutation({
@@ -106,6 +109,21 @@ function RequestsPage() {
               }}
               placeholder="Search by document or organization…"
             />
+            <div className="flex items-center gap-2">
+              <Input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => { setDateFrom(e.target.value); setPage(1); }}
+                className="w-40"
+              />
+              <span className="text-xs text-muted-foreground">to</span>
+              <Input
+                type="date"
+                value={dateTo}
+                onChange={(e) => { setDateTo(e.target.value); setPage(1); }}
+                className="w-40"
+              />
+            </div>
           </div>
 
           {list.isLoading ? (
@@ -349,7 +367,8 @@ function CreateRequestDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="space-y-5">
+          {/* Document type */}
           <div className="space-y-2">
             <Label>Document type</Label>
             <Input
@@ -359,8 +378,16 @@ function CreateRequestDialog({
             />
           </div>
 
+          <Separator />
+
+          {/* Issuing organization */}
           <div className="space-y-2">
-            <Label>Issuing organization</Label>
+            <div className="flex items-center gap-2">
+              <Building2 className="h-4 w-4 text-muted-foreground" />
+              <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Target organization
+              </Label>
+            </div>
             <Select value={orgUuid} onValueChange={setOrgUuid}>
               <SelectTrigger>
                 <SelectValue placeholder="Select an organization" />
@@ -371,13 +398,17 @@ function CreateRequestDialog({
                     {o.name}
                   </SelectItem>
                 ))}
-                <SelectItem value="__other__">Other (not listed)</SelectItem>
+                <Separator className="my-1" />
+                <SelectItem value="__other__">
+                  <span className="text-muted-foreground">Other (not listed)</span>
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           {isOther ? (
-            <>
+            <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-3">
+              <p className="text-xs font-medium text-muted-foreground">Organization details</p>
               <div className="space-y-2">
                 <Label>Organization name</Label>
                 <Input
@@ -386,7 +417,7 @@ function CreateRequestDialog({
                   placeholder="Enter organization name"
                 />
               </div>
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Email (optional)</Label>
                   <Input
@@ -416,21 +447,26 @@ function CreateRequestDialog({
               <p className="text-xs text-muted-foreground">
                 Our admin team will attempt to onboard this organization for review.
               </p>
-            </>
+            </div>
           ) : null}
 
+          <Separator />
+
+          {/* Document */}
           <div className="space-y-2">
             <Label>Document</Label>
             <label
               htmlFor="doc-file"
-              className="flex cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-border bg-muted/40 px-4 py-6 text-center hover:bg-muted/60"
+              className="flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-lg border-2 border-dashed border-border bg-muted/25 px-4 py-5 text-center transition-colors hover:border-primary/50 hover:bg-muted/40"
             >
-              <UploadCloud className="mb-2 h-5 w-5 text-muted-foreground" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+                <UploadCloud className="h-5 w-5 text-primary" />
+              </div>
               <span className="text-sm font-medium text-foreground">
-                {file ? file.name : "Click to upload or drag & drop"}
+                {file ? file.name : "Click to upload"}
               </span>
-              <span className="mt-0.5 text-xs text-muted-foreground">
-                PDF or JPEG · Max 10MB
+              <span className="text-xs text-muted-foreground">
+                PDF or JPEG &middot; Max 10MB
               </span>
               <input
                 id="doc-file"
@@ -442,6 +478,7 @@ function CreateRequestDialog({
             </label>
           </div>
 
+          {/* Remarks */}
           <div className="space-y-2">
             <Label>Remarks (optional)</Label>
             <Textarea

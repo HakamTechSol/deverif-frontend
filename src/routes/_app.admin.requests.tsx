@@ -13,6 +13,7 @@ import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { RequestDetailModal } from "@/components/common/RequestDetailModal";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -42,17 +43,21 @@ function AdminRequestsPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<string>("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [toDelete, setToDelete] = useState<UUID | null>(null);
   const [viewing, setViewing] = useState<VerificationRequest | null>(null);
 
   const list = useQuery({
-    queryKey: ["admin-requests", page, search, status],
+    queryKey: ["admin-requests", page, search, status, dateFrom, dateTo],
     queryFn: () =>
       adminService.requests({
         page,
         limit: 10,
         search,
         status: status === "all" ? undefined : status,
+        dateFrom: dateFrom || undefined,
+        dateTo: dateTo || undefined,
       }),
   });
 
@@ -85,6 +90,21 @@ function AdminRequestsPage() {
               }}
               placeholder="Search requests…"
             />
+            <div className="flex items-center gap-2">
+              <Input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => { setDateFrom(e.target.value); setPage(1); }}
+                className="w-40"
+              />
+              <span className="text-xs text-muted-foreground">to</span>
+              <Input
+                type="date"
+                value={dateTo}
+                onChange={(e) => { setDateTo(e.target.value); setPage(1); }}
+                className="w-40"
+              />
+            </div>
             <Select
               value={status}
               onValueChange={(v) => {

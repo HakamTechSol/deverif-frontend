@@ -12,6 +12,7 @@ import { RequestDetailModal } from "@/components/common/RequestDetailModal";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -46,12 +47,14 @@ function InboxPage() {
   const { isLocked } = useOrgSubscription();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [active, setActive] = useState<VerificationRequest | null>(null);
   const [viewing, setViewing] = useState<VerificationRequest | null>(null);
 
   const list = useQuery({
-    queryKey: ["inbox", page, search],
-    queryFn: () => requestsService.myInbox({ page, limit: 10, search }),
+    queryKey: ["inbox", page, search, dateFrom, dateTo],
+    queryFn: () => requestsService.myInbox({ page, limit: 10, search, dateFrom: dateFrom || undefined, dateTo: dateTo || undefined }),
   });
 
   const items = list.data?.items ?? [];
@@ -79,7 +82,7 @@ function InboxPage() {
 
       <Card className="border-border/70 shadow-none">
         <CardContent className="p-0">
-          <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center">
+          <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between">
             <SearchInput
               value={search}
               onChange={(v) => {
@@ -88,6 +91,21 @@ function InboxPage() {
               }}
               placeholder="Search by requester or document…"
             />
+            <div className="flex items-center gap-2">
+              <Input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => { setDateFrom(e.target.value); setPage(1); }}
+                className="w-40"
+              />
+              <span className="text-xs text-muted-foreground">to</span>
+              <Input
+                type="date"
+                value={dateTo}
+                onChange={(e) => { setDateTo(e.target.value); setPage(1); }}
+                className="w-40"
+              />
+            </div>
           </div>
 
           {list.isLoading ? (

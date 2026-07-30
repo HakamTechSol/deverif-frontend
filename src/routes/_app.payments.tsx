@@ -1,12 +1,21 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { CreditCard, Calendar, Clock, CheckCircle2, Building2 } from "lucide-react";
+import { CreditCard, Calendar, CheckCircle2, Building2, Wallet } from "lucide-react";
 
 import { PageHeader } from "@/components/common/PageHeader";
+import { EmptyState } from "@/components/common/EmptyState";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { paymentService, type PlanSummary, type OrgSubscription } from "@/services";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { paymentService, type PlanSummary, type OrgSubscription, type Payment } from "@/services";
 import { formatDate } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/payments")({
@@ -19,6 +28,7 @@ function PaymentsPage() {
 
   const planData = plan.data?.plan as PlanSummary | undefined;
   const orgSub = plan.data?.org_subscription as OrgSubscription | undefined;
+  const payments = plan.data?.payments as Payment[] | undefined;
 
   if (plan.isLoading) {
     return (
@@ -67,15 +77,17 @@ function PaymentsPage() {
     );
   }
 
-  return <PlanPage planData={planData} orgSub={orgSub} />;
+  return <PlanPage planData={planData} orgSub={orgSub} payments={payments ?? []} />;
 }
 
 function PlanPage({
   planData,
   orgSub,
+  payments,
 }: {
   planData: PlanSummary | undefined;
   orgSub: OrgSubscription | undefined;
+  payments: Payment[];
 }) {
   const isOrgActive = orgSub?.status === "active";
 
@@ -146,14 +158,51 @@ function PlanPage({
 
         {/* Billing history */}
         <Card className="border-border/70 shadow-none">
-          <CardContent className="p-6">
-            <div className="flex items-center gap-2">
+          <CardContent className="p-0">
+            <div className="flex items-center gap-2 border-b border-border p-6">
               <Calendar className="h-4 w-4 text-primary" />
               <h3 className="text-sm font-semibold text-foreground">Billing history</h3>
             </div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              All payments are handled manually by your admin. Contact your organization admin for payment details.
-            </p>
+            {payments.length === 0 ? (
+              <div className="p-6">
+                <EmptyState
+                  icon={Wallet}
+                  title="No billing history yet"
+                  description="Payments will appear here once your organization processes them."
+                />
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Reference</TableHead>
+                      <TableHead>Method</TableHead>
+                      <TableHead>Purpose</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead className="text-right">Amount</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {payments.map((p) => (
+                      <TableRow key={p.uuid}>
+                        <TableCell className="font-mono text-xs">{p.transaction_reference}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="rounded-full capitalize">
+                            {p.payment_method}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">{p.purpose}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {formatDate(p.paid_at ?? p.created_at)}
+                        </TableCell>
+                        <TableCell className="text-right font-medium">Rs. {p.amount?.toLocaleString()}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

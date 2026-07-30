@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Camera, Save, Lock } from "lucide-react";
+import { Camera, Save, Lock, Building2 } from "lucide-react";
 
 import { PageHeader } from "@/components/common/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -95,23 +95,6 @@ function SettingsPage() {
               This is how others in the network will see you.
             </p>
 
-            {user?.role !== "admin" && me.data?.organization_name && (
-              <div className="mt-4 flex items-center gap-2">
-                {me.data.organization_logo ? (
-                  <img
-                    src={resolveAssetUrl(me.data.organization_logo) ?? undefined}
-                    alt={me.data.organization_name}
-                    className="h-5 w-5 rounded object-cover"
-                  />
-                ) : (
-                  <span className="flex h-5 w-5 items-center justify-center rounded bg-primary/10 text-[9px] font-bold text-primary">
-                    {me.data.organization_name[0].toUpperCase()}
-                  </span>
-                )}
-                <span className="text-sm text-foreground">{me.data.organization_name}</span>
-              </div>
-            )}
-
             <div className="mt-6 flex items-center gap-5">
               <div className="relative">
                 <Avatar className="h-20 w-20">
@@ -158,6 +141,15 @@ function SettingsPage() {
                 <Label>Phone</Label>
                 <Input value={phone} onChange={(e) => setPhone(e.target.value)} />
               </div>
+              {user?.role !== "admin" && me.data?.organization_name && (
+                <div className="space-y-2">
+                  <Label>Organization</Label>
+                  <div className="flex h-10 w-full items-center gap-2 rounded-md border border-border bg-muted/40 px-3 text-sm text-foreground">
+                    <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <span className="truncate">{me.data.organization_name}</span>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="mt-6 flex justify-end">

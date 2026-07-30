@@ -179,7 +179,7 @@ export const requestsService = {
     api.get<{ items: Organization[] }>("/verification-requests/organizations").then((r) => r.data.items),
   create: (form: FormData) =>
     api.post<{ request: VerificationRequest }>("/verification-requests", form).then((r) => r.data.request),
-  mySent: (params: { page?: number; limit?: number; search?: string } = {}) =>
+  mySent: (params: { page?: number; limit?: number; search?: string; dateFrom?: string; dateTo?: string } = {}) =>
     api
       .get<Paginated<VerificationRequest>>("/verification-requests/my/sent", { params })
       .then((r) => r.data),
@@ -187,7 +187,7 @@ export const requestsService = {
     api.delete(`/verification-requests/my/sent/${uuid}`).then((r) => r.data),
   updateSent: (uuid: UUID, form: FormData) =>
     api.put<{ request: VerificationRequest }>(`/verification-requests/my/sent/${uuid}`, form).then((r) => r.data.request),
-  myInbox: (params: { page?: number; limit?: number; search?: string } = {}) =>
+  myInbox: (params: { page?: number; limit?: number; search?: string; dateFrom?: string; dateTo?: string } = {}) =>
     api
       .get<Paginated<VerificationRequest>>("/verification-requests/my/inbox", { params })
       .then((r) => r.data),
@@ -209,7 +209,7 @@ export const paymentService = {
   initiate: (data: { provider: string; plan: string; purpose?: string }) =>
     api.post<{ payment: { action_url: string; method: string; fields: Record<string, string>; transaction_reference: string; amount: number; provider: string; provider_label: string }; plan: PurchasablePlan }>("/payment/initiate", data).then((r) => r.data),
   plan: () =>
-    api.get<{ plan: PlanSummary; org_subscription: OrgSubscription }>("/payment/plan").then((r) => r.data),
+    api.get<{ plan: PlanSummary; org_subscription: OrgSubscription; payments: Payment[] }>("/payment/plan").then((r) => r.data),
 };
 
 /* ─────────── ADMIN ─────────── */
@@ -237,12 +237,12 @@ export const adminService = {
     api.delete<{ organization: Organization }>(`/admin/organizations/${uuid}/subscription`).then((r) => r.data),
 
   requests: (
-    params: { page?: number; limit?: number; search?: string; status?: string } = {},
+    params: { page?: number; limit?: number; search?: string; status?: string; dateFrom?: string; dateTo?: string } = {},
   ) =>
     api
       .get<Paginated<VerificationRequest>>("/admin/verification-requests", { params })
       .then((r) => r.data),
-  nullOrgRequests: (params: { page?: number; limit?: number; search?: string } = {}) =>
+  nullOrgRequests: (params: { page?: number; limit?: number; search?: string; dateFrom?: string; dateTo?: string } = {}) =>
     api
       .get<Paginated<UnmatchedOrganization>>("/admin/verification-requests/null-organization", { params })
       .then((r) => r.data),
@@ -278,6 +278,45 @@ export const adminService = {
     transaction_reference: string;
     purpose: string;
   }) => api.post<{ payment: Payment }>("/admin/payment", data).then((r) => r.data.payment),
+};
+
+/* ─────────── LEADS TYPES ─────────── */
+export type ContactLead = {
+  uuid: UUID;
+  name: string;
+  email: string;
+  phone: string | null;
+  message: string | null;
+  status: "new" | "contacted" | "closed";
+  created_at: string;
+};
+
+export type AccessRequest = {
+  uuid: UUID;
+  organization_name: string;
+  contact_name: string;
+  email: string;
+  phone: string | null;
+  company_size: string | null;
+  message: string | null;
+  status: "new" | "contacted" | "onboarded" | "rejected";
+  created_at: string;
+};
+
+/* ─────────── LEADS (public) ─────────── */
+export const leadsService = {
+  submitContact: (data: { name: string; email: string; phone?: string; message?: string }) =>
+    api.post<{ lead: ContactLead }>("/leads/contact", data).then((r) => r.data.lead),
+  submitAccessRequest: (data: { organization_name: string; contact_name: string; email: string; phone?: string; company_size?: string; message?: string }) =>
+    api.post<{ request: AccessRequest }>("/leads/request-access", data).then((r) => r.data.request),
+};
+
+/* ─────────── ADMIN LEADS ─────────── */
+export const adminLeadsService = {
+  contactLeads: (params: { page?: number; limit?: number; search?: string } = {}) =>
+    api.get<Paginated<ContactLead>>("/admin/leads/contact", { params }).then((r) => r.data),
+  accessRequests: (params: { page?: number; limit?: number; search?: string } = {}) =>
+    api.get<Paginated<AccessRequest>>("/admin/leads/request-access", { params }).then((r) => r.data),
 };
 
 /* ─────────── DASHBOARD ─────────── */

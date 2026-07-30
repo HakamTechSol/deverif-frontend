@@ -196,6 +196,7 @@ function AdminUsersPage() {
       </Card>
 
       <UserFormDialog
+        key={editing?.uuid ?? "new"}
         open={openForm}
         onOpenChange={setOpenForm}
         editing={editing}

@@ -20,6 +20,7 @@ import { Route as AppInboxRouteImport } from './routes/_app.inbox'
 import { Route as AppPaymentsRouteImport } from './routes/_app.payments'
 import { Route as AppRequestsRouteImport } from './routes/_app.requests'
 import { Route as AppSettingsRouteImport } from './routes/_app.settings'
+import { Route as AppAdminLeadsRouteImport } from './routes/_app.admin.leads'
 import { Route as AppAdminNullRequestsRouteImport } from './routes/_app.admin.null-requests'
 import { Route as AppAdminOrganizationsRouteImport } from './routes/_app.admin.organizations'
 import { Route as AppAdminPaymentsRouteImport } from './routes/_app.admin.payments'
@@ -80,6 +81,11 @@ const AppSettingsRoute = AppSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => AppRoute,
 } as any)
+const AppAdminLeadsRoute = AppAdminLeadsRouteImport.update({
+  id: '/admin/leads',
+  path: '/admin/leads',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppAdminNullRequestsRoute = AppAdminNullRequestsRouteImport.update({
   id: '/admin/null-requests',
   path: '/admin/null-requests',
@@ -117,6 +123,7 @@ export interface FileRoutesByFullPath {
   '/payments': typeof AppPaymentsRoute
   '/requests': typeof AppRequestsRoute
   '/settings': typeof AppSettingsRoute
+  '/admin/leads': typeof AppAdminLeadsRoute
   '/admin/null-requests': typeof AppAdminNullRequestsRoute
   '/admin/organizations': typeof AppAdminOrganizationsRoute
   '/admin/payments': typeof AppAdminPaymentsRoute
@@ -134,6 +141,7 @@ export interface FileRoutesByTo {
   '/payments': typeof AppPaymentsRoute
   '/requests': typeof AppRequestsRoute
   '/settings': typeof AppSettingsRoute
+  '/admin/leads': typeof AppAdminLeadsRoute
   '/admin/null-requests': typeof AppAdminNullRequestsRoute
   '/admin/organizations': typeof AppAdminOrganizationsRoute
   '/admin/payments': typeof AppAdminPaymentsRoute
@@ -153,6 +161,7 @@ export interface FileRoutesById {
   '/_app/payments': typeof AppPaymentsRoute
   '/_app/requests': typeof AppRequestsRoute
   '/_app/settings': typeof AppSettingsRoute
+  '/_app/admin/leads': typeof AppAdminLeadsRoute
   '/_app/admin/null-requests': typeof AppAdminNullRequestsRoute
   '/_app/admin/organizations': typeof AppAdminOrganizationsRoute
   '/_app/admin/payments': typeof AppAdminPaymentsRoute
@@ -172,6 +181,7 @@ export interface FileRouteTypes {
     | '/payments'
     | '/requests'
     | '/settings'
+    | '/admin/leads'
     | '/admin/null-requests'
     | '/admin/organizations'
     | '/admin/payments'
@@ -189,6 +199,7 @@ export interface FileRouteTypes {
     | '/payments'
     | '/requests'
     | '/settings'
+    | '/admin/leads'
     | '/admin/null-requests'
     | '/admin/organizations'
     | '/admin/payments'
@@ -207,6 +218,7 @@ export interface FileRouteTypes {
     | '/_app/payments'
     | '/_app/requests'
     | '/_app/settings'
+    | '/_app/admin/leads'
     | '/_app/admin/null-requests'
     | '/_app/admin/organizations'
     | '/_app/admin/payments'
@@ -302,6 +314,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSettingsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/admin/leads': {
+      id: '/_app/admin/leads'
+      path: '/admin/leads'
+      fullPath: '/admin/leads'
+      preLoaderRoute: typeof AppAdminLeadsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/admin/null-requests': {
       id: '/_app/admin/null-requests'
       path: '/admin/null-requests'
@@ -346,6 +365,7 @@ interface AppRouteChildren {
   AppPaymentsRoute: typeof AppPaymentsRoute
   AppRequestsRoute: typeof AppRequestsRoute
   AppSettingsRoute: typeof AppSettingsRoute
+  AppAdminLeadsRoute: typeof AppAdminLeadsRoute
   AppAdminNullRequestsRoute: typeof AppAdminNullRequestsRoute
   AppAdminOrganizationsRoute: typeof AppAdminOrganizationsRoute
   AppAdminPaymentsRoute: typeof AppAdminPaymentsRoute
@@ -359,6 +379,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppPaymentsRoute: AppPaymentsRoute,
   AppRequestsRoute: AppRequestsRoute,
   AppSettingsRoute: AppSettingsRoute,
+  AppAdminLeadsRoute: AppAdminLeadsRoute,
   AppAdminNullRequestsRoute: AppAdminNullRequestsRoute,
   AppAdminOrganizationsRoute: AppAdminOrganizationsRoute,
   AppAdminPaymentsRoute: AppAdminPaymentsRoute,

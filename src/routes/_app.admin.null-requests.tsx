@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, CheckCircle2, Building2, ExternalLink, Eye, XCircle, Lock, Unlock } from "lucide-react";
+import { CheckCircle2, ExternalLink, Eye, XCircle, Lock, Unlock } from "lucide-react";
 
 import { PageHeader } from "@/components/common/PageHeader";
 import { SearchInput } from "@/components/common/SearchInput";
@@ -10,11 +10,12 @@ import { EmptyState } from "@/components/common/EmptyState";
 import { Pagination } from "@/components/common/Pagination";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
   DialogContent,
@@ -38,6 +39,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { TableSkeleton } from "./_app.requests";
 import { adminService, type UnmatchedOrganization, type UnmatchedOrgDetail } from "@/services";
 import { formatDate, formatDateTime, resolveAssetUrl } from "@/lib/utils";
 
@@ -46,7 +48,7 @@ export const Route = createFileRoute("/_app/admin/null-requests")({
   component: NullRequestsPage,
 });
 
-const PAGE_SIZE = 12;
+const PAGE_SIZE = 20;
 
 const statusStyles: Record<string, string> = {
   pending: "bg-warning/15 text-warning-foreground border-warning/30",
@@ -64,10 +66,13 @@ function formatWebsiteUrl(url: string): string {
 function NullRequestsPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
   const q = useQuery({
-    queryKey: ["null-org-requests", page, search],
-    queryFn: () => adminService.nullOrgRequests({ page, limit: PAGE_SIZE, search }),
+    queryKey: ["null-org-requests", page, search, dateFrom, dateTo],
+    queryFn: () =>
+      adminService.nullOrgRequests({ page, limit: PAGE_SIZE, search, dateFrom: dateFrom || undefined, dateTo: dateTo || undefined }),
   });
 
   const items = q.data?.items ?? [];
@@ -83,108 +88,121 @@ function NullRequestsPage() {
         description="Organizations referenced in requests but not yet in the network. Assign them to a verified org or mark as handled."
       />
 
-      <div className="mb-4">
-        <SearchInput
-          value={search}
-          onChange={(v) => {
-            setSearch(v);
-            setPage(1);
-          }}
-          placeholder="Search by organization name, email, or phone…"
-        />
-      </div>
-
-      {q.isLoading ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-48 rounded-xl" />
-          ))}
-        </div>
-      ) : items.length === 0 ? (
-        <EmptyState
-          icon={CheckCircle2}
-          title="Nothing to review"
-          description="Every submitted request is already matched to a verified organization."
-        />
-      ) : (
-        <>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {items.map((org) => (
-              <Card key={org.uuid} className="border-border/70 shadow-none">
-                <CardContent className="p-5">
-                  <div className="flex items-start justify-between">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-md bg-warning/15 text-warning-foreground dark:text-warning">
-                      <Building2 className="h-4 w-4" />
-                    </div>
-                    <Badge
-                      variant="outline"
-                      className={`rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${statusStyles[org.status] ?? statusStyles.pending}`}
-                    >
-                      {org.status}
-                    </Badge>
-                  </div>
-                  <div className="mt-4">
-                    <div className="text-xs font-medium uppercase text-muted-foreground">
-                      Organization
-                    </div>
-                    <div className="mt-1 text-base font-semibold text-foreground">
-                      {org.name}
-                    </div>
-                  </div>
-                  <dl className="mt-4 space-y-1.5 text-xs">
-                    {org.email ? (
-                      <div className="flex justify-between">
-                        <dt className="text-muted-foreground">Email</dt>
-                        <dd className="text-foreground">{org.email}</dd>
-                      </div>
-                    ) : null}
-                    {org.phone ? (
-                      <div className="flex justify-between">
-                        <dt className="text-muted-foreground">Phone</dt>
-                        <dd className="text-foreground">{org.phone}</dd>
-                      </div>
-                    ) : null}
-                    <div className="flex justify-between">
-                      <dt className="text-muted-foreground">Requests</dt>
-                      <dd className="font-medium text-foreground">{org.request_count}</dd>
-                    </div>
-                    <div className="flex justify-between">
-                      <dt className="text-muted-foreground">First seen</dt>
-                      <dd className="text-foreground">
-                        {formatDate(org.created_at)}
-                      </dd>
-                    </div>
-                  </dl>
-                  <div className="mt-5 flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="flex-1"
-                      onClick={() => setDetailUuid(org.uuid)}
-                    >
-                      <Eye className="mr-1 h-3 w-3" /> Details
-                    </Button>
-                    {org.status === "pending" && (
-                      <Button
-                        size="sm"
-                        className="flex-1"
-                        onClick={() => setAssignOrg(org)}
-                      >
-                        Accept & assign
-                      </Button>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-          {totalPages > 1 && (
-            <div className="mt-6">
-              <Pagination page={page} totalPages={totalPages} total={q.data?.total ?? 0} onChange={setPage} />
+      <Card className="border-border/70 shadow-none">
+        <CardContent className="p-0">
+          <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between">
+            <SearchInput
+              value={search}
+              onChange={(v) => {
+                setSearch(v);
+                setPage(1);
+              }}
+              placeholder="Search by organization name, email, or phone…"
+            />
+            <div className="flex items-center gap-2">
+              <Input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => { setDateFrom(e.target.value); setPage(1); }}
+                className="w-40"
+              />
+              <span className="text-xs text-muted-foreground">to</span>
+              <Input
+                type="date"
+                value={dateTo}
+                onChange={(e) => { setDateTo(e.target.value); setPage(1); }}
+                className="w-40"
+              />
             </div>
+          </div>
+
+          {q.isLoading ? (
+            <TableSkeleton />
+          ) : items.length === 0 ? (
+            <div className="p-6">
+              <EmptyState
+                icon={CheckCircle2}
+                title="Nothing to review"
+                description="Every submitted request is already matched to a verified organization."
+              />
+            </div>
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="whitespace-nowrap">Organization</TableHead>
+                      <TableHead className="whitespace-nowrap">Email</TableHead>
+                      <TableHead className="whitespace-nowrap">Phone</TableHead>
+                      <TableHead className="whitespace-nowrap">Requests</TableHead>
+                      <TableHead className="whitespace-nowrap">Status</TableHead>
+                      <TableHead className="whitespace-nowrap">First seen</TableHead>
+                      <TableHead className="text-right whitespace-nowrap">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {items.map((org) => (
+                      <TableRow key={org.uuid}>
+                        <TableCell className="font-medium text-foreground whitespace-nowrap">
+                          {org.name}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground whitespace-nowrap">
+                          {org.email ?? "—"}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground whitespace-nowrap">
+                          {org.phone ?? "—"}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          <span className="font-medium">{org.request_count}</span>
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          <Badge
+                            variant="outline"
+                            className={`rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${statusStyles[org.status] ?? statusStyles.pending}`}
+                          >
+                            {org.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                          {formatDate(org.created_at)}
+                        </TableCell>
+                        <TableCell className="text-right whitespace-nowrap">
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs"
+                              onClick={() => setDetailUuid(org.uuid)}
+                            >
+                              <Eye className="mr-1 h-3 w-3" /> Details
+                            </Button>
+                            {org.status === "pending" && (
+                              <Button
+                                size="sm"
+                                className="h-7 text-xs"
+                                onClick={() => setAssignOrg(org)}
+                              >
+                                Accept & assign
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              <Pagination
+                page={page}
+                total={q.data?.total ?? 0}
+                totalPages={totalPages}
+                onChange={setPage}
+              />
+            </>
           )}
-        </>
-      )}
+        </CardContent>
+      </Card>
 
       <UnmatchedOrgDetailDialog uuid={detailUuid} onClose={() => setDetailUuid(null)} onAssign={(org) => { setDetailUuid(null); setAssignOrg(org); }} />
       <AssignDialog unmatchedOrg={assignOrg} onClose={() => setAssignOrg(null)} />
@@ -249,7 +267,7 @@ function UnmatchedOrgDetailDialog({
 
   return (
     <Dialog open={!!uuid} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Unmatched organization details</DialogTitle>
           <DialogDescription>
@@ -323,16 +341,16 @@ function UnmatchedOrgDetailDialog({
                 <h4 className="mb-2 text-sm font-semibold text-foreground">
                   Linked requests ({requests.length})
                 </h4>
-                <div className="rounded-lg border border-border">
+                <div className="rounded-lg border border-border overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Requester</TableHead>
-                        <TableHead>Document</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Locked</TableHead>
-                        <TableHead>Submitted</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
+                        <TableHead className="whitespace-nowrap">Requester</TableHead>
+                        <TableHead className="whitespace-nowrap">Document</TableHead>
+                        <TableHead className="whitespace-nowrap">Status</TableHead>
+                        <TableHead className="whitespace-nowrap">Locked</TableHead>
+                        <TableHead className="whitespace-nowrap">Submitted</TableHead>
+                        <TableHead className="text-right whitespace-nowrap">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -343,13 +361,13 @@ function UnmatchedOrgDetailDialog({
                         const isLocked = !!r.locked_by;
                         return (
                           <TableRow key={r.uuid}>
-                            <TableCell>
+                            <TableCell className="whitespace-nowrap">
                               <div className="text-sm font-medium text-foreground">{r.requester_name ?? "—"}</div>
                               <div className="text-xs text-muted-foreground">{r.requester_email ?? ""}</div>
                             </TableCell>
-                            <TableCell className="text-sm text-muted-foreground">{r.document_type}</TableCell>
-                            <TableCell><StatusBadge status={r.status} /></TableCell>
-                            <TableCell>
+                            <TableCell className="text-sm text-muted-foreground whitespace-nowrap">{r.document_type}</TableCell>
+                            <TableCell className="whitespace-nowrap"><StatusBadge status={r.status} /></TableCell>
+                            <TableCell className="whitespace-nowrap">
                               {isLocked ? (
                                 <span className="inline-flex items-center gap-1 text-xs text-warning-foreground">
                                   <Lock className="h-3 w-3" /> {r.locked_by_name ?? "Locked"}
@@ -358,11 +376,11 @@ function UnmatchedOrgDetailDialog({
                                 <span className="text-xs text-muted-foreground">—</span>
                               )}
                             </TableCell>
-                            <TableCell className="text-xs text-muted-foreground">{formatDate(r.submitted_at)}</TableCell>
-                            <TableCell className="text-right">
+                            <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{formatDate(r.submitted_at)}</TableCell>
+                            <TableCell className="text-right whitespace-nowrap">
                               <div className="flex items-center justify-end gap-1">
                                 {docUrl && (
-                                  <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-foreground" asChild>
+                                  <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground" asChild>
                                     <a href={docUrl} target="_blank" rel="noreferrer">
                                       <ExternalLink className="h-4 w-4" />
                                     </a>
@@ -374,7 +392,7 @@ function UnmatchedOrgDetailDialog({
                                       <Button
                                         size="icon"
                                         variant="ghost"
-                                        className="h-8 w-8 text-warning-foreground hover:text-warning"
+                                        className="h-8 w-8 shrink-0 text-warning-foreground hover:text-warning"
                                         title="Unlock request"
                                         onClick={() => unlockMut.mutate(r.uuid)}
                                         disabled={unlockMut.isPending}
@@ -385,7 +403,7 @@ function UnmatchedOrgDetailDialog({
                                       <Button
                                         size="icon"
                                         variant="ghost"
-                                        className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                                        className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
                                         title="Lock request"
                                         onClick={() => lockMut.mutate(r.uuid)}
                                         disabled={lockMut.isPending}
@@ -396,7 +414,7 @@ function UnmatchedOrgDetailDialog({
                                     <Button
                                       size="sm"
                                       variant="outline"
-                                      className="h-7 text-xs"
+                                      className="h-7 shrink-0 text-xs"
                                       onClick={() => { setReviewing(r); setRemarks(""); }}
                                     >
                                       <Eye className="mr-1 h-3 w-3" /> Review
