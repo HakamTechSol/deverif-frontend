@@ -91,19 +91,19 @@ function InboxPage() {
               }}
               placeholder="Search by requester or document…"
             />
-            <div className="flex items-center gap-2">
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
               <Input
                 type="date"
                 value={dateFrom}
                 onChange={(e) => { setDateFrom(e.target.value); setPage(1); }}
-                className="w-40"
+                className="w-full sm:w-40"
               />
-              <span className="text-xs text-muted-foreground">to</span>
+              <span className="text-xs text-muted-foreground max-sm:px-1">to</span>
               <Input
                 type="date"
                 value={dateTo}
                 onChange={(e) => { setDateTo(e.target.value); setPage(1); }}
-                className="w-40"
+                className="w-full sm:w-40"
               />
             </div>
           </div>
@@ -135,27 +135,27 @@ function InboxPage() {
                 <TableBody>
                   {items.map((r) => (
                     <TableRow key={r.uuid}>
-                      <TableCell className="font-medium text-foreground">
+                      <TableCell data-label="Requester" className="font-medium text-foreground">
                         <div>{r.requester_name ?? "—"}</div>
                         <div className="text-xs text-muted-foreground">
                           {r.requester_organization ?? r.requester_email}
                         </div>
                       </TableCell>
-                      <TableCell className="text-muted-foreground">{r.document_type}</TableCell>
-                      <TableCell>
+                      <TableCell data-label="Document type" className="text-muted-foreground">{r.document_type}</TableCell>
+                      <TableCell data-label="Status">
                         <StatusBadge status={r.status} />
                       </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
+                      <TableCell data-label="Submitted" className="text-xs text-muted-foreground">
                         {formatDate(r.submitted_at)}
                       </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
+                      <TableCell data-label="Verified date" className="text-xs text-muted-foreground">
                         {r.status === "under_review" ? "—" : formatDate(r.verified_at)}
                       </TableCell>
-                      <TableCell className="text-xs uppercase text-muted-foreground">
+                      <TableCell data-label="Format" className="text-xs uppercase text-muted-foreground">
                         {r.document_format ?? "PDF"}
                       </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1">
+                      <TableCell data-label="Actions" className="text-right">
+                        <div className="flex flex-wrap items-center justify-start gap-1 sm:justify-end">
                           <Button
                             size="icon"
                             variant="ghost"
@@ -236,7 +236,7 @@ function VerifyDialog({
 
   return (
     <Dialog open={!!request} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="max-w-3xl sm:p-6">
         <DialogHeader>
           <DialogTitle>
             {isFinalized ? "Request details" : "Review verification request"}
@@ -271,14 +271,14 @@ function VerifyDialog({
               </div>
             )}
 
-            <div className="grid gap-6 md:grid-cols-[1.2fr_1fr]">
+            <div className="grid min-w-0 gap-4 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] md:gap-6">
               <div className="rounded-lg border border-border bg-muted/40 p-4">
-                <div className="mb-3 flex items-center justify-between">
+                <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <div className="text-xs font-medium uppercase text-muted-foreground">
                       Document
                     </div>
-                    <div className="text-sm font-semibold text-foreground">
+                    <div className="break-words text-sm font-semibold text-foreground">
                       {request.document_type}
                     </div>
                   </div>
@@ -287,13 +287,13 @@ function VerifyDialog({
                       href={resolveAssetUrl(request.document_path) ?? request.document_path}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground hover:bg-accent"
+                      className="inline-flex min-h-9 items-center justify-center gap-1 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground hover:bg-accent sm:min-h-0"
                     >
                       Open <ExternalLink className="h-3 w-3" />
                     </a>
                   ) : null}
                 </div>
-                <dl className="grid grid-cols-2 gap-3 text-xs">
+                <dl className="grid gap-3 text-xs sm:grid-cols-2">
                   <MetaRow label="Requester" value={request.requester_name ?? "—"} />
                   <MetaRow label="Company" value={request.requester_organization ?? "—"} />
                   <MetaRow label="Submitted" value={formatDateTime(request.submitted_at)} />
@@ -303,7 +303,7 @@ function VerifyDialog({
               <div className="flex flex-col gap-4">
                 <div>
                   <Label>Requester's remarks</Label>
-                  <div className="mt-1.5 rounded-md border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
+                  <div className="mt-1.5 min-h-16 break-words rounded-md border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
                     {request.submission_remarks || "No remarks provided."}
                   </div>
                 </div>
@@ -311,7 +311,7 @@ function VerifyDialog({
                 {isFinalized ? (
                   <div className="space-y-2">
                     <Label>Verification remarks</Label>
-                    <div className="rounded-md border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
+                    <div className="min-h-16 break-words rounded-md border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
                       {request.verification_remarks || "No remarks provided."}
                     </div>
                   </div>
@@ -333,14 +333,14 @@ function VerifyDialog({
         ) : null}
 
         <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={onClose} disabled={verify.isPending}>
+          <Button className="w-full sm:w-auto" variant="outline" onClick={onClose} disabled={verify.isPending}>
             {isFinalized ? "Close" : "Cancel"}
           </Button>
           {!isFinalized && (
             <>
               <Button
                 variant="outline"
-                className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                className="w-full border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive sm:w-auto"
                 onClick={() => verify.mutate("unverified")}
                 disabled={verify.isPending}
               >
@@ -348,6 +348,7 @@ function VerifyDialog({
                 Reject
               </Button>
               <Button
+                className="w-full sm:w-auto"
                 onClick={() => verify.mutate("verified")}
                 disabled={verify.isPending}
               >

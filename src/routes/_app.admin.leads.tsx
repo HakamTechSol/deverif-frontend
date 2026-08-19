@@ -36,7 +36,7 @@ function AdminLeadsPage() {
       />
 
       <Tabs defaultValue="contact">
-        <TabsList className="mb-4">
+        <TabsList className="mb-4 grid w-full grid-cols-2 sm:inline-flex sm:w-auto">
           <TabsTrigger value="contact">
             <MessageSquare className="mr-1.5 h-4 w-4" /> Contact Form
           </TabsTrigger>

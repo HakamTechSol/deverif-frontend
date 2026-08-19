@@ -99,19 +99,19 @@ function NullRequestsPage() {
               }}
               placeholder="Search by organization name, email, or phone…"
             />
-            <div className="flex items-center gap-2">
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
               <Input
                 type="date"
                 value={dateFrom}
                 onChange={(e) => { setDateFrom(e.target.value); setPage(1); }}
-                className="w-40"
+                className="w-full sm:w-40"
               />
-              <span className="text-xs text-muted-foreground">to</span>
+              <span className="text-xs text-muted-foreground max-sm:px-1">to</span>
               <Input
                 type="date"
                 value={dateTo}
                 onChange={(e) => { setDateTo(e.target.value); setPage(1); }}
-                className="w-40"
+                className="w-full sm:w-40"
               />
             </div>
           </div>

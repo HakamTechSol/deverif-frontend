@@ -54,7 +54,7 @@ function AdminPaymentsPage() {
       />
 
       <Tabs defaultValue="history">
-        <TabsList className="mb-4">
+        <TabsList className="mb-4 grid w-full grid-cols-2 sm:inline-flex sm:w-auto">
           <TabsTrigger value="history">
             <Wallet className="mr-1.5 h-4 w-4" /> Payment History
           </TabsTrigger>
@@ -103,7 +103,7 @@ function PaymentHistoryTab() {
   return (
     <Card className="border-border/70 shadow-none">
       <CardContent className="p-0">
-        <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 border-b border-border p-4 lg:flex-row lg:items-center lg:justify-between">
           <SearchInput
             value={search}
             onChange={(v) => {
@@ -112,22 +112,22 @@ function PaymentHistoryTab() {
             }}
             placeholder="Search reference or user…"
           />
-          <div className="flex items-center gap-2">
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
             <Input
               type="date"
               value={dateFrom}
               onChange={(e) => { setDateFrom(e.target.value); setPage(1); }}
-              className="w-40"
+              className="w-full lg:w-40"
             />
-            <span className="text-xs text-muted-foreground">to</span>
+            <span className="text-xs text-muted-foreground max-lg:px-1">to</span>
             <Input
               type="date"
               value={dateTo}
               onChange={(e) => { setDateTo(e.target.value); setPage(1); }}
-              className="w-40"
+              className="w-full lg:w-40"
             />
             <Select value={method} onValueChange={setMethod}>
-              <SelectTrigger className="w-40">
+              <SelectTrigger className="w-full lg:w-40">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -137,7 +137,7 @@ function PaymentHistoryTab() {
                 <SelectItem value="manual">Manual</SelectItem>
               </SelectContent>
             </Select>
-            <Button onClick={() => setOpenForm(true)}>
+            <Button className="w-full lg:w-auto" onClick={() => setOpenForm(true)}>
               <Plus className="mr-2 h-4 w-4" /> Add manual payment
             </Button>
           </div>
@@ -164,21 +164,21 @@ function PaymentHistoryTab() {
               <TableBody>
                 {items.map((p) => (
                   <TableRow key={p.uuid}>
-                    <TableCell className="font-mono text-xs">{p.transaction_reference}</TableCell>
-                    <TableCell className="text-muted-foreground">
+                    <TableCell data-label="Reference" className="font-mono text-xs">{p.transaction_reference}</TableCell>
+                    <TableCell data-label="User" className="text-muted-foreground">
                       {p.full_name ?? "—"}
                       <div className="text-xs">{p.email}</div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell data-label="Method">
                       <Badge variant="outline" className="rounded-full capitalize">
                         {p.payment_method}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-muted-foreground">{p.purpose}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
+                    <TableCell data-label="Purpose" className="text-muted-foreground">{p.purpose}</TableCell>
+                    <TableCell data-label="Date" className="text-xs text-muted-foreground">
                       {formatDate(p.paid_at ?? p.created_at)}
                     </TableCell>
-                    <TableCell className="text-right font-medium">Rs. {p.amount.toLocaleString()}</TableCell>
+                    <TableCell data-label="Amount" className="text-right font-medium">Rs. {p.amount.toLocaleString()}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -327,16 +327,16 @@ function OrgSubscriptionsTab() {
               <TableBody>
                 {items.map((org) => (
                   <TableRow key={org.uuid}>
-                    <TableCell className="font-medium text-foreground">{org.name}</TableCell>
-                    <TableCell>{subscriptionBadge(org)}</TableCell>
-                    <TableCell className="capitalize text-muted-foreground">
+                    <TableCell data-label="Organization" className="font-medium text-foreground">{org.name}</TableCell>
+                    <TableCell data-label="Status">{subscriptionBadge(org)}</TableCell>
+                    <TableCell data-label="Plan" className="capitalize text-muted-foreground">
                       {org.subscription_plan ?? "—"}
                     </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
+                    <TableCell data-label="Expiry Date" className="text-xs text-muted-foreground">
                       {org.subscription_expiry ? formatDate(org.subscription_expiry) : "—"}
                     </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-1">
+                    <TableCell data-label="Actions" className="text-right">
+                      <div className="flex flex-wrap items-center justify-start gap-1 sm:justify-end">
                         <Button
                           size="sm"
                           variant={isActive(org) ? "default" : "outline"}
@@ -519,7 +519,7 @@ function PaymentFormDialog({
               </SelectContent>
             </Select>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-2">
               <Label>Amount</Label>
               <Input

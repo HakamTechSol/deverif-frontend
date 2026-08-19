@@ -98,7 +98,7 @@ function PlanPage({
         description="Manage your plan and purchase upgrades."
       />
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid min-w-0 gap-6 lg:grid-cols-2">
         {/* Subscription details */}
         <Card className="border-border/70 shadow-none">
           <CardContent className="p-6">
@@ -186,17 +186,17 @@ function PlanPage({
                   <TableBody>
                     {payments.map((p) => (
                       <TableRow key={p.uuid}>
-                        <TableCell className="font-mono text-xs">{p.transaction_reference}</TableCell>
-                        <TableCell>
+                        <TableCell data-label="Reference" className="font-mono text-xs">{p.transaction_reference}</TableCell>
+                        <TableCell data-label="Method">
                           <Badge variant="outline" className="rounded-full capitalize">
                             {p.payment_method}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-muted-foreground">{p.purpose}</TableCell>
-                        <TableCell className="text-xs text-muted-foreground">
+                        <TableCell data-label="Purpose" className="text-muted-foreground">{p.purpose}</TableCell>
+                        <TableCell data-label="Date" className="text-xs text-muted-foreground">
                           {formatDate(p.paid_at ?? p.created_at)}
                         </TableCell>
-                        <TableCell className="text-right font-medium">Rs. {p.amount?.toLocaleString()}</TableCell>
+                        <TableCell data-label="Amount" className="text-right font-medium">Rs. {p.amount?.toLocaleString()}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

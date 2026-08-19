@@ -90,19 +90,19 @@ function AdminRequestsPage() {
               }}
               placeholder="Search requests…"
             />
-            <div className="flex items-center gap-2">
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
               <Input
                 type="date"
                 value={dateFrom}
                 onChange={(e) => { setDateFrom(e.target.value); setPage(1); }}
-                className="w-40"
+                className="w-full sm:w-40"
               />
-              <span className="text-xs text-muted-foreground">to</span>
+              <span className="text-xs text-muted-foreground max-sm:px-1">to</span>
               <Input
                 type="date"
                 value={dateTo}
                 onChange={(e) => { setDateTo(e.target.value); setPage(1); }}
-                className="w-40"
+                className="w-full sm:w-40"
               />
             </div>
             <Select
@@ -112,7 +112,7 @@ function AdminRequestsPage() {
                 setPage(1);
               }}
             >
-              <SelectTrigger className="w-44">
+              <SelectTrigger className="w-full sm:w-44">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -147,23 +147,23 @@ function AdminRequestsPage() {
                 <TableBody>
                   {items.map((r) => (
                     <TableRow key={r.uuid}>
-                      <TableCell className="font-medium text-foreground">
+                      <TableCell data-label="Document" className="font-medium text-foreground">
                         {r.document_type}
                       </TableCell>
-                      <TableCell className="text-muted-foreground">
+                      <TableCell data-label="Requester" className="text-muted-foreground">
                         {r.requester_name ?? "—"}
                       </TableCell>
-                      <TableCell className="text-muted-foreground">
+                      <TableCell data-label="Issuing org" className="text-muted-foreground">
                         {r.issuing_org_name ?? (
                           <span className="italic">
                             {r.unmatched_org_name ?? "—"}
                           </span>
                         )}
                       </TableCell>
-                      <TableCell>
+                      <TableCell data-label="Status">
                         <StatusBadge status={r.status} />
                       </TableCell>
-                      <TableCell>
+                      <TableCell data-label="Locked">
                         {r.locked_by_name ? (
                           <span className="inline-flex items-center gap-1 text-xs text-warning-foreground">
                             <Lock className="h-3 w-3" /> {r.locked_by_name}
@@ -172,14 +172,14 @@ function AdminRequestsPage() {
                           <span className="text-xs text-muted-foreground">—</span>
                         )}
                       </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
+                      <TableCell data-label="Submitted" className="text-xs text-muted-foreground">
                         {formatDate(r.submitted_at)}
                       </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
+                      <TableCell data-label="Verified date" className="text-xs text-muted-foreground">
                         {r.status === "under_review" ? "—" : formatDate(r.verified_at)}
                       </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1">
+                      <TableCell data-label="Actions" className="text-right">
+                        <div className="flex flex-wrap items-center justify-start gap-1 sm:justify-end">
                           <Button
                             size="icon"
                             variant="ghost"

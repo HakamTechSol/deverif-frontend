@@ -125,3 +125,54 @@
     color: var(--color-foreground);
   }
 }
+
+@layer components {
+  @media (max-width: 639px) {
+    table:has(td[data-label]) {
+      display: block;
+    }
+
+    table:has(td[data-label]) thead {
+      display: none;
+    }
+
+    table:has(td[data-label]) tbody {
+      display: grid;
+      gap: 0.75rem;
+      padding: 1rem;
+    }
+
+    table:has(td[data-label]) tr {
+      display: grid;
+      gap: 0.625rem;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      background: color-mix(in oklab, var(--color-card) 96%, var(--color-muted));
+      padding: 0.875rem;
+    }
+
+    table:has(td[data-label]) td {
+      display: grid;
+      grid-template-columns: minmax(5.75rem, 42%) minmax(0, 1fr);
+      align-items: start;
+      gap: 0.75rem;
+      min-width: 0;
+      padding: 0;
+      text-align: left;
+      overflow-wrap: anywhere;
+    }
+
+    table:has(td[data-label]) td::before {
+      content: attr(data-label);
+      color: var(--color-muted-foreground);
+      font-size: 0.6875rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }
+
+    table:has(td[data-label]) td > * {
+      min-width: 0;
+    }
+  }
+}
