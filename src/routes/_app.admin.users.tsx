@@ -1,6 +1,6 @@
-import { createFileRoute } from "@tanstack/react-router";
+﻿import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { Pencil, Plus, Trash2, Users as UsersIcon, Mail, UploadCloud } from "lucide-react";
 
@@ -113,23 +113,32 @@ function AdminUsersPage() {
             <TableSkeleton />
           ) : items.length === 0 ? (
             <div className="p-6">
-              <EmptyState icon={UsersIcon} title="No users" description="Add your first user to get started." />
+              <EmptyState
+                icon={UsersIcon}
+                title="No users"
+                description="Add your first user to get started."
+              />
             </div>
           ) : (
             <>
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-10">S.No</TableHead>
                     <TableHead>Name</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Organization</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Org Role</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {items.map((u) => (
+                  {items.map((u, i) => (
                     <TableRow key={u.uuid}>
+                      <TableCell className="w-10 text-muted-foreground">
+                        {(page - 1) * 10 + i + 1}
+                      </TableCell>
                       <TableCell className="font-medium text-foreground">{u.full_name}</TableCell>
                       <TableCell className="text-muted-foreground">{u.email}</TableCell>
                       <TableCell className="text-muted-foreground">
@@ -147,6 +156,18 @@ function AdminUsersPage() {
                           {u.status === "inactive" ? "Invited" : "Active"}
                         </Badge>
                       </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="outline"
+                          className="rounded-full border-primary/30 bg-primary/10 text-primary"
+                        >
+                          {u.org_role === "org_admin"
+                            ? "Org Admin"
+                            : u.org_role === "sub_admin"
+                              ? "Sub Admin"
+                              : "Member"}
+                        </Badge>
+                      </TableCell>
                       <TableCell className="text-right">
                         {u.status === "inactive" && (
                           <Button
@@ -156,6 +177,7 @@ function AdminUsersPage() {
                             title="Resend invite link"
                             onClick={() => resendInvite.mutate(u.uuid)}
                             disabled={resendInvite.isPending}
+                            loading={resendInvite.isPending && resendInvite.variables === u.uuid}
                           >
                             <Mail className="h-4 w-4" />
                           </Button>
@@ -245,8 +267,18 @@ function UserFormDialog({
   const [orgMode, setOrgMode] = useState<"existing" | "new">("existing");
   const [orgName, setOrgName] = useState(editing?.organization_name ?? "");
   const [newOrgType, setNewOrgType] = useState<string>("software_house");
+  const [newOrgEmail, setNewOrgEmail] = useState("");
   const [newOrgLogo, setNewOrgLogo] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (open && !editing) {
+      setOrgName("");
+      setNewOrgType("software_house");
+      setNewOrgEmail("");
+      setNewOrgLogo(null);
+    }
+  }, [open, editing]);
 
   const orgList = orgs.data?.items ?? [];
   const selectedOrg = orgList.find((o) => o.name === orgName);
@@ -271,14 +303,11 @@ function UserFormDialog({
         const orgPayload =
           orgMode === "existing" && selectedOrg
             ? { name: selectedOrg.name }
-            : { name: orgName, organization_type: newOrgType };
+            : { name: orgName, organization_type: newOrgType, business_email: newOrgEmail.trim() };
 
         const form = new FormData();
         form.append("organization", JSON.stringify(orgPayload));
-        form.append(
-          "user",
-          JSON.stringify({ full_name: fullName, email, phone, cnic }),
-        );
+        form.append("user", JSON.stringify({ full_name: fullName, email, phone, cnic }));
         if (orgMode === "new" && newOrgLogo) {
           form.append("org_logo", newOrgLogo);
         }
@@ -299,7 +328,7 @@ function UserFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="w-[calc(100%-1rem)] max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{editing ? "Edit user" : "Add user"}</DialogTitle>
         </DialogHeader>
@@ -398,17 +427,11 @@ function UserFormDialog({
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="space-y-2 sm:col-span-2">
                       <Label>Name</Label>
-                      <Input
-                        value={orgName}
-                        onChange={(e) => setOrgName(e.target.value)}
-                      />
+                      <Input value={orgName} onChange={(e) => setOrgName(e.target.value)} />
                     </div>
-                    <div className="space-y-2">
+                    <div className="space-y-2 sm:col-span-2">
                       <Label>Type</Label>
-                      <Select
-                        value={newOrgType}
-                        onValueChange={(v) => setNewOrgType(v)}
-                      >
+                      <Select value={newOrgType} onValueChange={(v) => setNewOrgType(v)}>
                         <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
@@ -418,6 +441,18 @@ function UserFormDialog({
                           <SelectItem value="software_house">Software house</SelectItem>
                         </SelectContent>
                       </Select>
+                    </div>
+                    <div className="space-y-2 sm:col-span-2">
+                      <Label>Business email</Label>
+                      <Input
+                        type="email"
+                        value={newOrgEmail}
+                        onChange={(e) => setNewOrgEmail(e.target.value)}
+                        placeholder="Where SLA reminder emails are sent"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Used for automated reminders when this organization is slow to verify documents.
+                      </p>
                     </div>
                     <div className="space-y-2 sm:col-span-2">
                       <Label>Logo</Label>
@@ -448,7 +483,7 @@ function UserFormDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
             Cancel
           </Button>
-          <Button onClick={submit} disabled={submitting}>
+          <Button onClick={submit} disabled={submitting} loading={submitting}>
             {editing ? "Save changes" : "Create user"}
           </Button>
         </DialogFooter>
@@ -456,3 +491,6 @@ function UserFormDialog({
     </Dialog>
   );
 }
+
+
+

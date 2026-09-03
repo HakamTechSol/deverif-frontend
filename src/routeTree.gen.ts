@@ -13,19 +13,45 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as SetPasswordRouteImport } from './routes/set-password'
+import { Route as AppAttendanceRouteImport } from './routes/_app.attendance'
 import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
 import { Route as AppInboxRouteImport } from './routes/_app.inbox'
+import { Route as AppLeavesRouteImport } from './routes/_app.leaves'
 import { Route as AppPaymentsRouteImport } from './routes/_app.payments'
+import { Route as AppPayrollRouteImport } from './routes/_app.payroll'
 import { Route as AppRequestsRouteImport } from './routes/_app.requests'
 import { Route as AppSettingsRouteImport } from './routes/_app.settings'
+import { Route as SystemAdminForgotPasswordRouteImport } from './routes/system-admin.forgot-password'
+import { Route as SystemAdminLoginRouteImport } from './routes/system-admin.login'
+import { Route as SystemAdminResetPasswordRouteImport } from './routes/system-admin.reset-password'
+import { Route as VerifyQrTokenRouteImport } from './routes/verify.$qrToken'
+import { Route as AppAdminActivityLogsRouteImport } from './routes/_app.admin.activity-logs'
 import { Route as AppAdminLeadsRouteImport } from './routes/_app.admin.leads'
+import { Route as AppAdminLoginHistoryRouteImport } from './routes/_app.admin.login-history'
 import { Route as AppAdminNullRequestsRouteImport } from './routes/_app.admin.null-requests'
 import { Route as AppAdminOrganizationsRouteImport } from './routes/_app.admin.organizations'
 import { Route as AppAdminPaymentsRouteImport } from './routes/_app.admin.payments'
 import { Route as AppAdminRequestsRouteImport } from './routes/_app.admin.requests'
+import { Route as AppAdminSupportRouteImport } from './routes/_app.admin.support'
+import { Route as AppAdminUnresponsiveRouteImport } from './routes/_app.admin.unresponsive'
 import { Route as AppAdminUsersRouteImport } from './routes/_app.admin.users'
+import { Route as AppOrgAdminsRouteImport } from './routes/_app.org.admins'
+import { Route as AppOrgAttendanceRouteImport } from './routes/_app.org.attendance'
+import { Route as AppOrgLeavesRouteImport } from './routes/_app.org.leaves'
+import { Route as AppOrgPayrollRouteImport } from './routes/_app.org.payroll'
+import { Route as AppOrgSalaryComponentsRouteImport } from './routes/_app.org.salary-components'
+import { Route as AppOrgSupportRouteImport } from './routes/_app.org.support'
+import { Route as AppOrgTeamRouteImport } from './routes/_app.org.team'
+import { Route as AppPaymentCallbackRouteImport } from './routes/_app.payment.callback'
+import { Route as AppAdminSupportIndexRouteImport } from './routes/_app.admin.support.index'
+import { Route as AppAdminSupportUuidRouteImport } from './routes/_app.admin.support.$uuid'
+import { Route as AppOrgSupportIndexRouteImport } from './routes/_app.org.support.index'
+import { Route as AppOrgSupportUuidRouteImport } from './routes/_app.org.support.$uuid'
+import { Route as AppOrgTeamIndexRouteImport } from './routes/_app.org.team.index'
+import { Route as AppOrgTeamUuidRouteImport } from './routes/_app.org.team.$uuid'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -46,6 +72,11 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PricingRoute = PricingRouteImport.update({
+  id: '/pricing',
+  path: '/pricing',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
   path: '/reset-password',
@@ -55,6 +86,11 @@ const SetPasswordRoute = SetPasswordRouteImport.update({
   id: '/set-password',
   path: '/set-password',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AppAttendanceRoute = AppAttendanceRouteImport.update({
+  id: '/attendance',
+  path: '/attendance',
+  getParentRoute: () => AppRoute,
 } as any)
 const AppDashboardRoute = AppDashboardRouteImport.update({
   id: '/dashboard',
@@ -66,9 +102,19 @@ const AppInboxRoute = AppInboxRouteImport.update({
   path: '/inbox',
   getParentRoute: () => AppRoute,
 } as any)
+const AppLeavesRoute = AppLeavesRouteImport.update({
+  id: '/leaves',
+  path: '/leaves',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppPaymentsRoute = AppPaymentsRouteImport.update({
   id: '/payments',
   path: '/payments',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppPayrollRoute = AppPayrollRouteImport.update({
+  id: '/payroll',
+  path: '/payroll',
   getParentRoute: () => AppRoute,
 } as any)
 const AppRequestsRoute = AppRequestsRouteImport.update({
@@ -81,9 +127,41 @@ const AppSettingsRoute = AppSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => AppRoute,
 } as any)
+const SystemAdminForgotPasswordRoute =
+  SystemAdminForgotPasswordRouteImport.update({
+    id: '/system-admin/forgot-password',
+    path: '/system-admin/forgot-password',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const SystemAdminLoginRoute = SystemAdminLoginRouteImport.update({
+  id: '/system-admin/login',
+  path: '/system-admin/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SystemAdminResetPasswordRoute =
+  SystemAdminResetPasswordRouteImport.update({
+    id: '/system-admin/reset-password',
+    path: '/system-admin/reset-password',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const VerifyQrTokenRoute = VerifyQrTokenRouteImport.update({
+  id: '/verify/$qrToken',
+  path: '/verify/$qrToken',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AppAdminActivityLogsRoute = AppAdminActivityLogsRouteImport.update({
+  id: '/admin/activity-logs',
+  path: '/admin/activity-logs',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppAdminLeadsRoute = AppAdminLeadsRouteImport.update({
   id: '/admin/leads',
   path: '/admin/leads',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAdminLoginHistoryRoute = AppAdminLoginHistoryRouteImport.update({
+  id: '/admin/login-history',
+  path: '/admin/login-history',
   getParentRoute: () => AppRoute,
 } as any)
 const AppAdminNullRequestsRoute = AppAdminNullRequestsRouteImport.update({
@@ -106,47 +184,176 @@ const AppAdminRequestsRoute = AppAdminRequestsRouteImport.update({
   path: '/admin/requests',
   getParentRoute: () => AppRoute,
 } as any)
+const AppAdminSupportRoute = AppAdminSupportRouteImport.update({
+  id: '/admin/support',
+  path: '/admin/support',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAdminUnresponsiveRoute = AppAdminUnresponsiveRouteImport.update({
+  id: '/admin/unresponsive',
+  path: '/admin/unresponsive',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppAdminUsersRoute = AppAdminUsersRouteImport.update({
   id: '/admin/users',
   path: '/admin/users',
   getParentRoute: () => AppRoute,
+} as any)
+const AppOrgAdminsRoute = AppOrgAdminsRouteImport.update({
+  id: '/org/admins',
+  path: '/org/admins',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppOrgAttendanceRoute = AppOrgAttendanceRouteImport.update({
+  id: '/org/attendance',
+  path: '/org/attendance',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppOrgLeavesRoute = AppOrgLeavesRouteImport.update({
+  id: '/org/leaves',
+  path: '/org/leaves',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppOrgPayrollRoute = AppOrgPayrollRouteImport.update({
+  id: '/org/payroll',
+  path: '/org/payroll',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppOrgSalaryComponentsRoute = AppOrgSalaryComponentsRouteImport.update({
+  id: '/org/salary-components',
+  path: '/org/salary-components',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppOrgSupportRoute = AppOrgSupportRouteImport.update({
+  id: '/org/support',
+  path: '/org/support',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppOrgTeamRoute = AppOrgTeamRouteImport.update({
+  id: '/org/team',
+  path: '/org/team',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppPaymentCallbackRoute = AppPaymentCallbackRouteImport.update({
+  id: '/payment/callback',
+  path: '/payment/callback',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAdminSupportIndexRoute = AppAdminSupportIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppAdminSupportRoute,
+} as any)
+const AppAdminSupportUuidRoute = AppAdminSupportUuidRouteImport.update({
+  id: '/$uuid',
+  path: '/$uuid',
+  getParentRoute: () => AppAdminSupportRoute,
+} as any)
+const AppOrgSupportIndexRoute = AppOrgSupportIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppOrgSupportRoute,
+} as any)
+const AppOrgSupportUuidRoute = AppOrgSupportUuidRouteImport.update({
+  id: '/$uuid',
+  path: '/$uuid',
+  getParentRoute: () => AppOrgSupportRoute,
+} as any)
+const AppOrgTeamIndexRoute = AppOrgTeamIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppOrgTeamRoute,
+} as any)
+const AppOrgTeamUuidRoute = AppOrgTeamUuidRouteImport.update({
+  id: '/$uuid',
+  path: '/$uuid',
+  getParentRoute: () => AppOrgTeamRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
+  '/pricing': typeof PricingRoute
   '/reset-password': typeof ResetPasswordRoute
   '/set-password': typeof SetPasswordRoute
+  '/attendance': typeof AppAttendanceRoute
   '/dashboard': typeof AppDashboardRoute
   '/inbox': typeof AppInboxRoute
+  '/leaves': typeof AppLeavesRoute
   '/payments': typeof AppPaymentsRoute
+  '/payroll': typeof AppPayrollRoute
   '/requests': typeof AppRequestsRoute
   '/settings': typeof AppSettingsRoute
+  '/system-admin/forgot-password': typeof SystemAdminForgotPasswordRoute
+  '/system-admin/login': typeof SystemAdminLoginRoute
+  '/system-admin/reset-password': typeof SystemAdminResetPasswordRoute
+  '/verify/$qrToken': typeof VerifyQrTokenRoute
+  '/admin/activity-logs': typeof AppAdminActivityLogsRoute
   '/admin/leads': typeof AppAdminLeadsRoute
+  '/admin/login-history': typeof AppAdminLoginHistoryRoute
   '/admin/null-requests': typeof AppAdminNullRequestsRoute
   '/admin/organizations': typeof AppAdminOrganizationsRoute
   '/admin/payments': typeof AppAdminPaymentsRoute
   '/admin/requests': typeof AppAdminRequestsRoute
+  '/admin/support': typeof AppAdminSupportRouteWithChildren
+  '/admin/unresponsive': typeof AppAdminUnresponsiveRoute
   '/admin/users': typeof AppAdminUsersRoute
+  '/org/admins': typeof AppOrgAdminsRoute
+  '/org/attendance': typeof AppOrgAttendanceRoute
+  '/org/leaves': typeof AppOrgLeavesRoute
+  '/org/payroll': typeof AppOrgPayrollRoute
+  '/org/salary-components': typeof AppOrgSalaryComponentsRoute
+  '/org/support': typeof AppOrgSupportRouteWithChildren
+  '/org/team': typeof AppOrgTeamRouteWithChildren
+  '/payment/callback': typeof AppPaymentCallbackRoute
+  '/admin/support/$uuid': typeof AppAdminSupportUuidRoute
+  '/org/support/$uuid': typeof AppOrgSupportUuidRoute
+  '/org/team/$uuid': typeof AppOrgTeamUuidRoute
+  '/admin/support/': typeof AppAdminSupportIndexRoute
+  '/org/support/': typeof AppOrgSupportIndexRoute
+  '/org/team/': typeof AppOrgTeamIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
+  '/pricing': typeof PricingRoute
   '/reset-password': typeof ResetPasswordRoute
   '/set-password': typeof SetPasswordRoute
+  '/attendance': typeof AppAttendanceRoute
   '/dashboard': typeof AppDashboardRoute
   '/inbox': typeof AppInboxRoute
+  '/leaves': typeof AppLeavesRoute
   '/payments': typeof AppPaymentsRoute
+  '/payroll': typeof AppPayrollRoute
   '/requests': typeof AppRequestsRoute
   '/settings': typeof AppSettingsRoute
+  '/system-admin/forgot-password': typeof SystemAdminForgotPasswordRoute
+  '/system-admin/login': typeof SystemAdminLoginRoute
+  '/system-admin/reset-password': typeof SystemAdminResetPasswordRoute
+  '/verify/$qrToken': typeof VerifyQrTokenRoute
+  '/admin/activity-logs': typeof AppAdminActivityLogsRoute
   '/admin/leads': typeof AppAdminLeadsRoute
+  '/admin/login-history': typeof AppAdminLoginHistoryRoute
   '/admin/null-requests': typeof AppAdminNullRequestsRoute
   '/admin/organizations': typeof AppAdminOrganizationsRoute
   '/admin/payments': typeof AppAdminPaymentsRoute
   '/admin/requests': typeof AppAdminRequestsRoute
+  '/admin/unresponsive': typeof AppAdminUnresponsiveRoute
   '/admin/users': typeof AppAdminUsersRoute
+  '/org/admins': typeof AppOrgAdminsRoute
+  '/org/attendance': typeof AppOrgAttendanceRoute
+  '/org/leaves': typeof AppOrgLeavesRoute
+  '/org/payroll': typeof AppOrgPayrollRoute
+  '/org/salary-components': typeof AppOrgSalaryComponentsRoute
+  '/payment/callback': typeof AppPaymentCallbackRoute
+  '/admin/support/$uuid': typeof AppAdminSupportUuidRoute
+  '/org/support/$uuid': typeof AppOrgSupportUuidRoute
+  '/org/team/$uuid': typeof AppOrgTeamUuidRoute
+  '/admin/support': typeof AppAdminSupportIndexRoute
+  '/org/support': typeof AppOrgSupportIndexRoute
+  '/org/team': typeof AppOrgTeamIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -154,19 +361,45 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
+  '/pricing': typeof PricingRoute
   '/reset-password': typeof ResetPasswordRoute
   '/set-password': typeof SetPasswordRoute
+  '/_app/attendance': typeof AppAttendanceRoute
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/inbox': typeof AppInboxRoute
+  '/_app/leaves': typeof AppLeavesRoute
   '/_app/payments': typeof AppPaymentsRoute
+  '/_app/payroll': typeof AppPayrollRoute
   '/_app/requests': typeof AppRequestsRoute
   '/_app/settings': typeof AppSettingsRoute
+  '/system-admin/forgot-password': typeof SystemAdminForgotPasswordRoute
+  '/system-admin/login': typeof SystemAdminLoginRoute
+  '/system-admin/reset-password': typeof SystemAdminResetPasswordRoute
+  '/verify/$qrToken': typeof VerifyQrTokenRoute
+  '/_app/admin/activity-logs': typeof AppAdminActivityLogsRoute
   '/_app/admin/leads': typeof AppAdminLeadsRoute
+  '/_app/admin/login-history': typeof AppAdminLoginHistoryRoute
   '/_app/admin/null-requests': typeof AppAdminNullRequestsRoute
   '/_app/admin/organizations': typeof AppAdminOrganizationsRoute
   '/_app/admin/payments': typeof AppAdminPaymentsRoute
   '/_app/admin/requests': typeof AppAdminRequestsRoute
+  '/_app/admin/support': typeof AppAdminSupportRouteWithChildren
+  '/_app/admin/unresponsive': typeof AppAdminUnresponsiveRoute
   '/_app/admin/users': typeof AppAdminUsersRoute
+  '/_app/org/admins': typeof AppOrgAdminsRoute
+  '/_app/org/attendance': typeof AppOrgAttendanceRoute
+  '/_app/org/leaves': typeof AppOrgLeavesRoute
+  '/_app/org/payroll': typeof AppOrgPayrollRoute
+  '/_app/org/salary-components': typeof AppOrgSalaryComponentsRoute
+  '/_app/org/support': typeof AppOrgSupportRouteWithChildren
+  '/_app/org/team': typeof AppOrgTeamRouteWithChildren
+  '/_app/payment/callback': typeof AppPaymentCallbackRoute
+  '/_app/admin/support/$uuid': typeof AppAdminSupportUuidRoute
+  '/_app/org/support/$uuid': typeof AppOrgSupportUuidRoute
+  '/_app/org/team/$uuid': typeof AppOrgTeamUuidRoute
+  '/_app/admin/support/': typeof AppAdminSupportIndexRoute
+  '/_app/org/support/': typeof AppOrgSupportIndexRoute
+  '/_app/org/team/': typeof AppOrgTeamIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -174,56 +407,131 @@ export interface FileRouteTypes {
     | '/'
     | '/forgot-password'
     | '/login'
+    | '/pricing'
     | '/reset-password'
     | '/set-password'
+    | '/attendance'
     | '/dashboard'
     | '/inbox'
+    | '/leaves'
     | '/payments'
+    | '/payroll'
     | '/requests'
     | '/settings'
+    | '/system-admin/forgot-password'
+    | '/system-admin/login'
+    | '/system-admin/reset-password'
+    | '/verify/$qrToken'
+    | '/admin/activity-logs'
     | '/admin/leads'
+    | '/admin/login-history'
     | '/admin/null-requests'
     | '/admin/organizations'
     | '/admin/payments'
     | '/admin/requests'
+    | '/admin/support'
+    | '/admin/unresponsive'
     | '/admin/users'
+    | '/org/admins'
+    | '/org/attendance'
+    | '/org/leaves'
+    | '/org/payroll'
+    | '/org/salary-components'
+    | '/org/support'
+    | '/org/team'
+    | '/payment/callback'
+    | '/admin/support/$uuid'
+    | '/org/support/$uuid'
+    | '/org/team/$uuid'
+    | '/admin/support/'
+    | '/org/support/'
+    | '/org/team/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/forgot-password'
     | '/login'
+    | '/pricing'
     | '/reset-password'
     | '/set-password'
+    | '/attendance'
     | '/dashboard'
     | '/inbox'
+    | '/leaves'
     | '/payments'
+    | '/payroll'
     | '/requests'
     | '/settings'
+    | '/system-admin/forgot-password'
+    | '/system-admin/login'
+    | '/system-admin/reset-password'
+    | '/verify/$qrToken'
+    | '/admin/activity-logs'
     | '/admin/leads'
+    | '/admin/login-history'
     | '/admin/null-requests'
     | '/admin/organizations'
     | '/admin/payments'
     | '/admin/requests'
+    | '/admin/unresponsive'
     | '/admin/users'
+    | '/org/admins'
+    | '/org/attendance'
+    | '/org/leaves'
+    | '/org/payroll'
+    | '/org/salary-components'
+    | '/payment/callback'
+    | '/admin/support/$uuid'
+    | '/org/support/$uuid'
+    | '/org/team/$uuid'
+    | '/admin/support'
+    | '/org/support'
+    | '/org/team'
   id:
     | '__root__'
     | '/'
     | '/_app'
     | '/forgot-password'
     | '/login'
+    | '/pricing'
     | '/reset-password'
     | '/set-password'
+    | '/_app/attendance'
     | '/_app/dashboard'
     | '/_app/inbox'
+    | '/_app/leaves'
     | '/_app/payments'
+    | '/_app/payroll'
     | '/_app/requests'
     | '/_app/settings'
+    | '/system-admin/forgot-password'
+    | '/system-admin/login'
+    | '/system-admin/reset-password'
+    | '/verify/$qrToken'
+    | '/_app/admin/activity-logs'
     | '/_app/admin/leads'
+    | '/_app/admin/login-history'
     | '/_app/admin/null-requests'
     | '/_app/admin/organizations'
     | '/_app/admin/payments'
     | '/_app/admin/requests'
+    | '/_app/admin/support'
+    | '/_app/admin/unresponsive'
     | '/_app/admin/users'
+    | '/_app/org/admins'
+    | '/_app/org/attendance'
+    | '/_app/org/leaves'
+    | '/_app/org/payroll'
+    | '/_app/org/salary-components'
+    | '/_app/org/support'
+    | '/_app/org/team'
+    | '/_app/payment/callback'
+    | '/_app/admin/support/$uuid'
+    | '/_app/org/support/$uuid'
+    | '/_app/org/team/$uuid'
+    | '/_app/admin/support/'
+    | '/_app/org/support/'
+    | '/_app/org/team/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -231,8 +539,13 @@ export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   LoginRoute: typeof LoginRoute
+  PricingRoute: typeof PricingRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SetPasswordRoute: typeof SetPasswordRoute
+  SystemAdminForgotPasswordRoute: typeof SystemAdminForgotPasswordRoute
+  SystemAdminLoginRoute: typeof SystemAdminLoginRoute
+  SystemAdminResetPasswordRoute: typeof SystemAdminResetPasswordRoute
+  VerifyQrTokenRoute: typeof VerifyQrTokenRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -265,6 +578,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/pricing': {
+      id: '/pricing'
+      path: '/pricing'
+      fullPath: '/pricing'
+      preLoaderRoute: typeof PricingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/reset-password': {
       id: '/reset-password'
       path: '/reset-password'
@@ -278,6 +598,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/set-password'
       preLoaderRoute: typeof SetPasswordRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_app/attendance': {
+      id: '/_app/attendance'
+      path: '/attendance'
+      fullPath: '/attendance'
+      preLoaderRoute: typeof AppAttendanceRouteImport
+      parentRoute: typeof AppRoute
     }
     '/_app/dashboard': {
       id: '/_app/dashboard'
@@ -293,11 +620,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppInboxRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/leaves': {
+      id: '/_app/leaves'
+      path: '/leaves'
+      fullPath: '/leaves'
+      preLoaderRoute: typeof AppLeavesRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/payments': {
       id: '/_app/payments'
       path: '/payments'
       fullPath: '/payments'
       preLoaderRoute: typeof AppPaymentsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/payroll': {
+      id: '/_app/payroll'
+      path: '/payroll'
+      fullPath: '/payroll'
+      preLoaderRoute: typeof AppPayrollRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/requests': {
@@ -314,11 +655,53 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSettingsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/system-admin/forgot-password': {
+      id: '/system-admin/forgot-password'
+      path: '/system-admin/forgot-password'
+      fullPath: '/system-admin/forgot-password'
+      preLoaderRoute: typeof SystemAdminForgotPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/system-admin/login': {
+      id: '/system-admin/login'
+      path: '/system-admin/login'
+      fullPath: '/system-admin/login'
+      preLoaderRoute: typeof SystemAdminLoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/system-admin/reset-password': {
+      id: '/system-admin/reset-password'
+      path: '/system-admin/reset-password'
+      fullPath: '/system-admin/reset-password'
+      preLoaderRoute: typeof SystemAdminResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/verify/$qrToken': {
+      id: '/verify/$qrToken'
+      path: '/verify/$qrToken'
+      fullPath: '/verify/$qrToken'
+      preLoaderRoute: typeof VerifyQrTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_app/admin/activity-logs': {
+      id: '/_app/admin/activity-logs'
+      path: '/admin/activity-logs'
+      fullPath: '/admin/activity-logs'
+      preLoaderRoute: typeof AppAdminActivityLogsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/admin/leads': {
       id: '/_app/admin/leads'
       path: '/admin/leads'
       fullPath: '/admin/leads'
       preLoaderRoute: typeof AppAdminLeadsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/admin/login-history': {
+      id: '/_app/admin/login-history'
+      path: '/admin/login-history'
+      fullPath: '/admin/login-history'
+      preLoaderRoute: typeof AppAdminLoginHistoryRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/admin/null-requests': {
@@ -349,6 +732,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAdminRequestsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/admin/support': {
+      id: '/_app/admin/support'
+      path: '/admin/support'
+      fullPath: '/admin/support'
+      preLoaderRoute: typeof AppAdminSupportRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/admin/unresponsive': {
+      id: '/_app/admin/unresponsive'
+      path: '/admin/unresponsive'
+      fullPath: '/admin/unresponsive'
+      preLoaderRoute: typeof AppAdminUnresponsiveRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/admin/users': {
       id: '/_app/admin/users'
       path: '/admin/users'
@@ -356,35 +753,205 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAdminUsersRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/org/admins': {
+      id: '/_app/org/admins'
+      path: '/org/admins'
+      fullPath: '/org/admins'
+      preLoaderRoute: typeof AppOrgAdminsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/org/attendance': {
+      id: '/_app/org/attendance'
+      path: '/org/attendance'
+      fullPath: '/org/attendance'
+      preLoaderRoute: typeof AppOrgAttendanceRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/org/leaves': {
+      id: '/_app/org/leaves'
+      path: '/org/leaves'
+      fullPath: '/org/leaves'
+      preLoaderRoute: typeof AppOrgLeavesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/org/payroll': {
+      id: '/_app/org/payroll'
+      path: '/org/payroll'
+      fullPath: '/org/payroll'
+      preLoaderRoute: typeof AppOrgPayrollRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/org/salary-components': {
+      id: '/_app/org/salary-components'
+      path: '/org/salary-components'
+      fullPath: '/org/salary-components'
+      preLoaderRoute: typeof AppOrgSalaryComponentsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/org/support': {
+      id: '/_app/org/support'
+      path: '/org/support'
+      fullPath: '/org/support'
+      preLoaderRoute: typeof AppOrgSupportRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/org/team': {
+      id: '/_app/org/team'
+      path: '/org/team'
+      fullPath: '/org/team'
+      preLoaderRoute: typeof AppOrgTeamRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/payment/callback': {
+      id: '/_app/payment/callback'
+      path: '/payment/callback'
+      fullPath: '/payment/callback'
+      preLoaderRoute: typeof AppPaymentCallbackRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/admin/support/': {
+      id: '/_app/admin/support/'
+      path: '/'
+      fullPath: '/admin/support/'
+      preLoaderRoute: typeof AppAdminSupportIndexRouteImport
+      parentRoute: typeof AppAdminSupportRoute
+    }
+    '/_app/admin/support/$uuid': {
+      id: '/_app/admin/support/$uuid'
+      path: '/$uuid'
+      fullPath: '/admin/support/$uuid'
+      preLoaderRoute: typeof AppAdminSupportUuidRouteImport
+      parentRoute: typeof AppAdminSupportRoute
+    }
+    '/_app/org/support/': {
+      id: '/_app/org/support/'
+      path: '/'
+      fullPath: '/org/support/'
+      preLoaderRoute: typeof AppOrgSupportIndexRouteImport
+      parentRoute: typeof AppOrgSupportRoute
+    }
+    '/_app/org/support/$uuid': {
+      id: '/_app/org/support/$uuid'
+      path: '/$uuid'
+      fullPath: '/org/support/$uuid'
+      preLoaderRoute: typeof AppOrgSupportUuidRouteImport
+      parentRoute: typeof AppOrgSupportRoute
+    }
+    '/_app/org/team/': {
+      id: '/_app/org/team/'
+      path: '/'
+      fullPath: '/org/team/'
+      preLoaderRoute: typeof AppOrgTeamIndexRouteImport
+      parentRoute: typeof AppOrgTeamRoute
+    }
+    '/_app/org/team/$uuid': {
+      id: '/_app/org/team/$uuid'
+      path: '/$uuid'
+      fullPath: '/org/team/$uuid'
+      preLoaderRoute: typeof AppOrgTeamUuidRouteImport
+      parentRoute: typeof AppOrgTeamRoute
+    }
   }
 }
 
+interface AppAdminSupportRouteChildren {
+  AppAdminSupportUuidRoute: typeof AppAdminSupportUuidRoute
+  AppAdminSupportIndexRoute: typeof AppAdminSupportIndexRoute
+}
+
+const AppAdminSupportRouteChildren: AppAdminSupportRouteChildren = {
+  AppAdminSupportUuidRoute: AppAdminSupportUuidRoute,
+  AppAdminSupportIndexRoute: AppAdminSupportIndexRoute,
+}
+
+const AppAdminSupportRouteWithChildren = AppAdminSupportRoute._addFileChildren(
+  AppAdminSupportRouteChildren,
+)
+
+interface AppOrgSupportRouteChildren {
+  AppOrgSupportUuidRoute: typeof AppOrgSupportUuidRoute
+  AppOrgSupportIndexRoute: typeof AppOrgSupportIndexRoute
+}
+
+const AppOrgSupportRouteChildren: AppOrgSupportRouteChildren = {
+  AppOrgSupportUuidRoute: AppOrgSupportUuidRoute,
+  AppOrgSupportIndexRoute: AppOrgSupportIndexRoute,
+}
+
+const AppOrgSupportRouteWithChildren = AppOrgSupportRoute._addFileChildren(
+  AppOrgSupportRouteChildren,
+)
+
+interface AppOrgTeamRouteChildren {
+  AppOrgTeamUuidRoute: typeof AppOrgTeamUuidRoute
+  AppOrgTeamIndexRoute: typeof AppOrgTeamIndexRoute
+}
+
+const AppOrgTeamRouteChildren: AppOrgTeamRouteChildren = {
+  AppOrgTeamUuidRoute: AppOrgTeamUuidRoute,
+  AppOrgTeamIndexRoute: AppOrgTeamIndexRoute,
+}
+
+const AppOrgTeamRouteWithChildren = AppOrgTeamRoute._addFileChildren(
+  AppOrgTeamRouteChildren,
+)
+
 interface AppRouteChildren {
+  AppAttendanceRoute: typeof AppAttendanceRoute
   AppDashboardRoute: typeof AppDashboardRoute
   AppInboxRoute: typeof AppInboxRoute
+  AppLeavesRoute: typeof AppLeavesRoute
   AppPaymentsRoute: typeof AppPaymentsRoute
+  AppPayrollRoute: typeof AppPayrollRoute
   AppRequestsRoute: typeof AppRequestsRoute
   AppSettingsRoute: typeof AppSettingsRoute
+  AppAdminActivityLogsRoute: typeof AppAdminActivityLogsRoute
   AppAdminLeadsRoute: typeof AppAdminLeadsRoute
+  AppAdminLoginHistoryRoute: typeof AppAdminLoginHistoryRoute
   AppAdminNullRequestsRoute: typeof AppAdminNullRequestsRoute
   AppAdminOrganizationsRoute: typeof AppAdminOrganizationsRoute
   AppAdminPaymentsRoute: typeof AppAdminPaymentsRoute
   AppAdminRequestsRoute: typeof AppAdminRequestsRoute
+  AppAdminSupportRoute: typeof AppAdminSupportRouteWithChildren
+  AppAdminUnresponsiveRoute: typeof AppAdminUnresponsiveRoute
   AppAdminUsersRoute: typeof AppAdminUsersRoute
+  AppOrgAdminsRoute: typeof AppOrgAdminsRoute
+  AppOrgAttendanceRoute: typeof AppOrgAttendanceRoute
+  AppOrgLeavesRoute: typeof AppOrgLeavesRoute
+  AppOrgPayrollRoute: typeof AppOrgPayrollRoute
+  AppOrgSalaryComponentsRoute: typeof AppOrgSalaryComponentsRoute
+  AppOrgSupportRoute: typeof AppOrgSupportRouteWithChildren
+  AppOrgTeamRoute: typeof AppOrgTeamRouteWithChildren
+  AppPaymentCallbackRoute: typeof AppPaymentCallbackRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppAttendanceRoute: AppAttendanceRoute,
   AppDashboardRoute: AppDashboardRoute,
   AppInboxRoute: AppInboxRoute,
+  AppLeavesRoute: AppLeavesRoute,
   AppPaymentsRoute: AppPaymentsRoute,
+  AppPayrollRoute: AppPayrollRoute,
   AppRequestsRoute: AppRequestsRoute,
   AppSettingsRoute: AppSettingsRoute,
+  AppAdminActivityLogsRoute: AppAdminActivityLogsRoute,
   AppAdminLeadsRoute: AppAdminLeadsRoute,
+  AppAdminLoginHistoryRoute: AppAdminLoginHistoryRoute,
   AppAdminNullRequestsRoute: AppAdminNullRequestsRoute,
   AppAdminOrganizationsRoute: AppAdminOrganizationsRoute,
   AppAdminPaymentsRoute: AppAdminPaymentsRoute,
   AppAdminRequestsRoute: AppAdminRequestsRoute,
+  AppAdminSupportRoute: AppAdminSupportRouteWithChildren,
+  AppAdminUnresponsiveRoute: AppAdminUnresponsiveRoute,
   AppAdminUsersRoute: AppAdminUsersRoute,
+  AppOrgAdminsRoute: AppOrgAdminsRoute,
+  AppOrgAttendanceRoute: AppOrgAttendanceRoute,
+  AppOrgLeavesRoute: AppOrgLeavesRoute,
+  AppOrgPayrollRoute: AppOrgPayrollRoute,
+  AppOrgSalaryComponentsRoute: AppOrgSalaryComponentsRoute,
+  AppOrgSupportRoute: AppOrgSupportRouteWithChildren,
+  AppOrgTeamRoute: AppOrgTeamRouteWithChildren,
+  AppPaymentCallbackRoute: AppPaymentCallbackRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
@@ -394,8 +961,13 @@ const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   ForgotPasswordRoute: ForgotPasswordRoute,
   LoginRoute: LoginRoute,
+  PricingRoute: PricingRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SetPasswordRoute: SetPasswordRoute,
+  SystemAdminForgotPasswordRoute: SystemAdminForgotPasswordRoute,
+  SystemAdminLoginRoute: SystemAdminLoginRoute,
+  SystemAdminResetPasswordRoute: SystemAdminResetPasswordRoute,
+  VerifyQrTokenRoute: VerifyQrTokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

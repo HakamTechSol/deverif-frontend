@@ -176,3 +176,51 @@
     }
   }
 }
+
+/* --- Dvarif branded loader --- */
+@keyframes dvarif-loader-pulse {
+  0%,
+  100% {
+    opacity: 0.7;
+    transform: scale(0.94);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes dvarif-loader-halo {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.45;
+  }
+  70%,
+  100% {
+    transform: scale(1.45);
+    opacity: 0;
+  }
+}
+
+.dvarif-loader__mark {
+  animation: dvarif-loader-pulse 1.5s ease-in-out infinite;
+}
+
+.dvarif-loader__halo {
+  border-radius: 9999px;
+  background: color-mix(in oklab, var(--color-primary) 22%, transparent);
+  animation: dvarif-loader-halo 1.8s ease-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dvarif-loader__mark {
+    animation: none;
+    opacity: 0.85;
+  }
+
+  .dvarif-loader__halo {
+    animation: none;
+    transform: scale(1.2);
+    opacity: 0.15;
+  }
+}

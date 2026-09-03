@@ -1,0 +1,920 @@
+﻿import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
+import { toast } from "sonner";
+import { Contact, Eye, FileUp, Mail, MoreVertical, Plus, RefreshCw, Trash2, Upload, X } from "lucide-react";
+
+import { useAuth } from "@/lib/auth";
+import { PageHeader } from "@/components/common/PageHeader";
+import { SearchInput } from "@/components/common/SearchInput";
+import { Pagination } from "@/components/common/Pagination";
+import { EmptyState } from "@/components/common/EmptyState";
+import { ConfirmDialog } from "@/components/common/ConfirmDialog";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { TableSkeleton } from "@/routes/_app.requests";
+import { adminService, orgService, type EmployeeDocument, type EmployeeRecord, type ManagedOption, type Organization, type UUID } from "@/services";
+import { formatCNIC, formatDate, formatFileSize, resolveAssetUrl } from "@/lib/utils";
+
+type EmployeeApi = {
+  list: (params: { page?: number; limit?: number; search?: string }) => Promise<{
+    items: EmployeeRecord[];
+    total: number;
+    totalPages: number;
+  }>;
+  create: (data: Record<string, unknown>) => Promise<{ employee: EmployeeRecord; _email_warning?: string }>;
+  update: (uuid: UUID, data: Record<string, unknown>) => Promise<EmployeeRecord>;
+  remove: (uuid: UUID) => Promise<unknown>;
+};
+
+function apiErrorMessage(e: unknown, fallback: string) {
+  const err = e as { response?: { data?: { message?: string } } };
+  return err?.response?.data?.message ?? fallback;
+}
+
+const STATUS_OPTIONS: { value: EmployeeRecord["status"]; label: string }[] = [
+  { value: "active", label: "Active" },
+  { value: "inactive", label: "Inactive (invite pending)" },
+  { value: "resigned", label: "Resigned" },
+  { value: "terminated", label: "Terminated" },
+];
+
+function statusBadgeClass(status: EmployeeRecord["status"]) {
+  switch (status) {
+    case "active":
+      return "rounded-full border-success/30 bg-success/10 text-success";
+    case "inactive":
+      return "rounded-full border-amber-500/30 bg-amber-500/10 text-amber-600";
+    case "resigned":
+      return "rounded-full border-blue-500/30 bg-blue-500/10 text-blue-600";
+    case "terminated":
+      return "rounded-full border-destructive/30 bg-destructive/10 text-destructive";
+    default:
+      return "rounded-full border-border text-muted-foreground";
+  }
+}
+
+function statusLabel(status: EmployeeRecord["status"]) {
+  return status === "inactive" ? "Inactive" : status.charAt(0).toUpperCase() + status.slice(1);
+}
+
+type InviteStatus =
+  | { kind: "none" }
+  | { kind: "used" }
+  | { kind: "active"; daysAgo: number }
+  | { kind: "expired"; daysAgo: number };
+
+function inviteStatus(emp: EmployeeRecord): InviteStatus {
+  // No platform user at all -> no invite to show
+  if (emp.is_platform_user !== "yes" || !emp.invite_sent_at) return { kind: "none" };
+  // Token was actually used to set the password -> user is active
+  if (emp.invite_used_at) return { kind: "used" };
+
+  const sent = new Date(String(emp.invite_sent_at).replace(" ", "T")).getTime();
+  const now = Date.now();
+  const daysAgo = Math.max(0, Math.floor((now - sent) / (1000 * 60 * 60 * 24)));
+
+  // If not used and expired -> expired
+  if (emp.invite_expires_at && new Date(String(emp.invite_expires_at).replace(" ", "T")).getTime() < now) {
+    return { kind: "expired", daysAgo };
+  }
+  return { kind: "active", daysAgo };
+}
+
+export function EmployeeManager({
+  api,
+  queryKey,
+  canSelectOrg,
+  title,
+  description,
+  emptyTitle,
+  emptyDescription,
+}: {
+  api: EmployeeApi;
+  queryKey: string;
+  canSelectOrg: boolean;
+  title: string;
+  description: string;
+  emptyTitle: string;
+  emptyDescription: string;
+}) {
+  const { user } = useAuth();
+  const qc = useQueryClient();
+  const navigate = useNavigate();
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState("");
+  const [openForm, setOpenForm] = useState(false);
+  const [editing, setEditing] = useState<EmployeeRecord | null>(null);
+  const [toDelete, setToDelete] = useState<UUID | null>(null);
+
+  const list = useQuery({
+    queryKey: [queryKey, page, search],
+    queryFn: () => api.list({ page, limit: 10, search }),
+  });
+
+  const invalidate = () => qc.invalidateQueries({ queryKey: [queryKey] });
+
+  const del = useMutation({
+    mutationFn: (uuid: UUID) => api.remove(uuid),
+    onSuccess: () => {
+      toast.success("Employee deleted");
+      invalidate();
+    },
+    onError: (e) => toast.error(apiErrorMessage(e, "Delete failed")),
+  });
+
+  const resendInviteMut = useMutation({
+    mutationFn: (uuid: UUID) => orgService.resendInvite(uuid),
+    onSuccess: () => {
+      toast.success("Invite resent. Fresh set-password link sent.");
+      invalidate();
+    },
+    onError: (e) => toast.error(apiErrorMessage(e, "Resend failed")),
+  });
+
+  const items = list.data?.items ?? [];
+
+  return (
+    <div>
+      <PageHeader
+        title={title}
+        description={description}
+        actions={
+          <Button
+            size="sm"
+            onClick={() => {
+              setEditing(null);
+              setOpenForm(true);
+            }}
+          >
+            <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Employee
+          </Button>
+        }
+      />
+
+      <Card className="border-border/70 shadow-none">
+        <CardContent className="p-0">
+          <div className="border-b border-border p-4">
+            <SearchInput
+              value={search}
+              onChange={(v) => {
+                setSearch(v);
+                setPage(1);
+              }}
+              placeholder="Search by name, email, CNIC, designation or department…"
+            />
+          </div>
+
+          {list.isLoading ? (
+            <TableSkeleton />
+          ) : items.length === 0 ? (
+            <div className="p-6">
+              <EmptyState icon={Contact} title={emptyTitle} description={emptyDescription} />
+            </div>
+          ) : (
+            <>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-10">S.No</TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Designation</TableHead>
+                    <TableHead>Department</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Platform User</TableHead>
+                    <TableHead>Org Role</TableHead>
+                    <TableHead>Added By</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {items.map((emp, i) => (
+                    <TableRow key={emp.uuid}>
+                      <TableCell className="w-10 text-muted-foreground">
+                        {(page - 1) * 10 + i + 1}
+                      </TableCell>
+                      <TableCell>
+                        <div className="font-medium text-foreground">{emp.full_name}</div>
+                        <div className="text-xs text-muted-foreground">{emp.email ?? "—"}</div>
+                        {(() => {
+                          const st = inviteStatus(emp);
+                          if (st.kind === "none" || st.kind === "used") return null;
+                          const expired = st.kind === "expired";
+                          return (
+                            <div
+                              className={`mt-0.5 inline-flex items-center gap-1 rounded-full px-1.5 py-px text-[10px] font-medium ${
+                                expired
+                                  ? "bg-destructive/10 text-destructive"
+                                  : "bg-amber-500/10 text-amber-600"
+                              }`}
+                            >
+                              <Mail className="h-2.5 w-2.5" />
+                              {expired
+                                ? `Invite expired (sent ${st.daysAgo}d ago)`
+                                : `Invite sent ${st.daysAgo}d ago`}
+                            </div>
+                          );
+                        })()}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {emp.designation ?? "—"}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {emp.department ?? "—"}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={statusBadgeClass(emp.status)}>
+                          {statusLabel(emp.status)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="outline"
+                          className={
+                            emp.is_platform_user === "yes"
+                              ? "rounded-full border-primary/30 bg-primary/10 text-primary"
+                              : "rounded-full border-border text-muted-foreground"
+                          }
+                        >
+                          {emp.is_platform_user === "yes" ? "Yes" : "No"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {emp.is_platform_user === "yes" && emp.linked_user_role ? (
+                          <Badge
+                            variant="outline"
+                            className={
+                              emp.linked_user_role === "org_admin" || emp.linked_user_role === "sub_admin"
+                                ? "rounded-full border-primary/30 bg-primary/10 text-primary"
+                                : "rounded-full border-border text-muted-foreground"
+                            }
+                          >
+                            {emp.linked_user_role === "org_admin"
+                              ? "Org Admin"
+                              : emp.linked_user_role === "sub_admin"
+                                ? "Sub Admin"
+                                : "Member"}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {emp.added_by_name ?? "—"}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="inline-flex items-center justify-end gap-1">
+                          {(() => {
+                            const st = inviteStatus(emp);
+                            if (st.kind === "active" || st.kind === "expired") {
+                              return (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-7 whitespace-nowrap px-2 text-xs"
+                                  onClick={() => resendInviteMut.mutate(emp.uuid)}
+                                  disabled={resendInviteMut.isPending}
+                                >
+                                  <RefreshCw className="mr-1 h-3 w-3" />
+                                  Resend
+                                </Button>
+                              );
+                            }
+                            return null;
+                          })()}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button size="icon" variant="ghost" className="h-8 w-8">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-44">
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  navigate({ to: "/org/team/$uuid", params: { uuid: emp.uuid } })
+                                }
+                              >
+                                <Eye className="mr-2 h-4 w-4" /> View
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              <Pagination
+                page={page}
+                total={list.data?.total ?? 0}
+                totalPages={list.data?.totalPages ?? 1}
+                onChange={setPage}
+              />
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      <EmployeeFormDialog
+        key={editing?.uuid ?? "new"}
+        open={openForm}
+        onOpenChange={setOpenForm}
+        editing={editing}
+        api={api}
+        canSelectOrg={canSelectOrg}
+        onDone={() => {
+          setOpenForm(false);
+          invalidate();
+        }}
+      />
+
+      <ConfirmDialog
+        open={!!toDelete}
+        onOpenChange={(o) => !o && setToDelete(null)}
+        title="Delete this employee?"
+        description="This will permanently remove the HR record. Employees linked to a platform user cannot be deleted."
+        onConfirm={() => {
+          if (toDelete) del.mutate(toDelete);
+          setToDelete(null);
+        }}
+      />
+    </div>
+  );
+}
+
+function EmployeeFormDialog({
+  open,
+  onOpenChange,
+  editing,
+  api,
+  canSelectOrg,
+  onDone,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  editing: EmployeeRecord | null;
+  api: EmployeeApi;
+  canSelectOrg: boolean;
+  onDone: () => void;
+}) {
+  const isEdit = !!editing;
+  const { user } = useAuth();
+  const canDelete = user?.org_role === "org_admin";
+
+  const [form, setForm] = useState({
+    full_name: editing?.full_name ?? "",
+    cnic: editing?.cnic ?? "",
+    email: editing?.email ?? "",
+    phone: editing?.phone ?? "",
+    designation: editing?.designation ?? "",
+    department: editing?.department ?? "",
+    status: (editing?.status ?? "active") as EmployeeRecord["status"],
+    joining_date: editing?.joining_date ?? "",
+    emergency_contact: editing?.emergency_contact ?? "",
+    current_salary: editing ? String(editing?.current_salary ?? "0") : "",
+    organization_uuid: (editing as unknown as { organization_uuid?: string })?.organization_uuid ?? "",
+  });
+
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [submitting, setSubmitting] = useState(false);
+
+  const departmentsQ = useQuery({
+    queryKey: ["org-departments"],
+    queryFn: () => orgService.departments.list(),
+    enabled: open,
+  });
+  const designationsQ = useQuery({
+    queryKey: ["org-designations"],
+    queryFn: () => orgService.designations.list(),
+    enabled: open,
+  });
+
+  const [manageType, setManageType] = useState<null | "department" | "designation">(null);
+
+  const docsQ = useQuery({
+    queryKey: ["emp-docs", editing?.uuid],
+    queryFn: () => orgService.employeeDocuments.list(editing!.uuid),
+    enabled: !!editing?.uuid && open,
+  });
+
+  const [docFiles, setDocFiles] = useState<File[]>([]);
+  const [docType, setDocType] = useState("");
+  const uploadDocsMut = useMutation({
+    mutationFn: (files: File[]) => {
+      const fd = new FormData();
+      files.forEach((f) => fd.append("documents", f));
+      if (docType.trim()) fd.append("document_type", docType.trim());
+      return orgService.employeeDocuments.upload(editing!.uuid, fd);
+    },
+    onSuccess: () => {
+      setDocFiles([]);
+      setDocType("");
+      docsQ.refetch();
+      toast.success("Documents uploaded");
+    },
+    onError: (e) => toast.error(apiErrorMessage(e, "Upload failed")),
+  });
+  const deleteDocMut = useMutation({
+    mutationFn: (uuid: UUID) => orgService.employeeDocuments.remove(uuid),
+    onSuccess: () => {
+      docsQ.refetch();
+      toast.success("Document deleted");
+    },
+    onError: (e) => toast.error(apiErrorMessage(e, "Delete failed")),
+  });
+
+  const formatCNICInput = (v: string) => {
+    const digits = v.replace(/\D/g, "").slice(0, 13);
+    if (digits.length <= 5) return digits;
+    if (digits.length <= 12) return `${digits.slice(0, 5)}-${digits.slice(5)}`;
+    return `${digits.slice(0, 5)}-${digits.slice(5, 12)}-${digits.slice(12)}`;
+  };
+
+  const validate = () => {
+    const e: Record<string, string> = {};
+    if (!form.full_name.trim()) e.full_name = "Name is required";
+    if (!isEdit && !form.cnic.trim()) e.cnic = "CNIC is required";
+    if (form.emergency_contact.trim() && !/^[0-9+\-() ]{6,30}$/.test(form.emergency_contact.trim()))
+      e.emergency_contact = "Invalid contact";
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const onSubmit = async () => {
+    if (!validate()) return;
+    setSubmitting(true);
+    try {
+      const data: Record<string, unknown> = {
+        full_name: form.full_name.trim(),
+        cnic: form.cnic.replace(/\D/g, ""),
+        email: form.email.trim() || undefined,
+        phone: form.phone.trim() || undefined,
+        designation: form.designation.trim() || undefined,
+        department: form.department.trim() || undefined,
+        status: form.status,
+        joining_date: form.joining_date || undefined,
+        emergency_contact: form.emergency_contact.trim() || undefined,
+      };
+      if (canSelectOrg && form.organization_uuid) {
+        data.organization_uuid = form.organization_uuid;
+      }
+      if (!isEdit) {
+        data.current_salary = form.current_salary ? Number(form.current_salary) : 0;
+      }
+      if (isEdit) {
+        await api.update(editing.uuid, data);
+        if (docFiles.length) {
+          const fd = new FormData();
+          docFiles.forEach((f) => fd.append("documents", f));
+          if (docType.trim()) fd.append("document_type", docType.trim());
+          await orgService.employeeDocuments.upload(editing.uuid, fd);
+        }
+        toast.success("Employee updated");
+      } else {
+        const createdRes = await api.create(data);
+        const newUuid = createdRes?.employee?.uuid;
+        if (createdRes?._email_warning) toast.warning(createdRes._email_warning);
+        else if (form.email.trim()) toast.success("Employee created. Set-password email sent to " + form.email.trim() + ".");
+        else toast.success("Employee created");
+        if (docFiles.length && newUuid) {
+          const fd = new FormData();
+          docFiles.forEach((f) => fd.append("documents", f));
+          if (docType.trim()) fd.append("document_type", docType.trim());
+          await orgService.employeeDocuments.upload(newUuid, fd);
+        }
+      }
+      setDocFiles([]);
+      setDocType("");
+      onDone();
+    } catch (err) {
+      toast.error(apiErrorMessage(err, "Save failed"));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const orgs = useQuery({
+    queryKey: ["admin-orgs-select"],
+    queryFn: () => adminService.organizations({ limit: 200 }),
+    enabled: canSelectOrg && open,
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{isEdit ? "Edit Employee" : "Add Employee"}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div className="space-y-1.5">
+            <Label>Full Name *</Label>
+            <Input
+              value={form.full_name}
+              onChange={(e) => setForm({ ...form, full_name: e.target.value })}
+              placeholder="Enter full name"
+            />
+            {errors.full_name && <p className="text-xs text-destructive">{errors.full_name}</p>}
+          </div>
+          <div className="space-y-1.5">
+            <Label>CNIC {isEdit ? "" : "*"}</Label>
+            <Input
+              value={isEdit ? formatCNIC(form.cnic) : form.cnic}
+              onChange={(e) => setForm({ ...form, cnic: isEdit ? form.cnic : formatCNICInput(e.target.value) })}
+              placeholder="XXXXX-XXXXXXX-X"
+              disabled={isEdit}
+            />
+            {errors.cnic && <p className="text-xs text-destructive">{errors.cnic}</p>}
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label>Email</Label>
+              <Input
+                type="email"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                placeholder="email@example.com"
+              />
+              {!isEdit && (
+                <p className="text-xs text-muted-foreground">
+                  Providing an email will automatically send a "Set your password" invite. This
+                  employee will become a platform user with <strong>Member</strong> access.
+                </p>
+              )}
+            </div>
+            <div className="space-y-1.5">
+              <Label>Phone</Label>
+              <Input
+                value={form.phone}
+                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                placeholder="Phone number"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label>Emergency Contact</Label>
+              <Input
+                value={form.emergency_contact}
+                onChange={(e) => setForm({ ...form, emergency_contact: e.target.value })}
+                placeholder="+92 300 0000000"
+              />
+              {errors.emergency_contact && (
+                <p className="text-xs text-destructive">{errors.emergency_contact}</p>
+              )}
+            </div>
+            <div className="space-y-1.5">
+              <Label>Joining Date</Label>
+              <Input
+                type="date"
+                value={form.joining_date}
+                onChange={(e) => setForm({ ...form, joining_date: e.target.value })}
+              />
+            </div>
+          </div>
+          {!isEdit && (
+            <div className="space-y-1.5">
+              <Label>Current Salary</Label>
+              <Input
+                type="number"
+                min={0}
+                step="0.01"
+                value={form.current_salary}
+                onChange={(e) => setForm({ ...form, current_salary: e.target.value })}
+                placeholder="0.00"
+              />
+              <p className="text-xs text-muted-foreground">
+                Captured as this employee's starting salary on their salary history.
+              </p>
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label>Designation</Label>
+                <button
+                  type="button"
+                  className="text-xs text-primary hover:underline"
+                  onClick={() => setManageType("designation")}
+                >
+                  Manage
+                </button>
+              </div>
+              <Select value={form.designation} onValueChange={(v) => setForm({ ...form, designation: v })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select designation" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(designationsQ.data ?? []).map((d: ManagedOption) => (
+                    <SelectItem key={d.uuid} value={d.name}>{d.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label>Department</Label>
+                <button
+                  type="button"
+                  className="text-xs text-primary hover:underline"
+                  onClick={() => setManageType("department")}
+                >
+                  Manage
+                </button>
+              </div>
+              <Select value={form.department} onValueChange={(v) => setForm({ ...form, department: v })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select department" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(departmentsQ.data ?? []).map((d: ManagedOption) => (
+                    <SelectItem key={d.uuid} value={d.name}>{d.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Status (Lifecycle)</Label>
+            <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v as EmployeeRecord["status"] })}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {STATUS_OPTIONS.map((s) => (
+                  <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {canSelectOrg && (
+            <div className="space-y-1.5">
+              <Label>Organization</Label>
+              <Select
+                value={form.organization_uuid}
+                onValueChange={(v) => setForm({ ...form, organization_uuid: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select organization" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(orgs.data?.items ?? []).map((org: Organization) => (
+                    <SelectItem key={org.uuid} value={org.uuid}>
+                      {org.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          <div className="space-y-2 rounded-lg border border-border p-3">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm font-medium">Documents</Label>
+              <span className="text-xs text-muted-foreground">
+                Multiple files, each up to 10MB
+              </span>
+            </div>
+            <div className="space-y-1.5">
+              {isEdit && (
+                <Input
+                  type="text"
+                  value={docType}
+                  onChange={(e) => setDocType(e.target.value)}
+                  placeholder="Document type (optional, e.g. CNIC, Contract)"
+                  className="text-sm"
+                />
+              )}
+              <Input
+                type="file"
+                accept=".pdf,image/jpeg,image/png,image/webp,.doc,.docx,.xls,.xlsx,.txt,.csv,.zip"
+                multiple
+                onChange={(e) => {
+                  const picked = Array.from(e.target.files ?? []);
+                  setDocFiles((prev) => [...prev, ...picked]);
+                  e.target.value = "";
+                }}
+                className="text-sm"
+              />
+              {docFiles.length > 0 && (
+                <div className="space-y-1.5">
+                  {docFiles.map((f, idx) => (
+                    <div key={idx} className="flex items-center justify-between rounded-md border border-border px-2 py-1.5 text-sm">
+                      <span className="flex min-w-0 items-center gap-2">
+                        <FileUp className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        <span className="truncate">{f.name}</span>
+                        <span className="shrink-0 text-xs text-muted-foreground">{formatFileSize(f.size)}</span>
+                      </span>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                        onClick={() => setDocFiles((prev) => prev.filter((_, i) => i !== idx))}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                  {!isEdit && (
+                    <p className="text-xs text-muted-foreground">
+                      {docFiles.length} file(s) selected — they will be uploaded after you save the employee.
+                    </p>
+                  )}
+                  {isEdit && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => uploadDocsMut.mutate(docFiles)}
+                      loading={uploadDocsMut.isPending}
+                    >
+                      <Upload className="mr-1.5 h-3.5 w-3.5" /> Upload {docFiles.length} file(s)
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
+            {isEdit && (
+              <div className="space-y-1.5">
+                {docsQ.isLoading && <p className="text-xs text-muted-foreground">Loading documents…</p>}
+                {(docsQ.data ?? []).map((doc: EmployeeDocument) => (
+                  <div key={doc.uuid} className="flex items-center justify-between rounded-md border border-border px-2 py-1.5 text-sm">
+                    <a
+                      href={resolveAssetUrl(doc.file_path)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex min-w-0 items-center gap-2 truncate text-primary hover:underline"
+                    >
+                      <FileUp className="h-4 w-4 shrink-0" />
+                      <span className="truncate">{doc.file_name}</span>
+                      {doc.file_size ? (
+                        <span className="ml-1 shrink-0 text-xs text-muted-foreground">({formatFileSize(doc.file_size)})</span>
+                      ) : doc.document_type ? (
+                        <span className="ml-1 shrink-0 text-xs text-muted-foreground">({doc.document_type})</span>
+                      ) : null}
+                    </a>
+                    {canDelete ? (
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                        onClick={() => deleteDocMut.mutate(doc.uuid)}
+                        loading={deleteDocMut.isPending && deleteDocMut.variables === doc.uuid}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    ) : null}
+                  </div>
+                ))}
+                {(docsQ.data ?? []).length === 0 && !docsQ.isLoading && (
+                  <p className="text-xs text-muted-foreground">No documents uploaded yet.</p>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={submitting}>
+            Cancel
+          </Button>
+          <Button onClick={onSubmit} loading={submitting}>
+            {isEdit ? "Save Changes" : "Create"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+
+      <ManageOptionsDialog
+        open={manageType !== null}
+        onOpenChange={(o) => !o && setManageType(null)}
+        type={manageType}
+      />
+    </Dialog>
+  );
+}
+
+function ManageOptionsDialog({
+  open,
+  onOpenChange,
+  type,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  type: "department" | "designation" | null;
+}) {
+  const qc = useQueryClient();
+  const isDept = type === "department";
+  const title = isDept ? "Manage Departments" : "Manage Designations";
+  const { user } = useAuth();
+  const canDelete = user?.org_role === "org_admin";
+  const listQ = useQuery({
+    queryKey: [isDept ? "org-departments" : "org-designations"],
+    queryFn: () => (isDept ? orgService.departments.list() : orgService.designations.list()),
+    enabled: open,
+  });
+
+  const [name, setName] = useState("");
+  const createMut = useMutation({
+    mutationFn: (n: string) => (isDept ? orgService.departments.create(n) : orgService.designations.create(n)),
+    onSuccess: () => {
+      setName("");
+      qc.invalidateQueries({ queryKey: [isDept ? "org-departments" : "org-designations"] });
+      toast.success(`${isDept ? "Department" : "Designation"} added`);
+    },
+    onError: (e) => toast.error(apiErrorMessage(e, "Add failed")),
+  });
+  const removeMut = useMutation({
+    mutationFn: (uuid: UUID) => (isDept ? orgService.departments.remove(uuid) : orgService.designations.remove(uuid)),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [isDept ? "org-departments" : "org-designations"] });
+      toast.success("Removed");
+    },
+    onError: (e) => toast.error(apiErrorMessage(e, "Remove failed")),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <div className="flex gap-2">
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder={`New ${isDept ? "department" : "designation"} name`}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && name.trim()) createMut.mutate(name.trim());
+              }}
+            />
+            <Button onClick={() => name.trim() && createMut.mutate(name.trim())} loading={createMut.isPending}>
+              <Plus className="mr-1.5 h-4 w-4" /> Add
+            </Button>
+          </div>
+          <div className="max-h-60 space-y-1.5 overflow-y-auto">
+            {(listQ.data ?? []).map((opt: ManagedOption) => (
+              <div key={opt.uuid} className="flex items-center justify-between rounded-md border border-border px-2 py-1.5 text-sm">
+                <span className="truncate">{opt.name}</span>
+                {canDelete ? (
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                    onClick={() => removeMut.mutate(opt.uuid)}
+                    loading={removeMut.isPending && removeMut.variables === opt.uuid}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                ) : null}
+              </div>
+            ))}
+            {(listQ.data ?? []).length === 0 && (
+              <p className="text-xs text-muted-foreground">No items yet.</p>
+            )}
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+            Close
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+
+
+

@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import { CheckCircle2, ExternalLink, Eye, Inbox as InboxIcon, XCircle } from "lucide-react";
 
 import { PageHeader } from "@/components/common/PageHeader";
@@ -34,7 +35,9 @@ import {
 import { TableSkeleton } from "./_app.requests";
 import { requestsService, notificationService, type VerificationRequest } from "@/services";
 import { formatDate, formatDateTime, resolveAssetUrl } from "@/lib/utils";
+import { tDocType } from "@/i18n";
 import { useOrgSubscription } from "@/hooks/useOrgSubscription";
+import { usePermissions } from "@/lib/permissions";
 import { Lock } from "lucide-react";
 
 export const Route = createFileRoute("/_app/inbox")({
@@ -44,6 +47,7 @@ export const Route = createFileRoute("/_app/inbox")({
 
 function InboxPage() {
   const qc = useQueryClient();
+  const { t } = useTranslation();
   const { isLocked } = useOrgSubscription();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
@@ -51,10 +55,19 @@ function InboxPage() {
   const [dateTo, setDateTo] = useState("");
   const [active, setActive] = useState<VerificationRequest | null>(null);
   const [viewing, setViewing] = useState<VerificationRequest | null>(null);
+  const perms = usePermissions();
+  const canApprove = perms.approve_request;
 
   const list = useQuery({
     queryKey: ["inbox", page, search, dateFrom, dateTo],
-    queryFn: () => requestsService.myInbox({ page, limit: 10, search, dateFrom: dateFrom || undefined, dateTo: dateTo || undefined }),
+    queryFn: () =>
+      requestsService.myInbox({
+        page,
+        limit: 10,
+        search,
+        dateFrom: dateFrom || undefined,
+        dateTo: dateTo || undefined,
+      }),
   });
 
   const items = list.data?.items ?? [];
@@ -76,8 +89,8 @@ function InboxPage() {
   return (
     <div>
       <PageHeader
-        title="Inbox"
-        description={isLocked ? "Verification actions are locked. Renew your subscription to continue." : "Verification requests other organizations have sent to your team."}
+        title={t("inbox.title")}
+        description={isLocked ? t("inbox.lockedSub") : t("inbox.subtitle")}
       />
 
       <Card className="border-border/70 shadow-none">
@@ -89,20 +102,26 @@ function InboxPage() {
                 setSearch(v);
                 setPage(1);
               }}
-              placeholder="Search by requester or document…"
+              placeholder={t("inbox.searchPlaceholder")}
             />
             <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
               <Input
                 type="date"
                 value={dateFrom}
-                onChange={(e) => { setDateFrom(e.target.value); setPage(1); }}
+                onChange={(e) => {
+                  setDateFrom(e.target.value);
+                  setPage(1);
+                }}
                 className="w-full sm:w-40"
               />
-              <span className="text-xs text-muted-foreground max-sm:px-1">to</span>
+              <span className="text-xs text-muted-foreground max-sm:px-1">{t("common.to")}</span>
               <Input
                 type="date"
                 value={dateTo}
-                onChange={(e) => { setDateTo(e.target.value); setPage(1); }}
+                onChange={(e) => {
+                  setDateTo(e.target.value);
+                  setPage(1);
+                }}
                 className="w-full sm:w-40"
               />
             </div>
@@ -114,8 +133,8 @@ function InboxPage() {
             <div className="p-6">
               <EmptyState
                 icon={InboxIcon}
-                title="Your inbox is empty"
-                description="You'll see verification requests here as other organizations send them to you."
+                title={t("inbox.emptyTitle")}
+                description={t("inbox.emptyDesc")}
               />
             </div>
           ) : (
@@ -123,38 +142,73 @@ function InboxPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Requester</TableHead>
-                    <TableHead>Document type</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Submitted</TableHead>
-                    <TableHead>Verified date</TableHead>
-                    <TableHead>Format</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead className="w-10">S.No</TableHead>
+                    <TableHead>{t("inbox.requester")}</TableHead>
+                    <TableHead>{t("inbox.documentType")}</TableHead>
+                    <TableHead>{t("inbox.status")}</TableHead>
+                    <TableHead>{t("inbox.submitted")}</TableHead>
+                    <TableHead>{t("inbox.verifiedDate")}</TableHead>
+                    <TableHead>{t("inbox.verifiedBy")}</TableHead>
+                    <TableHead>{t("inbox.format")}</TableHead>
+                    <TableHead className="text-right">{t("inbox.actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {items.map((r) => (
+                  {items.map((r, i) => (
                     <TableRow key={r.uuid}>
-                      <TableCell data-label="Requester" className="font-medium text-foreground">
+                      <TableCell className="w-10 text-muted-foreground">
+                        {(page - 1) * 10 + i + 1}
+                      </TableCell>
+                      <TableCell
+                        data-label={t("inbox.requester")}
+                        className="font-medium text-foreground"
+                      >
                         <div>{r.requester_name ?? "—"}</div>
                         <div className="text-xs text-muted-foreground">
                           {r.requester_organization ?? r.requester_email}
                         </div>
                       </TableCell>
-                      <TableCell data-label="Document type" className="text-muted-foreground">{r.document_type}</TableCell>
-                      <TableCell data-label="Status">
+                      <TableCell
+                        data-label={t("inbox.documentType")}
+                        className="text-muted-foreground"
+                      >
+                        {tDocType(r.document_type)}
+                      </TableCell>
+                      <TableCell data-label={t("inbox.status")}>
                         <StatusBadge status={r.status} />
                       </TableCell>
-                      <TableCell data-label="Submitted" className="text-xs text-muted-foreground">
+                      <TableCell
+                        data-label={t("inbox.submitted")}
+                        className="text-xs text-muted-foreground"
+                      >
                         {formatDate(r.submitted_at)}
                       </TableCell>
-                      <TableCell data-label="Verified date" className="text-xs text-muted-foreground">
+                      <TableCell
+                        data-label={t("inbox.verifiedDate")}
+                        className="text-xs text-muted-foreground"
+                      >
                         {r.status === "under_review" ? "—" : formatDate(r.verified_at)}
                       </TableCell>
-                      <TableCell data-label="Format" className="text-xs uppercase text-muted-foreground">
+                      <TableCell
+                        data-label={t("inbox.verifiedBy")}
+                        className="text-xs text-muted-foreground"
+                      >
+                        {r.status === "under_review" || !r.verified_by_name ? (
+                          "—"
+                        ) : (
+                          <>
+                            <div className="font-medium text-foreground">{r.verified_by_name}</div>
+                            <div>{r.verified_by_email}</div>
+                          </>
+                        )}
+                      </TableCell>
+                      <TableCell
+                        data-label={t("inbox.format")}
+                        className="text-xs uppercase text-muted-foreground"
+                      >
                         {r.document_format ?? "PDF"}
                       </TableCell>
-                      <TableCell data-label="Actions" className="text-right">
+                      <TableCell data-label={t("inbox.actions")} className="text-right">
                         <div className="flex flex-wrap items-center justify-start gap-1 sm:justify-end">
                           <Button
                             size="icon"
@@ -166,15 +220,15 @@ function InboxPage() {
                           </Button>
                           {isLocked ? (
                             <Button size="sm" variant="outline" disabled>
-                              <Lock className="mr-1 h-3 w-3" /> Locked
+                              <Lock className="mr-1 h-3 w-3" /> {t("common.locked")}
                             </Button>
-                          ) : r.status === "under_review" ? (
+                          ) : r.status === "under_review" && canApprove ? (
                             <Button size="sm" variant="outline" onClick={() => setActive(r)}>
-                              Review
+                              {t("inbox.review")}
                             </Button>
                           ) : (
                             <span className="text-xs text-muted-foreground">
-                              {r.status === "verified" ? "Approved" : "Processed"}
+                              {r.status === "verified" ? t("inbox.approved") : t("inbox.processed")}
                             </span>
                           )}
                         </div>
@@ -220,6 +274,7 @@ function VerifyDialog({
 }) {
   const [remarks, setRemarks] = useState("");
   const isFinalized = request && request.status !== "under_review";
+  const { t } = useTranslation();
 
   const verify = useMutation({
     mutationFn: (status: "verified" | "unverified") =>
@@ -228,10 +283,10 @@ function VerifyDialog({
         verification_remarks: remarks,
       }),
     onSuccess: () => {
-      toast.success("Decision recorded");
+      toast.success(t("inbox.decisionRecorded"));
       onDone();
     },
-    onError: (e: any) => toast.error(e?.response?.data?.message ?? "Failed"),
+    onError: (e: any) => toast.error(e?.response?.data?.message ?? t("common.failed")),
   });
 
   return (
@@ -239,12 +294,10 @@ function VerifyDialog({
       <DialogContent className="max-w-3xl sm:p-6">
         <DialogHeader>
           <DialogTitle>
-            {isFinalized ? "Request details" : "Review verification request"}
+            {isFinalized ? t("inbox.requestDetails") : t("inbox.reviewRequest")}
           </DialogTitle>
           <DialogDescription>
-            {isFinalized
-              ? "This request has already been finalized."
-              : "Approve or reject the document with an explanatory remark."}
+            {isFinalized ? t("inbox.alreadyFinalized") : t("inbox.finalizeDescription")}
           </DialogDescription>
         </DialogHeader>
 
@@ -259,9 +312,13 @@ function VerifyDialog({
                 }`}
               >
                 {request.status === "verified" ? (
-                  <><CheckCircle2 className="h-4 w-4" /> Verified</>
+                  <>
+                    <CheckCircle2 className="h-4 w-4" /> {t("inbox.verifiedTag")}
+                  </>
                 ) : (
-                  <><XCircle className="h-4 w-4" /> Unverified</>
+                  <>
+                    <XCircle className="h-4 w-4" /> {t("inbox.unverifiedTag")}
+                  </>
                 )}
                 {request.verified_at && (
                   <span className="ml-auto text-xs font-normal opacity-70">
@@ -276,10 +333,10 @@ function VerifyDialog({
                 <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <div className="text-xs font-medium uppercase text-muted-foreground">
-                      Document
+                      {t("inbox.document")}
                     </div>
                     <div className="break-words text-sm font-semibold text-foreground">
-                      {request.document_type}
+                      {tDocType(request.document_type)}
                     </div>
                   </div>
                   {request.document_path ? (
@@ -289,41 +346,58 @@ function VerifyDialog({
                       rel="noreferrer"
                       className="inline-flex min-h-9 items-center justify-center gap-1 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground hover:bg-accent sm:min-h-0"
                     >
-                      Open <ExternalLink className="h-3 w-3" />
+                      {t("common.open")} <ExternalLink className="h-3 w-3" />
                     </a>
                   ) : null}
                 </div>
                 <dl className="grid gap-3 text-xs sm:grid-cols-2">
-                  <MetaRow label="Requester" value={request.requester_name ?? "—"} />
-                  <MetaRow label="Company" value={request.requester_organization ?? "—"} />
-                  <MetaRow label="Submitted" value={formatDateTime(request.submitted_at)} />
+                  <MetaRow label={t("inbox.requester")} value={request.requester_name ?? "—"} />
+                  <MetaRow
+                    label={t("inbox.company")}
+                    value={request.requester_organization ?? "—"}
+                  />
+                  <MetaRow
+                    label={t("inbox.submitted")}
+                    value={formatDateTime(request.submitted_at)}
+                  />
+                  {request.status !== "under_review" && (
+                    <>
+                      <MetaRow
+                        label={t("inbox.verifiedBy")}
+                        value={request.verified_by_name ?? "—"}
+                      />
+                      {request.verified_by_email ? (
+                        <MetaRow label={t("inbox.verifiedByEmail")} value={request.verified_by_email} />
+                      ) : null}
+                    </>
+                  )}
                 </dl>
               </div>
 
               <div className="flex flex-col gap-4">
                 <div>
-                  <Label>Requester's remarks</Label>
+                  <Label>{t("inbox.requesterRemarks")}</Label>
                   <div className="mt-1.5 min-h-16 break-words rounded-md border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
-                    {request.submission_remarks || "No remarks provided."}
+                    {request.submission_remarks || t("common.noRemarks")}
                   </div>
                 </div>
 
                 {isFinalized ? (
                   <div className="space-y-2">
-                    <Label>Verification remarks</Label>
+                    <Label>{t("inbox.verificationRemarks")}</Label>
                     <div className="min-h-16 break-words rounded-md border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
-                      {request.verification_remarks || "No remarks provided."}
+                      {request.verification_remarks || t("common.noRemarks")}
                     </div>
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    <Label htmlFor="vrem">Your verification remarks</Label>
+                    <Label htmlFor="vrem">{t("inbox.yourVerificationRemarks")}</Label>
                     <Textarea
                       id="vrem"
                       rows={4}
                       value={remarks}
                       onChange={(e) => setRemarks(e.target.value)}
-                      placeholder="Explain the reasoning for your decision…"
+                      placeholder={t("inbox.remarksPlaceholder")}
                     />
                   </div>
                 )}
@@ -333,8 +407,13 @@ function VerifyDialog({
         ) : null}
 
         <DialogFooter className="gap-2">
-          <Button className="w-full sm:w-auto" variant="outline" onClick={onClose} disabled={verify.isPending}>
-            {isFinalized ? "Close" : "Cancel"}
+          <Button
+            className="w-full sm:w-auto"
+            variant="outline"
+            onClick={onClose}
+            disabled={verify.isPending}
+          >
+            {isFinalized ? t("common.close") : t("common.cancel")}
           </Button>
           {!isFinalized && (
             <>
@@ -345,7 +424,7 @@ function VerifyDialog({
                 disabled={verify.isPending}
               >
                 <XCircle className="mr-2 h-4 w-4" />
-                Reject
+                {t("common.reject")}
               </Button>
               <Button
                 className="w-full sm:w-auto"
@@ -353,7 +432,7 @@ function VerifyDialog({
                 disabled={verify.isPending}
               >
                 <CheckCircle2 className="mr-2 h-4 w-4" />
-                Approve
+                {t("common.approve")}
               </Button>
             </>
           )}

@@ -1,5 +1,6 @@
 import { CheckCircle2, ExternalLink, Lock, XCircle } from "lucide-react";
 import { StatusBadge } from "@/components/common/StatusBadge";
+import { VerificationCertificate } from "@/components/requests/VerificationCertificate";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -24,9 +25,7 @@ function MetaRow({
   if (multiline) {
     return (
       <div className="rounded-md border border-border/70 bg-muted/25 px-3 py-2.5">
-        <dt className="text-[11px] font-medium uppercase text-muted-foreground">
-          {label}
-        </dt>
+        <dt className="text-[11px] font-medium uppercase text-muted-foreground">{label}</dt>
         <dd className="mt-1 whitespace-pre-wrap break-words text-sm font-medium leading-relaxed text-foreground">
           {value || "-"}
         </dd>
@@ -54,7 +53,7 @@ export function RequestDetailModal({
   if (!request) return null;
 
   const docUrl = request.document_path
-    ? resolveAssetUrl(request.document_path) ?? request.document_path
+    ? (resolveAssetUrl(request.document_path) ?? request.document_path)
     : null;
 
   const isFinalized = request.status !== "under_review";
@@ -64,9 +63,7 @@ export function RequestDetailModal({
       <DialogContent className="w-[calc(100vw-1.5rem)] max-w-xl p-5 sm:p-6">
         <DialogHeader>
           <DialogTitle>Request details</DialogTitle>
-          <DialogDescription>
-            Full details for this verification request.
-          </DialogDescription>
+          <DialogDescription>Full details for this verification request.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -103,9 +100,7 @@ export function RequestDetailModal({
           <div className="rounded-lg border border-border bg-muted/40 p-4">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <div className="text-xs font-medium uppercase text-muted-foreground">
-                  Document
-                </div>
+                <div className="text-xs font-medium uppercase text-muted-foreground">Document</div>
                 <div className="break-words text-sm font-semibold text-foreground">
                   {request.document_type}
                 </div>
@@ -119,9 +114,7 @@ export function RequestDetailModal({
               label="Organization"
               value={request.issuing_org_name ?? request.unmatched_org_name ?? "-"}
             />
-            {request.requester_name && (
-              <MetaRow label="Requester" value={request.requester_name} />
-            )}
+            {request.requester_name && <MetaRow label="Requester" value={request.requester_name} />}
             {request.requester_email && (
               <MetaRow label="Requester email" value={request.requester_email} />
             )}
@@ -129,25 +122,17 @@ export function RequestDetailModal({
             <MetaRow
               label="Verified"
               value={
-                request.status === "under_review"
-                  ? "Pending"
-                  : formatDateTime(request.verified_at)
+                request.status === "under_review" ? "Pending" : formatDateTime(request.verified_at)
               }
             />
-            <MetaRow
-              label="Format"
-              value={request.document_format?.toUpperCase() ?? "-"}
-            />
+            <MetaRow label="Format" value={request.document_format?.toUpperCase() ?? "-"} />
             {request.submission_remarks && (
               <MetaRow label="Remarks" value={request.submission_remarks} multiline />
             )}
             {request.verification_remarks && (
-              <MetaRow
-                label="Verification notes"
-                value={request.verification_remarks}
-                multiline
-              />
+              <MetaRow label="Verification notes" value={request.verification_remarks} multiline />
             )}
+            {request.status === "verified" && <VerificationCertificate request={request} />}
             {request.locked_by_name && (
               <div className="grid gap-1 py-2 sm:grid-cols-[8.5rem_minmax(0,1fr)] sm:items-start">
                 <dt className="text-xs text-muted-foreground">Locked by</dt>

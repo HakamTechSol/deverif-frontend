@@ -1,6 +1,8 @@
 import { useSyncExternalStore } from "react";
 
 export type Role = "admin" | "user";
+import type { FeatureAccess } from "@/services";
+
 export type AuthUser = {
   uuid: string;
   full_name: string;
@@ -8,6 +10,10 @@ export type AuthUser = {
   role: Role;
   profile_image?: string | null;
   phone?: string | null;
+  organization?: number | null;
+  org_role?: "employee" | "org_admin" | "sub_admin";
+  feature_access?: FeatureAccess | null;
+  preferred_language?: "en" | "ur";
 };
 
 const listeners = new Set<() => void>();
@@ -60,9 +66,5 @@ export const authStore = {
 
 const serverSnap = { token: null as string | null, user: null as AuthUser | null };
 export function useAuth() {
-  return useSyncExternalStore(
-    authStore.subscribe,
-    authStore.get,
-    () => serverSnap,
-  );
+  return useSyncExternalStore(authStore.subscribe, authStore.get, () => serverSnap);
 }

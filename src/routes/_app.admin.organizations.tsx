@@ -109,16 +109,22 @@ function AdminOrgsPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-10">S.No</TableHead>
                     <TableHead>Name</TableHead>
                     <TableHead>Type</TableHead>
+                    <TableHead className="text-center">Users</TableHead>
+                    <TableHead className="text-center">Employees</TableHead>
                     <TableHead>Subscription</TableHead>
                     <TableHead>Added</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {items.map((o) => (
+                  {items.map((o, i) => (
                     <TableRow key={o.uuid}>
+                      <TableCell className="w-10 text-muted-foreground">
+                        {(page - 1) * 10 + i + 1}
+                      </TableCell>
                       <TableCell className="font-medium text-foreground">
                         <div className="flex items-center gap-3">
                           {o.logo ? (
@@ -137,6 +143,16 @@ function AdminOrgsPage() {
                       </TableCell>
                       <TableCell className="capitalize text-muted-foreground">
                         {o.organization_type?.replace("_", " ")}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <span className="inline-flex min-w-7 justify-center rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                          {o.users_count ?? 0}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <span className="inline-flex min-w-7 justify-center rounded-full border border-border px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                          {o.employees_count ?? 0}
+                        </span>
                       </TableCell>
                       <TableCell>
                         <OrgSubscriptionBadge org={o} />
@@ -217,6 +233,7 @@ function OrgFormDialog({
 }) {
   const [name, setName] = useState("");
   const [type, setType] = useState<Organization["organization_type"]>("software_house");
+  const [businessEmail, setBusinessEmail] = useState("");
   const [logo, setLogo] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -224,6 +241,7 @@ function OrgFormDialog({
     if (open) {
       setName(editing?.name ?? "");
       setType((editing?.organization_type as any) ?? "software_house");
+      setBusinessEmail(editing?.business_email ?? "");
       setLogo(null);
     }
   }, [open, editing]);
@@ -234,6 +252,7 @@ function OrgFormDialog({
       const form = new FormData();
       form.append("name", name);
       form.append("organization_type", type);
+      form.append("business_email", businessEmail.trim());
       if (logo) form.append("logo", logo);
       if (editing) {
         await adminService.updateOrganization(editing.uuid, form);
@@ -276,6 +295,18 @@ function OrgFormDialog({
                 <SelectItem value="software_house">Software house</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Business email</Label>
+            <Input
+              type="email"
+              value={businessEmail}
+              onChange={(e) => setBusinessEmail(e.target.value)}
+              placeholder="Where SLA reminder emails are sent"
+            />
+            <p className="text-xs text-muted-foreground">
+              Used for automated reminders when this organization is slow to verify documents.
+            </p>
           </div>
           <div className="space-y-2">
             <Label>Logo</Label>

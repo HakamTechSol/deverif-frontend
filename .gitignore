@@ -16,9 +16,23 @@ dist-ssr
 .nitro
 *.local
 
+# Environment files (keep .env.example tracked)
+.env
+.env.*.local
+.env.production
+.env.staging
+
 # Wrangler / Cloudflare
 .wrangler/
 .dev.vars
+
+# Cache / test / coverage
+.cache/
+.turbo/
+coverage/
+*.tsbuildinfo
+.test-results/
+playwright-report/
 
 # Editor directories and files
 .vscode/*

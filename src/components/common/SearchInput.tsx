@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Search } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 export function SearchInput({
   value,
   onChange,
-  placeholder = "Search…",
+  placeholder,
   debounce = 300,
 }: {
   value: string;
@@ -13,6 +14,7 @@ export function SearchInput({
   placeholder?: string;
   debounce?: number;
 }) {
+  const { t } = useTranslation();
   const [local, setLocal] = useState(value);
   useEffect(() => setLocal(value), [value]);
   useEffect(() => {
@@ -28,7 +30,7 @@ export function SearchInput({
       <Input
         value={local}
         onChange={(e) => setLocal(e.target.value)}
-        placeholder={placeholder}
+        placeholder={placeholder ?? t("common.search")}
         className="pl-9"
       />
     </div>

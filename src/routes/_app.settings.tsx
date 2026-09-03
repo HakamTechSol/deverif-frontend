@@ -2,7 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Camera, Save, Lock, Building2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { Camera, Save, Lock, Building2, Languages } from "lucide-react";
 
 import { PageHeader } from "@/components/common/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -10,11 +11,13 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { authService } from "@/services";
 import { PasswordInput } from "@/components/common/PasswordInput";
 import { authStore, useAuth } from "@/lib/auth";
 import { resolveAssetUrl } from "@/lib/utils";
+import { setLanguage, getLanguage } from "@/i18n";
 
 export const Route = createFileRoute("/_app/settings")({
   head: () => ({ meta: [{ title: "Settings — Dvarif" }] }),
@@ -23,9 +26,18 @@ export const Route = createFileRoute("/_app/settings")({
 
 function SettingsPage() {
   const qc = useQueryClient();
+  const { t } = useTranslation();
   const { user } = useAuth();
 
-  type ProfileData = { full_name?: string; phone?: string | null; profile_image?: string | null; email?: string; organization_uuid?: string | null; organization_name?: string | null; organization_logo?: string | null };
+  type ProfileData = {
+    full_name?: string;
+    phone?: string | null;
+    profile_image?: string | null;
+    email?: string;
+    organization_uuid?: string | null;
+    organization_name?: string | null;
+    organization_logo?: string | null;
+  };
 
   const me = useQuery({
     queryKey: ["me"],
@@ -59,7 +71,7 @@ function SettingsPage() {
       return authService.updateProfile(form);
     },
     onSuccess: (u) => {
-      toast.success("Profile updated");
+      toast.success(t("settings.profileUpdated"));
       if (u && user) {
         authStore.updateUser({
           ...user,
@@ -70,7 +82,7 @@ function SettingsPage() {
       }
       qc.invalidateQueries({ queryKey: ["me"] });
     },
-    onError: (e: any) => toast.error(e?.response?.data?.message ?? "Update failed"),
+    onError: (e: any) => toast.error(e?.response?.data?.message ?? t("settings.updateFailed")),
   });
 
   const initials = (fullName || "U")
@@ -82,18 +94,13 @@ function SettingsPage() {
 
   return (
     <div>
-      <PageHeader
-        title="Settings"
-        description="Manage your profile and account preferences."
-      />
+      <PageHeader title={t("settings.title")} description={t("settings.description")} />
 
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="border-border/70 shadow-none lg:col-span-2">
           <CardContent className="p-6">
-            <h2 className="text-sm font-semibold text-foreground">Profile</h2>
-            <p className="text-xs text-muted-foreground">
-              This is how others in the network will see you.
-            </p>
+            <h2 className="text-sm font-semibold text-foreground">{t("settings.profile")}</h2>
+            <p className="text-xs text-muted-foreground">{t("settings.profileSubtitle")}</p>
 
             <div className="mt-6 flex items-center gap-5">
               <div className="relative">
@@ -104,18 +111,18 @@ function SettingsPage() {
                   </AvatarFallback>
                 </Avatar>
                 <label className="absolute -bottom-1 -right-1 flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-sm hover:text-foreground">
-                    <Camera className="h-3.5 w-3.5" />
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={(e) => {
-                        const f = e.target.files?.[0] ?? null;
-                        setImage(f);
-                        if (f) setPreview(URL.createObjectURL(f));
-                      }}
-                    />
-                  </label>
+                  <Camera className="h-3.5 w-3.5" />
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0] ?? null;
+                      setImage(f);
+                      if (f) setPreview(URL.createObjectURL(f));
+                    }}
+                  />
+                </label>
               </div>
               <div>
                 <div className="text-sm font-medium text-foreground">{fullName || "—"}</div>
@@ -130,20 +137,20 @@ function SettingsPage() {
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label>Full name</Label>
+                <Label>{t("settings.fullName")}</Label>
                 <Input value={fullName} onChange={(e) => setFullName(e.target.value)} />
               </div>
               <div className="space-y-2">
-                <Label>Email</Label>
+                <Label>{t("settings.email")}</Label>
                 <Input value={me.data?.email ?? user?.email ?? ""} readOnly disabled />
               </div>
               <div className="space-y-2">
-                <Label>Phone</Label>
+                <Label>{t("settings.phone")}</Label>
                 <Input value={phone} onChange={(e) => setPhone(e.target.value)} />
               </div>
               {user?.role !== "admin" && me.data?.organization_name && (
                 <div className="space-y-2">
-                  <Label>Organization</Label>
+                  <Label>{t("settings.organization")}</Label>
                   <div className="flex h-10 w-full items-center gap-2 rounded-md border border-border bg-muted/40 px-3 text-sm text-foreground">
                     <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
                     <span className="truncate">{me.data.organization_name}</span>
@@ -155,7 +162,7 @@ function SettingsPage() {
             <div className="mt-6 flex justify-end">
               <Button onClick={() => save.mutate()} disabled={save.isPending}>
                 <Save className="mr-2 h-4 w-4" />
-                Save changes
+                {save.isPending ? t("settings.saving") : t("settings.saveChanges")}
               </Button>
             </div>
           </CardContent>
@@ -164,10 +171,8 @@ function SettingsPage() {
         {user?.role !== "admin" ? (
           <Card className="border-border/70 shadow-none">
             <CardContent className="p-6">
-              <h2 className="text-sm font-semibold text-foreground">Security</h2>
-              <p className="text-xs text-muted-foreground">
-                Request a password reset link sent to your email.
-              </p>
+              <h2 className="text-sm font-semibold text-foreground">{t("settings.security")}</h2>
+              <p className="text-xs text-muted-foreground">{t("settings.securitySubtitleUser")}</p>
               <div className="mt-5">
                 <PasswordChangeCard />
               </div>
@@ -176,16 +181,18 @@ function SettingsPage() {
         ) : (
           <Card className="border-border/70 shadow-none">
             <CardContent className="p-6">
-              <h2 className="text-sm font-semibold text-foreground">Security</h2>
-              <p className="text-xs text-muted-foreground">
-                Update your admin password.
-              </p>
+              <h2 className="text-sm font-semibold text-foreground">{t("settings.security")}</h2>
+              <p className="text-xs text-muted-foreground">{t("settings.securitySubtitleAdmin")}</p>
               <div className="mt-5">
                 <AdminPasswordChangeCard />
               </div>
             </CardContent>
           </Card>
         )}
+      </div>
+
+      <div className="mt-6">
+        {user?.role !== "admin" && <LanguagePreferenceCard />}
       </div>
     </div>
   );
@@ -195,15 +202,16 @@ function PasswordChangeCard() {
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
   const { user } = useAuth();
+  const { t } = useTranslation();
 
   const sendReset = async () => {
     setLoading(true);
     try {
       await authService.forgotPassword(user?.email ?? "");
       setSent(true);
-      toast.success("Reset link sent to your email");
+      toast.success(t("settings.resetSent"));
     } catch (err: any) {
-      toast.error(err?.response?.data?.message ?? "Failed to send reset email");
+      toast.error(err?.response?.data?.message ?? t("settings.resetSendFailed"));
     } finally {
       setLoading(false);
     }
@@ -212,7 +220,7 @@ function PasswordChangeCard() {
   if (sent) {
     return (
       <div className="rounded-md border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
-        A password reset link has been sent to your email. Check your inbox.
+        {t("settings.resetLinkSentInfo")}
       </div>
     );
   }
@@ -220,7 +228,7 @@ function PasswordChangeCard() {
   return (
     <Button variant="outline" className="w-full" onClick={sendReset} disabled={loading}>
       <Lock className="mr-2 h-4 w-4" />
-      {loading ? "Sending..." : "Send password reset link"}
+      {loading ? t("settings.sending") : t("settings.sendResetLink")}
     </Button>
   );
 }
@@ -229,44 +237,45 @@ function AdminPasswordChangeCard() {
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const { t } = useTranslation();
 
   const pwValidations = [
-    { label: "At least 8 characters", ok: newPassword.length >= 8 },
-    { label: "One uppercase letter", ok: /[A-Z]/.test(newPassword) },
-    { label: "One lowercase letter", ok: /[a-z]/.test(newPassword) },
-    { label: "One number", ok: /[0-9]/.test(newPassword) },
-    { label: "One special character", ok: /[^A-Za-z0-9]/.test(newPassword) },
+    { label: t("settings.pwValidationMin"), ok: newPassword.length >= 8 },
+    { label: t("settings.pwValidationUpper"), ok: /[A-Z]/.test(newPassword) },
+    { label: t("settings.pwValidationLower"), ok: /[a-z]/.test(newPassword) },
+    { label: t("settings.pwValidationNumber"), ok: /[0-9]/.test(newPassword) },
+    { label: t("settings.pwValidationSpecial"), ok: /[^A-Za-z0-9]/.test(newPassword) },
   ];
   const passwordsMatch = newPassword.length > 0 && newPassword === confirmPassword;
 
   const changePw = useMutation({
     mutationFn: () => {
-      if (newPassword.length < 8) throw new Error("Password must be at least 8 characters");
-      if (!/[A-Z]/.test(newPassword)) throw new Error("Password must contain at least one uppercase letter");
-      if (!/[a-z]/.test(newPassword)) throw new Error("Password must contain at least one lowercase letter");
-      if (!/[0-9]/.test(newPassword)) throw new Error("Password must contain at least one number");
-      if (!/[^A-Za-z0-9]/.test(newPassword)) throw new Error("Password must contain at least one special character");
-      if (newPassword !== confirmPassword) throw new Error("Passwords do not match");
+      if (newPassword.length < 8) throw new Error(t("settings.pwValidationMin"));
+      if (!/[A-Z]/.test(newPassword)) throw new Error(t("settings.pwValidationUpper"));
+      if (!/[a-z]/.test(newPassword)) throw new Error(t("settings.pwValidationLower"));
+      if (!/[0-9]/.test(newPassword)) throw new Error(t("settings.pwValidationNumber"));
+      if (!/[^A-Za-z0-9]/.test(newPassword)) throw new Error(t("settings.pwValidationSpecial"));
+      if (newPassword !== confirmPassword) throw new Error(t("settings.passwordsDontMatch"));
       return authService.updateAdminProfile({
         password: newPassword,
         old_password: oldPassword,
       });
     },
     onSuccess: () => {
-      toast.success("Password updated");
+      toast.success(t("settings.passwordUpdated"));
       setOldPassword("");
       setNewPassword("");
       setConfirmPassword("");
     },
     onError: (e: any) => {
-      toast.error(e?.response?.data?.message ?? e?.message ?? "Failed to update password");
+      toast.error(e?.response?.data?.message ?? e?.message ?? t("settings.passwordUpdateFailed"));
     },
   });
 
   return (
     <div className="space-y-3">
       <div className="space-y-2">
-        <Label>Current password</Label>
+        <Label>{t("settings.currentPassword")}</Label>
         <PasswordInput
           placeholder="••••••••"
           value={oldPassword}
@@ -274,7 +283,7 @@ function AdminPasswordChangeCard() {
         />
       </div>
       <div className="space-y-2">
-        <Label>New password</Label>
+        <Label>{t("settings.newPassword")}</Label>
         <PasswordInput
           placeholder="••••••••"
           value={newPassword}
@@ -291,7 +300,7 @@ function AdminPasswordChangeCard() {
         </ul>
       )}
       <div className="space-y-2">
-        <Label>Confirm new password</Label>
+        <Label>{t("settings.confirmNewPassword")}</Label>
         <PasswordInput
           placeholder="••••••••"
           value={confirmPassword}
@@ -300,7 +309,9 @@ function AdminPasswordChangeCard() {
       </div>
       {confirmPassword.length > 0 && (
         <p className={`text-[11px] ${passwordsMatch ? "text-emerald-600" : "text-destructive"}`}>
-          {passwordsMatch ? "\u2713 Passwords match" : "Passwords do not match"}
+          {passwordsMatch
+            ? `\u2713 ${t("settings.passwordsMatch")}`
+            : t("settings.passwordsDontMatch")}
         </p>
       )}
       <Button
@@ -310,8 +321,59 @@ function AdminPasswordChangeCard() {
         disabled={changePw.isPending || !oldPassword || !newPassword || !passwordsMatch}
       >
         <Lock className="mr-2 h-4 w-4" />
-        {changePw.isPending ? "Updating..." : "Update password"}
+        {changePw.isPending ? t("settings.updating") : t("settings.updatePassword")}
       </Button>
     </div>
+  );
+}
+
+function LanguagePreferenceCard() {
+  const { t } = useTranslation();
+  const { user } = useAuth();
+  const [value, setValue] = useState<string>(getLanguage());
+
+  const onChange = (next: string) => {
+    setValue(next);
+    const lang = next as "en" | "ur";
+    setLanguage(lang);
+    if (!user) return;
+    const persist =
+      user.role === "admin"
+        ? authService.setAdminPreferredLanguage(lang)
+        : authService.setPreferredLanguage(lang);
+    persist
+      .then(() => {
+        authStore.updateUser({ ...user, preferred_language: lang });
+        toast.success(lang === "ur" ? "زبان اردو کر دی گئی" : "Language set to English");
+      })
+      .catch(() => {
+        // preference still applies locally for this session
+      });
+  };
+
+  return (
+    <Card className="border-border/70 shadow-none">
+      <CardContent className="p-6">
+        <div className="flex items-center gap-2">
+          <Languages className="h-4 w-4 text-muted-foreground" />
+          <h2 className="text-sm font-semibold text-foreground">{t("lang.language")}</h2>
+        </div>
+        <p className="mt-1 text-xs text-muted-foreground">{t("lang.preferenceHint")}</p>
+        <RadioGroup
+          value={value}
+          onValueChange={onChange}
+          className="mt-4 flex flex-col gap-2 sm:flex-row"
+        >
+          <label className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm text-foreground hover:bg-accent">
+            <RadioGroupItem value="en" />
+            {t("lang.english")}
+          </label>
+          <label className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm text-foreground hover:bg-accent">
+            <RadioGroupItem value="ur" />
+            {t("lang.urdu")}
+          </label>
+        </RadioGroup>
+      </CardContent>
+    </Card>
   );
 }

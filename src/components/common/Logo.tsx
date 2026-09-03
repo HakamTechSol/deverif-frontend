@@ -10,16 +10,10 @@ export function Logo({
 }) {
   return (
     <div className={cn("flex items-center gap-2", className)}>
-      <img
-        src={logoMark}
-        alt="Dvarif logo"
-        className="h-8 w-8 rounded-md object-contain"
-      />
+      <img src={logoMark} alt="Dvarif logo" className="h-8 w-8 rounded-md object-contain" />
       {showWordmark ? (
         <div className="flex flex-col leading-none">
-          <span className="text-base font-semibold tracking-tight text-foreground">
-            Dvarif
-          </span>
+          <span className="text-base font-semibold tracking-tight text-foreground">Dvarif</span>
           <span className="mt-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
             Verification
           </span>

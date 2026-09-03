@@ -2,6 +2,7 @@ import { Link, useRouter, useRouterState } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import {
   LayoutDashboard,
   Send,
@@ -21,37 +22,79 @@ import {
   Bell,
   CheckCheck,
   MessageSquare,
+  History,
+  ScrollText,
+  Hourglass,
+  CalendarDays,
+  CalendarClock,
+  ClipboardCheck,
+  Headset,
+  Languages,
+  ShieldCheck,
 } from "lucide-react";
 import { Logo } from "@/components/common/Logo";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { authStore, useAuth } from "@/lib/auth";
 import { useTheme } from "@/lib/theme";
 import { authService, requestsService, notificationService } from "@/services";
+import type { FileRouteTypes } from "@/routeTree.gen";
 import { cn, resolveAssetUrl, formatDateTime } from "@/lib/utils";
+import { setLanguage, getLanguage, type Language } from "@/i18n";
 import { useOrgSubscription } from "@/hooks/useOrgSubscription";
 import { SubscriptionBanner } from "@/components/common/SubscriptionLocked";
+import { usePermissions } from "@/lib/permissions";
 import type { LucideIcon } from "lucide-react";
 
-type NavItem = { to: string; label: string; icon: LucideIcon; badge?: number };
+type NavItem = { to: string; labelKey: string; icon: LucideIcon; badge?: number };
 
 const userNavItems: NavItem[] = [
-  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/requests", label: "My Requests", icon: Send },
-  { to: "/inbox", label: "Inbox", icon: Inbox },
-  { to: "/payments", label: "Payments", icon: CreditCard },
-  { to: "/settings", label: "Settings", icon: Settings },
+  { to: "/dashboard", labelKey: "nav.dashboard", icon: LayoutDashboard },
+  { to: "/requests", labelKey: "nav.myRequests", icon: Send },
+  { to: "/leaves", labelKey: "nav.leaves", icon: CalendarDays },
+  { to: "/inbox", labelKey: "nav.inbox", icon: Inbox },
+];
+
+const memberNavItems: NavItem[] = [
+  { to: "/attendance", labelKey: "nav.attendance", icon: ClipboardCheck },
+  { to: "/payroll", labelKey: "nav.payroll", icon: Wallet },
+  { to: "/org/support", labelKey: "nav.support", icon: Headset },
+];
+
+const orgAdminNavItems: NavItem[] = [
+  { to: "/org/team", labelKey: "nav.myTeam", icon: Users },
+  { to: "/org/admins", labelKey: "nav.orgAdmins", icon: ShieldCheck },
+  { to: "/org/leaves", labelKey: "nav.leaveRequests", icon: CalendarClock },
+  { to: "/org/attendance", labelKey: "nav.attendance", icon: ClipboardCheck },
+  { to: "/org/salary-components", labelKey: "nav.payrollComponents", icon: Wallet },
+  { to: "/org/payroll", labelKey: "nav.payroll", icon: Wallet },
+  { to: "/org/support", labelKey: "nav.support", icon: Headset },
+  { to: "/payments", labelKey: "nav.payments", icon: CreditCard },
 ];
 
 const adminNav: NavItem[] = [
-  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/admin/users", label: "Users", icon: Users },
-  { to: "/admin/organizations", label: "Organizations", icon: Building2 },
-  { to: "/admin/requests", label: "Verification Requests", icon: FileCheck2 },
-  { to: "/admin/null-requests", label: "Unmatched Orgs", icon: AlertTriangle },
-  { to: "/admin/payments", label: "Payments", icon: Wallet },
-  { to: "/admin/leads", label: "Leads", icon: MessageSquare },
-  { to: "/settings", label: "Settings", icon: Settings },
+  { to: "/dashboard", labelKey: "nav.dashboard", icon: LayoutDashboard },
+  { to: "/admin/users", labelKey: "nav.users", icon: Users },
+  { to: "/admin/organizations", labelKey: "nav.organizations", icon: Building2 },
+  { to: "/admin/requests", labelKey: "nav.verificationRequests", icon: FileCheck2 },
+  { to: "/admin/null-requests", labelKey: "nav.unmatchedOrgs", icon: AlertTriangle },
+  { to: "/admin/unresponsive", labelKey: "nav.unresponsive", icon: Hourglass },
+  { to: "/admin/payments", labelKey: "nav.payments", icon: Wallet },
+  { to: "/admin/leads", labelKey: "nav.leads", icon: MessageSquare },
+  { to: "/admin/login-history", labelKey: "nav.loginHistory", icon: History },
+  { to: "/admin/activity-logs", labelKey: "nav.activityLogs", icon: ScrollText },
+  { to: "/admin/support", labelKey: "nav.supportTickets", icon: Headset },
+  { to: "/settings", labelKey: "nav.settings", icon: Settings },
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -74,24 +117,80 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
     authStore.clear();
     toast.success("Signed out");
-    router.navigate({ to: "/login" });
+    router.navigate({ to: user?.role === "admin" ? "/system-admin/login" : "/login" });
   };
+
+  const isOrgAdmin = !isAdmin && user?.org_role === "org_admin";
+  const isSubAdmin = !isAdmin && user?.org_role === "sub_admin";
+  const perms = usePermissions();
+  const canApprove = isOrgAdmin || perms.approve_request;
+  const canGenerate = isOrgAdmin || perms.generate_request;
 
   const inboxCount = useQuery({
     queryKey: ["inbox-count"],
     queryFn: () => requestsService.myInboxCount(),
-    enabled: mounted && !!user && !isAdmin,
+    enabled: mounted && !!user && !isAdmin && canApprove,
     refetchInterval: 30_000,
     retry: false,
   });
 
+  const meSync = useQuery({
+    queryKey: ["me-sync"],
+    queryFn: () => authService.me(),
+    enabled: mounted && !!user && !isAdmin,
+    retry: false,
+  });
+
+  useEffect(() => {
+    if (!user || isAdmin || !meSync.data) return;
+    const synced = meSync.data as { org_role?: "employee" | "org_admin" | "sub_admin"; feature_access?: Record<string, boolean> | null };
+    const updates: Record<string, unknown> = {};
+    if (synced.org_role !== user.org_role) updates.org_role = synced.org_role ?? "org_admin";
+    if (synced.feature_access !== undefined) updates.feature_access = synced.feature_access;
+    if (Object.keys(updates).length) authStore.updateUser({ ...user, ...updates });
+  }, [meSync.data, user, isAdmin]);
+
+  const userNavVisible = userNavItems.filter((it) => {
+    if (it.to === "/requests") return isOrgAdmin ? canGenerate : perms.generate_request;
+    if (it.to === "/leaves") return isOrgAdmin || isSubAdmin ? false : perms.leave;
+    if (it.to === "/inbox") return canApprove;
+    return true;
+  });
+
+  const memberServiceVisible = memberNavItems.filter((it) => {
+    if (isOrgAdmin || isSubAdmin) return false;
+    if (it.to === "/attendance") return perms.attendance;
+    if (it.to === "/payroll") return perms.payroll;
+    return true;
+  });
+
+  // org_admin gets full operational org access. sub_admin only gets the org
+  // pages matching their granted feature_access permissions, and never
+  // sub-admin management, org billing, or org settings.
+  const subAdminForbidden = new Set(["/org/admins", "/payments"]);
+  const orgNavVisible: NavItem[] = isOrgAdmin || isSubAdmin
+    ? isOrgAdmin
+      ? orgAdminNavItems
+      : orgAdminNavItems.filter((it) => {
+          if (subAdminForbidden.has(it.to)) return false;
+          if (it.to === "/org/team") return perms.manage_employees;
+          if (it.to === "/org/leaves") return perms.leave;
+          if (it.to === "/org/attendance") return perms.attendance;
+          if (it.to === "/org/salary-components" || it.to === "/org/payroll") return perms.payroll;
+          return true;
+        })
+    : [];
+
   const items: NavItem[] = isAdmin
     ? adminNav
-    : userNavItems.map((it) =>
-        it.to === "/inbox"
-          ? { ...it, badge: inboxCount.data ?? 0 }
-          : it,
-      );
+    : [
+        ...userNavVisible.map((it) =>
+          it.to === "/inbox" ? { ...it, badge: inboxCount.data ?? 0 } : it,
+        ),
+        ...(isOrgAdmin || isSubAdmin ? [] : memberServiceVisible),
+        ...orgNavVisible,
+        { to: "/settings", labelKey: "nav.settings", icon: Settings },
+      ];
 
   return (
     <div className="min-h-screen bg-background">
@@ -141,6 +240,7 @@ function SidebarInner({
   onNavigate: () => void;
   onLogout: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <>
       <div className="flex h-16 items-center justify-between border-b border-sidebar-border px-5">
@@ -148,12 +248,12 @@ function SidebarInner({
         <button
           className="rounded-md p-1.5 text-sidebar-foreground hover:bg-sidebar-accent lg:hidden"
           onClick={onNavigate}
-          aria-label="Close menu"
+          aria-label={t("nav.closeMenu")}
         >
           <X className="h-4 w-4" />
         </button>
       </div>
-      <nav className="flex-1 space-y-0.5 overflow-y-auto p-3">
+      <nav className="flex-1 space-y-0.5 overflow-y-auto p-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {items.map((it) => {
           const active =
             pathname === it.to || (it.to !== "/dashboard" && pathname.startsWith(it.to));
@@ -170,12 +270,9 @@ function SidebarInner({
               )}
             >
               <it.icon
-                className={cn(
-                  "h-4 w-4",
-                  active ? "text-sidebar-primary" : "text-muted-foreground",
-                )}
+                className={cn("h-4 w-4", active ? "text-sidebar-primary" : "text-muted-foreground")}
               />
-              {it.label}
+              {t(it.labelKey)}
               {it.badge && it.badge > 0 ? (
                 <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-bold text-destructive-foreground">
                   {it.badge > 99 ? "99+" : it.badge}
@@ -191,7 +288,7 @@ function SidebarInner({
           className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-xs font-medium text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-destructive"
         >
           <LogOut className="h-3.5 w-3.5" />
-          Sign out
+          {t("nav.signOut")}
         </button>
       </div>
     </>
@@ -203,6 +300,7 @@ function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
   const { user } = useAuth();
   const qc = useQueryClient();
   const router = useRouter();
+  const { t } = useTranslation();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => setMounted(true), []);
@@ -253,6 +351,8 @@ function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
 
       <div className="flex-1" />
 
+      {!isAdmin && <LanguageToggle />}
+
       <Button
         variant="ghost"
         size="icon"
@@ -284,20 +384,22 @@ function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
               <div className="fixed inset-0 z-40" onClick={() => setNotifOpen(false)} />
               <div className="absolute right-0 top-full z-50 mt-2 w-80 rounded-lg border border-border bg-card shadow-lg">
                 <div className="flex items-center justify-between border-b border-border px-4 py-3">
-                  <span className="text-sm font-semibold text-foreground">Notifications</span>
+                  <span className="text-sm font-semibold text-foreground">
+                    {t("notifications.title")}
+                  </span>
                   {unread > 0 ? (
                     <button
                       onClick={markAllRead}
                       className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
                     >
-                      <CheckCheck className="h-3.5 w-3.5" /> Mark all read
+                      <CheckCheck className="h-3.5 w-3.5" /> {t("notifications.markAllRead")}
                     </button>
                   ) : null}
                 </div>
                 <div className="max-h-80 overflow-y-auto">
                   {notifItems.length === 0 ? (
                     <div className="px-4 py-8 text-center text-sm text-muted-foreground">
-                      No notifications yet
+                      {t("notifications.noNotifications")}
                     </div>
                   ) : (
                     notifItems.map((n) => (
@@ -309,7 +411,7 @@ function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
                         onClick={() => {
                           markRead(n.id);
                           if (n.link) {
-                            router.navigate({ to: n.link as any });
+                            router.navigate({ to: n.link as FileRouteTypes["to"] });
                             setNotifOpen(false);
                           }
                         }}
@@ -344,9 +446,17 @@ function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
 
       <div className="flex items-center gap-2">
         <Avatar className="h-7 w-7">
-          <AvatarImage src={resolveAssetUrl(user?.profile_image) ?? undefined} alt={user?.full_name} />
+          <AvatarImage
+            src={resolveAssetUrl(user?.profile_image) ?? undefined}
+            alt={user?.full_name}
+          />
           <AvatarFallback className="bg-primary/10 text-[10px] font-medium text-primary">
-            {(user?.full_name ?? "U").split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase()}
+            {(user?.full_name ?? "U")
+              .split(" ")
+              .map((p) => p[0])
+              .slice(0, 2)
+              .join("")
+              .toUpperCase()}
           </AvatarFallback>
         </Avatar>
         <span className="hidden max-w-[180px] truncate text-xs text-muted-foreground sm:inline">
@@ -354,5 +464,52 @@ function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
         </span>
       </div>
     </header>
+  );
+}
+
+function LanguageToggle() {
+  const { user } = useAuth();
+  const { t } = useTranslation();
+  const lang = getLanguage();
+
+  const onChange = (next: string) => {
+    const value = next as Language;
+    if (value === lang) return;
+    setLanguage(value);
+    if (!user) return;
+    const persist =
+      user.role === "admin"
+        ? authService.setAdminPreferredLanguage(value)
+        : authService.setPreferredLanguage(value);
+    persist
+      .then(() => {
+        authStore.updateUser({ ...user, preferred_language: value });
+      })
+      .catch(() => {
+        // preference still applies locally for this session
+      });
+  };
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label={t("lang.language")}
+          className="text-muted-foreground"
+        >
+          <Languages className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-44">
+        <DropdownMenuLabel>{t("lang.language")}</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuRadioGroup value={lang} onValueChange={onChange}>
+          <DropdownMenuRadioItem value="en">{t("lang.english")}</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="ur">{t("lang.urdu")}</DropdownMenuRadioItem>
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

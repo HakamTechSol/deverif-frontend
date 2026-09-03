@@ -1,8 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useSearch } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Plus, Wallet, CreditCard, RefreshCw, Ban } from "lucide-react";
+import { Plus, Wallet, CreditCard, RefreshCw, Ban, Sparkles, Check, X, Layers, Pencil, Trash2, Power, ArrowUpRight, Clock } from "lucide-react";
 
 import { PageHeader } from "@/components/common/PageHeader";
 import { SearchInput } from "@/components/common/SearchInput";
@@ -13,6 +13,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
@@ -28,6 +30,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Table,
   TableBody,
@@ -37,15 +40,23 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { TableSkeleton } from "./_app.requests";
-import { adminService, type Organization } from "@/services";
+import { adminService, type Organization, type CustomPlanRequest, type SubscriptionPlan, type SubscriptionCheckout } from "@/services";
 import { formatDate } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/admin/payments")({
+  validateSearch: (search: Record<string, unknown>): { tab?: string } => ({
+    tab: typeof search.tab === "string" ? search.tab : undefined,
+  }),
   head: () => ({ meta: [{ title: "Payments — Dvarif Admin" }] }),
   component: AdminPaymentsPage,
 });
 
 function AdminPaymentsPage() {
+  const search = useSearch({ from: "/_app/admin/payments" });
+  const initialTab = search.tab && ["history", "subscriptions", "self-subscriptions", "custom-plans", "plans"].includes(search.tab)
+    ? search.tab
+    : "history";
+
   return (
     <div>
       <PageHeader
@@ -53,13 +64,22 @@ function AdminPaymentsPage() {
         description="Review platform payments, record manual receipts, and manage organization subscriptions."
       />
 
-      <Tabs defaultValue="history">
-        <TabsList className="mb-4 grid w-full grid-cols-2 sm:inline-flex sm:w-auto">
+      <Tabs defaultValue={initialTab}>
+        <TabsList className="mb-4 grid w-full grid-cols-5 sm:inline-flex sm:w-auto">
           <TabsTrigger value="history">
             <Wallet className="mr-1.5 h-4 w-4" /> Payment History
           </TabsTrigger>
           <TabsTrigger value="subscriptions">
             <CreditCard className="mr-1.5 h-4 w-4" /> Organization Subscriptions
+          </TabsTrigger>
+          <TabsTrigger value="self-subscriptions">
+            <Clock className="mr-1.5 h-4 w-4" /> Self-subscriptions
+          </TabsTrigger>
+          <TabsTrigger value="custom-plans">
+            <Sparkles className="mr-1.5 h-4 w-4" /> Custom Plan Requests
+          </TabsTrigger>
+          <TabsTrigger value="plans">
+            <Layers className="mr-1.5 h-4 w-4" /> Plans
           </TabsTrigger>
         </TabsList>
 
@@ -69,6 +89,18 @@ function AdminPaymentsPage() {
 
         <TabsContent value="subscriptions">
           <OrgSubscriptionsTab />
+        </TabsContent>
+
+        <TabsContent value="self-subscriptions">
+          <SelfSubscriptionTab />
+        </TabsContent>
+
+        <TabsContent value="custom-plans">
+          <CustomPlanRequestsTab />
+        </TabsContent>
+
+        <TabsContent value="plans">
+          <PlansTab />
         </TabsContent>
       </Tabs>
     </div>
@@ -153,6 +185,7 @@ function PaymentHistoryTab() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-10">S.No</TableHead>
                   <TableHead>Reference</TableHead>
                   <TableHead>User</TableHead>
                   <TableHead>Method</TableHead>
@@ -162,8 +195,9 @@ function PaymentHistoryTab() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {items.map((p) => (
+                {items.map((p, i) => (
                   <TableRow key={p.uuid}>
+                    <TableCell className="w-10 text-muted-foreground">{(page - 1) * 10 + i + 1}</TableCell>
                     <TableCell data-label="Reference" className="font-mono text-xs">{p.transaction_reference}</TableCell>
                     <TableCell data-label="User" className="text-muted-foreground">
                       {p.full_name ?? "—"}
@@ -210,7 +244,7 @@ function OrgSubscriptionsTab() {
   const qc = useQueryClient();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
-  const [confirmOrg, setConfirmOrg] = useState<{ org: Organization; plan: "monthly" | "yearly"; amount: string } | null>(null);
+  const [assignOrg, setAssignOrg] = useState<{ org: Organization; planUuid: string; amount: string } | null>(null);
   const [cancelOrg, setCancelOrg] = useState<Organization | null>(null);
 
   const list = useQuery({
@@ -218,11 +252,27 @@ function OrgSubscriptionsTab() {
     queryFn: () => adminService.organizations({ page, limit: 10, search }),
   });
 
+  const plansQuery = useQuery({
+    queryKey: ["admin-plans"],
+    queryFn: () => adminService.plans(),
+  });
+  // ALL plans from the subscription_plans table — standard (Plan A/B) AND
+  // custom plans (is_custom=1, e.g. "Custom Plan — HakamTechSol"). Custom
+  // plans carry their own price/quota and appear as assignable options below.
+  const assignablePlans = plansQuery.data?.items ?? [];
+
   const setSub = useMutation({
-    mutationFn: ({ uuid, plan, amount }: { uuid: string; plan: "monthly" | "yearly"; amount: number }) =>
-      adminService.setOrganizationSubscription(uuid, plan, amount),
+    mutationFn: ({
+      uuid,
+      plan_uuid,
+      amount,
+    }: {
+      uuid: string;
+      plan_uuid: string;
+      amount: number;
+    }) => adminService.setOrganizationSubscription(uuid, { plan_uuid, amount }),
     onSuccess: (_, vars) => {
-      const label = vars.plan === "monthly" ? "Monthly" : "Yearly";
+      const label = assignablePlans.find((p) => p.uuid === vars.plan_uuid)?.name ?? "Plan";
       toast.success(`Subscription set to ${label}`);
       qc.invalidateQueries({ queryKey: ["admin-orgs-subs"] });
       qc.invalidateQueries({ queryKey: ["admin-orgs"] });
@@ -280,17 +330,23 @@ function OrgSubscriptionsTab() {
     );
   };
 
-  const isActive = (org: Organization) => org.subscription_status === "active";
+  const isActive = (org?: Organization) => org?.subscription_status === "active";
 
-  const handleSetSubscription = (org: Organization, plan: "monthly" | "yearly") => {
-    setConfirmOrg({ org, plan, amount: "" });
+  const openAssign = (org: Organization) => {
+    // Preselect the org's currently-active plan, if it exists in the list.
+    const current =
+      assignablePlans.find((p) => p.uuid === org.subscription_plan_name || p.id === org.subscription_plan_id)?.uuid ||
+      (org.subscription_plan_name && assignablePlans.find((p) => p.name === org.subscription_plan_name)?.uuid) ||
+      assignablePlans[0]?.uuid ||
+      "";
+    setAssignOrg({ org, planUuid: current, amount: "" });
   };
 
-  const confirmSet = () => {
-    if (!confirmOrg) return;
-    const amt = Number(confirmOrg.amount) || 0;
-    setSub.mutate({ uuid: confirmOrg.org.uuid, plan: confirmOrg.plan, amount: amt });
-    setConfirmOrg(null);
+  const confirmAssign = () => {
+    if (!assignOrg || !assignOrg.planUuid) return;
+    const amt = Number(assignOrg.amount) || 0;
+    setSub.mutate({ uuid: assignOrg.org.uuid, plan_uuid: assignOrg.planUuid, amount: amt });
+    setAssignOrg(null);
   };
 
   return (
@@ -317,6 +373,7 @@ function OrgSubscriptionsTab() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-10">S.No</TableHead>
                   <TableHead>Organization</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Plan</TableHead>
@@ -325,8 +382,9 @@ function OrgSubscriptionsTab() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {items.map((org) => (
+                {items.map((org, i) => (
                   <TableRow key={org.uuid}>
+                    <TableCell className="w-10 text-muted-foreground">{(page - 1) * 10 + i + 1}</TableCell>
                     <TableCell data-label="Organization" className="font-medium text-foreground">{org.name}</TableCell>
                     <TableCell data-label="Status">{subscriptionBadge(org)}</TableCell>
                     <TableCell data-label="Plan" className="capitalize text-muted-foreground">
@@ -339,23 +397,13 @@ function OrgSubscriptionsTab() {
                       <div className="flex flex-wrap items-center justify-start gap-1 sm:justify-end">
                         <Button
                           size="sm"
-                          variant={isActive(org) ? "default" : "outline"}
+                          variant="outline"
                           className="h-7 text-xs"
-                          disabled={setSub.isPending || isActive(org)}
-                          onClick={() => handleSetSubscription(org, "monthly")}
+                          disabled={setSub.isPending || plansQuery.isLoading}
+                          onClick={() => openAssign(org)}
                         >
-                          <RefreshCw className="mr-1 h-3 w-3" />
-                          Monthly
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant={isActive(org) ? "default" : "outline"}
-                          className="h-7 text-xs"
-                          disabled={setSub.isPending || isActive(org)}
-                          onClick={() => handleSetSubscription(org, "yearly")}
-                        >
-                          <RefreshCw className="mr-1 h-3 w-3" />
-                          Yearly
+                          <Sparkles className="mr-1 h-3 w-3" />
+                          {isActive(org) ? "Change Plan" : "Assign Plan"}
                         </Button>
                         {isActive(org) && (
                           <Button
@@ -385,37 +433,80 @@ function OrgSubscriptionsTab() {
         )}
       </CardContent>
 
-      {/* Set subscription dialog */}
-      <Dialog open={!!confirmOrg} onOpenChange={(o) => !o && setConfirmOrg(null)}>
-        <DialogContent className="max-w-sm">
+      {/* Change Plan dialog */}
+      <Dialog open={!!assignOrg} onOpenChange={(o) => !o && setAssignOrg(null)}>
+        <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Confirm subscription</DialogTitle>
+            <DialogTitle>{isActive(assignOrg?.org) ? "Change plan" : "Assign plan"}</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            Set <span className="font-medium text-foreground">{confirmOrg?.org.name}</span> to a{" "}
-            <span className="font-medium text-foreground">
-              {confirmOrg?.plan === "monthly" ? "Monthly" : "Yearly"}
-            </span>{" "}
-            subscription? This will <span className="font-medium text-foreground">restart from today</span>.
+            Assign a plan to{" "}
+            <span className="font-medium text-foreground">{assignOrg?.org.name}</span>. This will restart
+            the subscription from today.
           </p>
-          <div className="space-y-2">
-            <Label htmlFor="sub-amount">Amount received (Rs.) — optional</Label>
-            <Input
-              id="sub-amount"
-              type="number"
-              min="0"
-              placeholder="Leave empty if no payment"
-              value={confirmOrg?.amount ?? ""}
-              onChange={(e) => setConfirmOrg((prev) => prev ? { ...prev, amount: e.target.value } : null)}
-              autoFocus
-            />
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <Label>Select plan</Label>
+              <RadioGroup
+                value={assignOrg?.planUuid}
+                onValueChange={(v) => setAssignOrg((prev) => (prev ? { ...prev, planUuid: v } : null))}
+              >
+                {assignablePlans.map((p) => {
+                  const isCustom = p.is_custom === 1;
+                  const isCurrent = assignOrg?.org.subscription_plan_id === p.id ||
+                    assignOrg?.org.subscription_plan_name === p.name;
+                  return (
+                    <div
+                      key={p.uuid}
+                      className={`flex items-start justify-between gap-3 rounded-lg border px-3 py-2.5 ${
+                        isCustom ? "border-primary/40 bg-primary/5" : "border-border"
+                      }`}
+                    >
+                      <label className="flex cursor-pointer items-start gap-3" htmlFor={`plan-${p.uuid}`}>
+                        <RadioGroupItem value={p.uuid} id={`plan-${p.uuid}`} className="mt-0.5" />
+                        <span>
+                          <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                            {p.name}
+                            {isCustom && (
+                              <Badge variant="outline" className="rounded-full text-primary">
+                                Custom
+                              </Badge>
+                            )}
+                            {isCurrent && (
+                              <Badge variant="outline" className="rounded-full text-success">
+                                Current
+                              </Badge>
+                            )}
+                          </span>
+                          <span className="mt-0.5 block text-xs text-muted-foreground">
+                            Rs. {p.monthly_price?.toLocaleString()} / month · {p.daily_request_quota?.toLocaleString()} requests/day
+                            {p.billing_period ? ` · ${p.billing_period === "monthly" ? "Monthly" : "Yearly"} billing` : " · Monthly billing"}
+                          </span>
+                        </span>
+                      </label>
+                    </div>
+                  );
+                })}
+              </RadioGroup>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="assign-amount">Amount received (Rs.) — optional</Label>
+              <Input
+                id="assign-amount"
+                type="number"
+                min="0"
+                placeholder="Leave empty if no payment"
+                value={assignOrg?.amount ?? ""}
+                onChange={(e) => setAssignOrg((prev) => (prev ? { ...prev, amount: e.target.value } : null))}
+              />
+            </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmOrg(null)}>
+            <Button variant="outline" onClick={() => setAssignOrg(null)}>
               Cancel
             </Button>
-            <Button onClick={confirmSet} disabled={setSub.isPending}>
-              {setSub.isPending ? "Setting…" : "Confirm"}
+            <Button onClick={confirmAssign} disabled={setSub.isPending || !assignOrg?.planUuid}>
+              {setSub.isPending ? "Assigning…" : "Assign plan"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -565,5 +656,598 @@ function PaymentFormDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/* ─────────── Self-subscriptions Tab ─────────── */
+function SelfSubscriptionTab() {
+  const [status, setStatus] = useState<"pending" | "completed" | "failed" | "expired" | "cancelled" | "all">("all");
+  const [page, setPage] = useState(1);
+
+  const list = useQuery({
+    queryKey: ["admin-checkouts", status, page],
+    queryFn: () =>
+      adminService.subscriptionCheckouts({
+        status: status === "all" ? undefined : status,
+        page,
+        limit: 10,
+      }),
+  });
+
+  const checkoutBadge = (s: string) => {
+    const base = "rounded-full capitalize ";
+    switch (s) {
+      case "completed":
+        return <Badge variant="outline" className={`${base}border-success/30 bg-success/10 text-success`}>{s}</Badge>;
+      case "failed":
+      case "cancelled":
+        return <Badge variant="outline" className={`${base}border-destructive/30 bg-destructive/10 text-destructive`}>{s}</Badge>;
+      case "expired":
+        return <Badge variant="outline" className={`${base}border-muted bg-muted text-muted-foreground`}>{s}</Badge>;
+      default:
+        return <Badge variant="outline" className={`${base}border-warning/30 bg-warning/10 text-warning-foreground`}>{s}</Badge>;
+    }
+  };
+
+  return (
+    <Card className="border-border/70 shadow-none">
+      <CardContent className="p-6">
+        <div className="mb-4 flex items-center gap-2">
+          <Clock className="h-4 w-4 text-primary" />
+          <h3 className="text-sm font-semibold text-foreground">Self-subscriptions</h3>
+        </div>
+        <p className="mb-4 text-xs text-muted-foreground">
+          Organizations that subscribed directly through the Safepay gateway. Each row is a self-service
+          checkout initiated by an org admin.
+        </p>
+
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          {(["all", "pending", "completed", "failed", "expired", "cancelled"] as const).map((s) => (
+            <Badge
+              key={s}
+              variant={status === s ? "default" : "outline"}
+              className="cursor-pointer capitalize"
+              onClick={() => { setStatus(s); setPage(1); }}
+            >
+              {s}
+            </Badge>
+          ))}
+        </div>
+
+        {list.isLoading ? (
+          <TableSkeleton />
+        ) : !list.data || list.data.items.length === 0 ? (
+          <EmptyState
+            icon={Clock}
+            title={status === "all" ? "No self-subscriptions" : `No ${status} checkouts`}
+            description="Self-service Safepay checkouts initiated by organizations will appear here."
+          />
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-10">S.No</TableHead>
+                    <TableHead>Organization</TableHead>
+                    <TableHead>Plan</TableHead>
+                    <TableHead>Gateway</TableHead>
+                    <TableHead>Amount</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Date</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {list.data.items.map((c: SubscriptionCheckout, i: number) => (
+                    <TableRow key={c.uuid}>
+                      <TableCell className="w-10 text-muted-foreground">{(page - 1) * 10 + i + 1}</TableCell>
+                      <TableCell className="font-medium">{c.organization_name ?? "—"}</TableCell>
+                      <TableCell className="capitalize">{c.plan_name ?? "—"}</TableCell>
+                      <TableCell className="capitalize text-muted-foreground">{c.gateway ?? "—"}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {c.amount != null
+                          ? `Rs. ${Number(c.amount).toLocaleString()}${c.currency ? ` ${c.currency}` : ""}`
+                          : "—"}
+                      </TableCell>
+                      <TableCell>{checkoutBadge(c.status)}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {formatDate(c.completed_at ?? c.created_at)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            <Pagination
+              page={page}
+              total={list.data?.total ?? 0}
+              totalPages={list.data?.totalPages ?? 1}
+              onChange={setPage}
+            />
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ─────────── Custom Plan Requests Tab ─────────── */
+function CustomPlanRequestsTab() {
+  const qc = useQueryClient();
+  const [status, setStatus] = useState<"pending" | "approved" | "denied" | "all">("pending");
+  const [approveTarget, setApproveTarget] = useState<CustomPlanRequest | null>(null);
+  const [dailyQuota, setDailyQuota] = useState<string>("");
+  const [price, setPrice] = useState<string>("");
+
+  const list = useQuery({
+    queryKey: ["admin-custom-plan-requests", status],
+    queryFn: () =>
+      adminService.customPlanRequests({
+        status: status === "all" ? undefined : status,
+      }),
+  });
+
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ["admin-custom-plan-requests"] });
+    qc.invalidateQueries({ queryKey: ["admin-orgs"] });
+    qc.invalidateQueries({ queryKey: ["admin-orgs-subs"] });
+  };
+
+  const approve = useMutation({
+    mutationFn: (r: { uuid: string; daily_quota: number; price: number }) =>
+      adminService.approveCustomPlanRequest(r.uuid, { daily_quota: r.daily_quota, price: r.price }),
+    onSuccess: () => {
+      toast.success("Custom plan approved and assigned");
+      setApproveTarget(null);
+      setDailyQuota("");
+      setPrice("");
+      invalidate();
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.message ?? "Failed to approve"),
+  });
+
+  const deny = useMutation({
+    mutationFn: (uuid: string) => adminService.denyCustomPlanRequest(uuid),
+    onSuccess: () => {
+      toast.success("Custom plan request denied");
+      invalidate();
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.message ?? "Failed to deny"),
+  });
+
+  const openApprove = (r: CustomPlanRequest) => {
+    setDailyQuota(String(r.approved_daily_quota ?? ""));
+    setPrice(String(r.approved_price ?? ""));
+    setApproveTarget(r);
+  };
+
+  const confirmApprove = () => {
+    if (!approveTarget) return;
+    const q = Number(dailyQuota);
+    const p = Number(price);
+    if (!Number.isInteger(q) || q <= 0) return toast.error("Daily quota must be a positive integer");
+    if (!Number.isFinite(p) || p < 0) return toast.error("Price must be a non-negative number");
+    approve.mutate({ uuid: approveTarget.uuid, daily_quota: q, price: p });
+  };
+
+  return (
+    <Card className="border-border/70 shadow-none">
+      <CardContent className="p-6">
+        <div className="mb-4 flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-primary" />
+          <h3 className="text-sm font-semibold text-foreground">Custom Plan Requests</h3>
+        </div>
+
+        <div className="mb-4 flex items-center gap-2">
+          {(["pending", "approved", "denied", "all"] as const).map((s) => (
+            <Badge
+              key={s}
+              variant={status === s ? "default" : "outline"}
+              className="cursor-pointer capitalize"
+              onClick={() => setStatus(s)}
+            >
+              {s}
+            </Badge>
+          ))}
+        </div>
+
+        {list.isLoading ? (
+          <TableSkeleton />
+        ) : !list.data || list.data.items.length === 0 ? (
+          <EmptyState
+            icon={Sparkles}
+            title="No custom plan requests"
+            description="No custom plan requests match the current filter."
+          />
+        ) : (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-10">S.No</TableHead>
+                  <TableHead>Organization</TableHead>
+                  <TableHead>Requested by</TableHead>
+                  <TableHead>Message</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Quota / Price</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {list.data.items.map((r: CustomPlanRequest, i: number) => (
+                  <TableRow key={r.uuid}>
+                    <TableCell className="w-10 text-muted-foreground">{i + 1}</TableCell>
+                    <TableCell className="font-medium">{r.organization_name ?? "—"}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {r.requested_by_name ?? "—"}
+                    </TableCell>
+                    <TableCell className="max-w-xs truncate text-muted-foreground">{r.message}</TableCell>
+                    <TableCell>
+                      <Badge
+                        variant="outline"
+                        className={`rounded-full capitalize ${
+                          r.status === "approved"
+                            ? "border-success/30 bg-success/10 text-success"
+                            : r.status === "denied"
+                              ? "border-destructive/30 bg-destructive/10 text-destructive"
+                              : "border-warning/30 bg-warning/10 text-warning-foreground"
+                        }`}
+                      >
+                        {r.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      {r.approved_daily_quota
+                        ? `${r.approved_daily_quota}/day · Rs. ${Number(r.approved_price ?? 0).toLocaleString()}`
+                        : "—"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {r.status === "pending" ? (
+                        <div className="flex justify-end gap-1.5">
+                          <Button size="sm" variant="outline" onClick={() => openApprove(r)}>
+                            <Check className="mr-1 h-3.5 w-3.5" /> Approve
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-destructive"
+                            onClick={() => deny.mutate(r.uuid)}
+                            disabled={deny.isPending}
+                          >
+                            <X className="mr-1 h-3.5 w-3.5" /> Deny
+                          </Button>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </CardContent>
+
+      <Dialog open={!!approveTarget} onOpenChange={(o) => !o && setApproveTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Approve custom plan</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="rounded-md border border-border bg-muted/40 p-3 text-xs">
+              <div className="font-medium text-foreground">{approveTarget?.organization_name}</div>
+              <div className="mt-1 text-muted-foreground">{approveTarget?.message}</div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Daily request quota</Label>
+                <Input
+                  type="number"
+                  value={dailyQuota}
+                  onChange={(e) => setDailyQuota(e.target.value)}
+                  placeholder="e.g. 500"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Monthly price (Rs.)</Label>
+                <Input
+                  type="number"
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value)}
+                  placeholder="e.g. 50000"
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setApproveTarget(null)}>Cancel</Button>
+            <Button onClick={confirmApprove} disabled={approve.isPending}>
+              {approve.isPending ? "Approving…" : "Approve plan"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </Card>
+  );
+}
+
+/* ─────────── Plans Tab (admin-managed public plans) ─────────── */
+function PlansTab() {
+  const qc = useQueryClient();
+  const [openForm, setOpenForm] = useState(false);
+  const [editing, setEditing] = useState<SubscriptionPlan | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<SubscriptionPlan | null>(null);
+
+  const [name, setName] = useState("");
+  const [price, setPrice] = useState<string>("");
+  const [quota, setQuota] = useState<string>("");
+  const [billingPeriod, setBillingPeriod] = useState<"monthly" | "yearly">("monthly");
+  const [description, setDescription] = useState("");
+  const [features, setFeatures] = useState("");
+  const [isPublic, setIsPublic] = useState(true);
+
+  const list = useQuery({
+    queryKey: ["admin-plans"],
+    queryFn: () => adminService.plans(),
+  });
+
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ["admin-plans"] });
+    qc.invalidateQueries({ queryKey: ["marketing-plans"] });
+  };
+
+  const save = useMutation({
+    mutationFn: (data: Partial<SubscriptionPlan>) =>
+      editing ? adminService.updatePlan(editing.uuid, data) : adminService.createPlan(data),
+    onSuccess: () => {
+      toast.success(editing ? "Plan updated" : "Plan created");
+      setOpenForm(false);
+      invalidate();
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.message ?? "Failed to save plan"),
+  });
+
+  const togglePublic = useMutation({
+    mutationFn: (p: SubscriptionPlan) => adminService.togglePlanPublic(p.uuid, p.is_public !== 1),
+    onSuccess: () => {
+      toast.success("Visibility updated");
+      invalidate();
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.message ?? "Failed to update"),
+  });
+
+  const remove = useMutation({
+    mutationFn: (uuid: string) => adminService.deletePlan(uuid),
+    onSuccess: () => {
+      toast.success("Plan deleted");
+      setDeleteTarget(null);
+      invalidate();
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.message ?? "Failed to delete plan"),
+  });
+
+  const openCreate = () => {
+    setEditing(null);
+    setName("");
+    setPrice("");
+    setQuota("");
+    setBillingPeriod("monthly");
+    setDescription("");
+    setFeatures("");
+    setIsPublic(true);
+    setOpenForm(true);
+  };
+
+  const openEdit = (p: SubscriptionPlan) => {
+    setEditing(p);
+    setName(p.name);
+    setPrice(String(p.monthly_price ?? ""));
+    setQuota(String(p.daily_request_quota ?? ""));
+    setBillingPeriod(p.billing_period ?? "monthly");
+    setDescription(p.description ?? "");
+    setFeatures((p.features ?? []).join("\n"));
+    setIsPublic(p.is_public === 1);
+    setOpenForm(true);
+  };
+
+  const submitSave = () => {
+    if (!name.trim()) return toast.error("Plan name is required");
+    const p = Number(price);
+    const q = Number(quota);
+    if (!Number.isFinite(p) || p < 0) return toast.error("Price must be a non-negative number");
+    if (!Number.isInteger(q) || q < 0) return toast.error("Daily quota must be a non-negative integer");
+    save.mutate({
+      name: name.trim(),
+      monthly_price: p,
+      daily_request_quota: q,
+      billing_period: billingPeriod,
+      description: description.trim() || null,
+      features: features.split("\n").map((s) => s.trim()).filter(Boolean),
+      is_public: isPublic ? 1 : 0,
+    });
+  };
+
+  const items = list.data?.items ?? [];
+
+  return (
+    <Card className="border-border/70 shadow-none">
+      <CardContent className="p-6">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Layers className="h-4 w-4 text-primary" />
+            <h3 className="text-sm font-semibold text-foreground">Plans</h3>
+          </div>
+          <div className="flex items-center gap-2">
+            <a
+              href="/pricing"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+            >
+              View public page <ArrowUpRight className="h-3.5 w-3.5" />
+            </a>
+            <Button size="sm" onClick={openCreate}>
+              <Plus className="mr-1 h-4 w-4" /> New Plan
+            </Button>
+          </div>
+        </div>
+
+        {list.isLoading ? (
+          <TableSkeleton />
+        ) : items.length === 0 ? (
+          <EmptyState icon={Layers} title="No plans yet" description="Create a plan to show it on the marketing site." />
+        ) : (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-10">S.No</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Price</TableHead>
+                  <TableHead>Quota / Day</TableHead>
+                  <TableHead>Billing</TableHead>
+                  <TableHead>Features</TableHead>
+                  <TableHead>Public</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {items.map((p, i) => (
+                  <TableRow key={p.uuid}>
+                    <TableCell className="w-10 text-muted-foreground">{i + 1}</TableCell>
+                    <TableCell className="font-medium capitalize">{p.name}</TableCell>
+                    <TableCell>Rs. {p.monthly_price?.toLocaleString()}</TableCell>
+                    <TableCell>{p.daily_request_quota}</TableCell>
+                    <TableCell className="capitalize">{p.billing_period}</TableCell>
+                    <TableCell className="text-muted-foreground">{(p.features ?? []).length}</TableCell>
+                    <TableCell>
+                      {p.is_custom === 1 ? (
+                        <Badge variant="outline" className="rounded-full text-muted-foreground">Custom</Badge>
+                      ) : (
+                        <Switch
+                          checked={p.is_public === 1}
+                          onCheckedChange={() => togglePublic.mutate(p)}
+                          disabled={togglePublic.isPending}
+                        />
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {p.is_custom !== 1 && (
+                        <div className="flex justify-end gap-1.5">
+                          <Button size="sm" variant="outline" onClick={() => openEdit(p)}>
+                            <Pencil className="mr-1 h-3.5 w-3.5" /> Edit
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-destructive"
+                            onClick={() => setDeleteTarget(p)}
+                          >
+                            <Trash2 className="mr-1 h-3.5 w-3.5" /> Delete
+                          </Button>
+                        </div>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </CardContent>
+
+      {/* Create / Edit dialog */}
+      <Dialog open={openForm} onOpenChange={setOpenForm}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{editing ? "Edit plan" : "Create plan"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Plan name</Label>
+              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Pro" />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="space-y-2">
+                <Label>Price (Rs.)</Label>
+                <Input type="number" min="0" value={price} onChange={(e) => setPrice(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label>Quota / day</Label>
+                <Input type="number" min="0" value={quota} onChange={(e) => setQuota(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label>Billing</Label>
+                <Select value={billingPeriod} onValueChange={(v) => setBillingPeriod(v as any)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="monthly">Monthly</SelectItem>
+                    <SelectItem value="yearly">Yearly</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Description</Label>
+              <Textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Short description shown on the pricing page"
+                rows={2}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Features (one per line)</Label>
+              <Textarea
+                value={features}
+                onChange={(e) => setFeatures(e.target.value)}
+                placeholder={"50 requests/day\nEmail support"}
+                rows={3}
+              />
+            </div>
+            <div className="flex items-center justify-between rounded-md border border-border bg-muted/40 p-3">
+              <div>
+                <div className="text-sm font-medium text-foreground">Show on marketing site</div>
+                <div className="text-xs text-muted-foreground">Display this plan on the public /pricing page</div>
+              </div>
+              <Switch checked={isPublic} onCheckedChange={setIsPublic} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpenForm(false)}>Cancel</Button>
+            <Button onClick={submitSave} disabled={save.isPending}>
+              {save.isPending ? "Saving…" : editing ? "Save changes" : "Create plan"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete confirm */}
+      <Dialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Delete plan?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Delete{" "}
+            <span className="font-medium text-foreground">{deleteTarget?.name}</span>? This cannot be
+            undone. Plans assigned to an organization cannot be deleted.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              disabled={remove.isPending}
+              onClick={() => deleteTarget && remove.mutate(deleteTarget.uuid)}
+            >
+              {remove.isPending ? "Deleting…" : "Delete plan"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </Card>
   );
 }

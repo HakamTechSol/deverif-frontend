@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+﻿import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -132,6 +132,7 @@ function NullRequestsPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-10">S.No</TableHead>
                       <TableHead className="whitespace-nowrap">Organization</TableHead>
                       <TableHead className="whitespace-nowrap">Email</TableHead>
                       <TableHead className="whitespace-nowrap">Phone</TableHead>
@@ -142,8 +143,11 @@ function NullRequestsPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {items.map((org) => (
+                    {items.map((org, i) => (
                       <TableRow key={org.uuid}>
+                        <TableCell className="w-10 text-muted-foreground">
+                          {(page - 1) * 20 + i + 1}
+                        </TableCell>
                         <TableCell className="font-medium text-foreground whitespace-nowrap">
                           {org.name}
                         </TableCell>
@@ -267,7 +271,7 @@ function UnmatchedOrgDetailDialog({
 
   return (
     <Dialog open={!!uuid} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="w-[calc(100%-1rem)] max-w-4xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Unmatched organization details</DialogTitle>
           <DialogDescription>
@@ -293,13 +297,13 @@ function UnmatchedOrgDetailDialog({
                   {org.email && (
                     <TableRow>
                       <TableCell className="font-medium text-muted-foreground">Email</TableCell>
-                      <TableCell className="text-foreground">{org.email}</TableCell>
+                      <TableCell className="break-words text-foreground">{org.email}</TableCell>
                     </TableRow>
                   )}
                   {org.phone && (
                     <TableRow>
                       <TableCell className="font-medium text-muted-foreground">Phone</TableCell>
-                      <TableCell className="text-foreground">{org.phone}</TableCell>
+                      <TableCell className="break-words text-foreground">{org.phone}</TableCell>
                     </TableRow>
                   )}
                   {org.website && (
@@ -310,7 +314,7 @@ function UnmatchedOrgDetailDialog({
                           href={formatWebsiteUrl(org.website)}
                           target="_blank"
                           rel="noreferrer"
-                          className="inline-flex items-center gap-1 text-foreground underline underline-offset-2 hover:text-primary"
+                          className="inline-flex max-w-full items-center gap-1 break-all text-foreground underline underline-offset-2 hover:text-primary"
                         >
                           {org.website} <ExternalLink className="h-3 w-3" />
                         </a>
@@ -345,6 +349,7 @@ function UnmatchedOrgDetailDialog({
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        <TableHead className="w-10">S.No</TableHead>
                         <TableHead className="whitespace-nowrap">Requester</TableHead>
                         <TableHead className="whitespace-nowrap">Document</TableHead>
                         <TableHead className="whitespace-nowrap">Status</TableHead>
@@ -354,13 +359,14 @@ function UnmatchedOrgDetailDialog({
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {requests.map((r) => {
+                      {requests.map((r, i) => {
                         const docUrl = r.document_path
                           ? resolveAssetUrl(r.document_path) ?? r.document_path
                           : null;
                         const isLocked = !!r.locked_by;
                         return (
                           <TableRow key={r.uuid}>
+                            <TableCell className="w-10 text-muted-foreground">{i + 1}</TableCell>
                             <TableCell className="whitespace-nowrap">
                               <div className="text-sm font-medium text-foreground">{r.requester_name ?? "—"}</div>
                               <div className="text-xs text-muted-foreground">{r.requester_email ?? ""}</div>
@@ -590,3 +596,4 @@ function AssignDialog({
     </Dialog>
   );
 }
+

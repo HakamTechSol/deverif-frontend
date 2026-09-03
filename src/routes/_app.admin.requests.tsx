@@ -134,6 +134,7 @@ function AdminRequestsPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-10">S.No</TableHead>
                     <TableHead>Document</TableHead>
                     <TableHead>Requester</TableHead>
                     <TableHead>Issuing org</TableHead>
@@ -145,8 +146,11 @@ function AdminRequestsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {items.map((r) => (
+                  {items.map((r, i) => (
                     <TableRow key={r.uuid}>
+                      <TableCell className="w-10 text-muted-foreground">
+                        {(page - 1) * 10 + i + 1}
+                      </TableCell>
                       <TableCell data-label="Document" className="font-medium text-foreground">
                         {r.document_type}
                       </TableCell>

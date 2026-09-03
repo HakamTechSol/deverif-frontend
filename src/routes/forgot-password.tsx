@@ -1,9 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, Loader2, Mail } from "lucide-react";
+import { ArrowLeft, Mail } from "lucide-react";
 
 import logoFull from "@/assets/logo-full.png";
+import { DvarifLoader } from "@/components/common/DvarifLoader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -86,7 +87,7 @@ function ForgotPasswordPage() {
                 <Button type="submit" className="w-full" disabled={loading}>
                   {loading ? (
                     <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Sending…
+                      <DvarifLoader size="xs" className="mr-2" /> Sending…
                     </>
                   ) : (
                     "Send reset link"

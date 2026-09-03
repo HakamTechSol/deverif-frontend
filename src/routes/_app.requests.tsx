@@ -1,10 +1,27 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { FileText, Plus, Trash2, UploadCloud, FileCheck2, Pencil, ExternalLink, Eye, Lock, Unlock, Building2 } from "lucide-react";
+import {
+  FileText,
+  Plus,
+  // Trash2,
+  UploadCloud,
+  FileCheck2,
+  Pencil,
+  ExternalLink,
+  Eye,
+  Lock,
+  Building2,
+  Activity,
+  Gauge,
+  ChartColumnIncreasing,
+  TriangleAlert,
+} from "lucide-react";
 
 import { PageHeader } from "@/components/common/PageHeader";
+import { usePermissions } from "@/lib/permissions";
 import { SearchInput } from "@/components/common/SearchInput";
 import { Pagination } from "@/components/common/Pagination";
 import { EmptyState } from "@/components/common/EmptyState";
@@ -40,10 +57,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Skeleton } from "@/components/ui/skeleton";
-import { requestsService, type VerificationRequest, type UUID } from "@/services";
+
+import {
+  requestsService,
+  orgSubscriptionService,
+  type VerificationRequest,
+  type UUID,
+} from "@/services";
 import { formatDate, resolveAssetUrl } from "@/lib/utils";
-import { useOrgSubscription } from "@/hooks/useOrgSubscription";
+import { useAuth } from "@/lib/auth";
+import { DvarifLoader } from "@/components/common/DvarifLoader";
 
 export const Route = createFileRoute("/_app/requests")({
   head: () => ({ meta: [{ title: "My Requests — Dvarif" }] }),
@@ -51,8 +74,9 @@ export const Route = createFileRoute("/_app/requests")({
 });
 
 function RequestsPage() {
+  const { t } = useTranslation();
   const qc = useQueryClient();
-  const { isLocked } = useOrgSubscription();
+  const { user } = useAuth();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
@@ -61,19 +85,48 @@ function RequestsPage() {
   const [editing, setEditing] = useState<VerificationRequest | null>(null);
   const [toDelete, setToDelete] = useState<UUID | null>(null);
   const [viewing, setViewing] = useState<VerificationRequest | null>(null);
+  const perms = usePermissions();
+  const canGenerate = perms.generate_request;
 
   const list = useQuery({
     queryKey: ["myRequests", page, search, dateFrom, dateTo],
-    queryFn: () => requestsService.mySent({ page, limit: 10, search, dateFrom: dateFrom || undefined, dateTo: dateTo || undefined }),
+    queryFn: () =>
+      requestsService.mySent({
+        page,
+        limit: 10,
+        search,
+        dateFrom: dateFrom || undefined,
+        dateTo: dateTo || undefined,
+      }),
   });
 
+  const quota = useQuery({
+    queryKey: ["quota-status"],
+    queryFn: () => orgSubscriptionService.quota(),
+    enabled: !!user && user.role !== "admin",
+    refetchOnWindowFocus: true,
+    refetchInterval: 30_000,
+  });
+
+  const quotaData = quota.data;
+  const hasPaidPlan = Number(quotaData?.plan_quota ?? 0) > 0;
+
+  // Always use the pre-combined totals from quota_status — these already
+  // account for both the free daily request AND the paid plan quota, so the
+  // ring shows the true picture regardless of plan type.
+  const usedToday = Number(quotaData?.total_requests ?? 0);
+  const dailyQuota = Math.max(1, Number(quotaData?.total_allowance ?? 1));
+  const quotaExhausted = quota.isFetched && usedToday >= dailyQuota;
+  const quotaLabel = hasPaidPlan
+    ? quotaData?.plan?.name ?? t("requests.quota.planTitle", "Plan quota")
+    : t("requests.quota.freeTier", "Free tier");
   const del = useMutation({
     mutationFn: (uuid: UUID) => requestsService.deleteSent(uuid),
     onSuccess: () => {
-      toast.success("Request deleted");
+      toast.success(t("requests.requestDeleted"));
       qc.invalidateQueries({ queryKey: ["myRequests"] });
     },
-    onError: (e: any) => toast.error(e?.response?.data?.message ?? "Delete failed"),
+    onError: (e: any) => toast.error(e?.response?.data?.message ?? t("requests.deleteFailed")),
   });
 
   const items = list.data?.items ?? [];
@@ -81,21 +134,40 @@ function RequestsPage() {
   const total = list.data?.total ?? 0;
 
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader
-        title="My verification requests"
-        description={isLocked ? "Request creation is locked. Renew your subscription to continue." : "Requests you've submitted to other organizations in the network."}
-        actions={
-          isLocked ? (
-            <Button disabled variant="outline">
-              <Lock className="mr-2 h-4 w-4" /> Subscription Required
-            </Button>
-          ) : (
-            <Button onClick={() => setOpenCreate(true)}>
-              <Plus className="mr-2 h-4 w-4" /> New request
-            </Button>
-          )
+        className="sm:items-end"
+        title={t("requests.title")}
+        description={
+          hasPaidPlan
+            ? t("requests.description")
+            : t(
+                "requests.freeTierDescription",
+                "Your organization does not have an active subscription right now, but one free verification request is still available each day.",
+              )
         }
+        actions={
+          <Button
+            onClick={() => setOpenCreate(true)}
+            disabled={!canGenerate || quotaExhausted}
+            title={
+              quotaExhausted
+                ? t("requests.quota.exhausted")
+                : undefined
+            }
+          >
+            <Plus className="mr-2 h-4 w-4" /> {t("requests.newRequest")}
+          </Button>
+        }
+      />
+
+      <QuotaSummary
+        usedToday={usedToday}
+        dailyQuota={dailyQuota}
+        remaining={Math.max(0, dailyQuota - usedToday)}
+        label={quotaLabel}
+        planName={quotaData?.plan?.name}
+        exhausted={quotaExhausted}
       />
 
       <Card className="border-border/70 shadow-none">
@@ -107,20 +179,26 @@ function RequestsPage() {
                 setSearch(v);
                 setPage(1);
               }}
-              placeholder="Search by document or organization…"
+              placeholder={t("requests.searchPlaceholder", "Search by document or organization…")}
             />
             <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
               <Input
                 type="date"
                 value={dateFrom}
-                onChange={(e) => { setDateFrom(e.target.value); setPage(1); }}
+                onChange={(e) => {
+                  setDateFrom(e.target.value);
+                  setPage(1);
+                }}
                 className="w-full sm:w-40"
               />
-              <span className="text-xs text-muted-foreground max-sm:px-1">to</span>
+              <span className="text-xs text-muted-foreground max-sm:px-1">{t("requests.dateTo", "to")}</span>
               <Input
                 type="date"
                 value={dateTo}
-                onChange={(e) => { setDateTo(e.target.value); setPage(1); }}
+                onChange={(e) => {
+                  setDateTo(e.target.value);
+                  setPage(1);
+                }}
                 className="w-full sm:w-40"
               />
             </div>
@@ -132,18 +210,22 @@ function RequestsPage() {
             <div className="p-6">
               <EmptyState
                 icon={FileText}
-                title="No requests yet"
-                description={isLocked ? "Renew your subscription to create verification requests." : "Submit your first verification request to an organization in the network."}
+                title={t("requests.noRequestsYet")}
+                description={
+                  hasPaidPlan
+                    ? t("requests.emptyDescription")
+                    : t(
+                        "requests.freeTierEmptyDesc",
+                        "Your free daily request is still available. Submit one verification request to get started.",
+                      )
+                }
                 action={
-                  isLocked ? (
-                    <Button disabled variant="outline">
-                      <Lock className="mr-2 h-4 w-4" /> Subscription Required
-                    </Button>
-                  ) : (
-                    <Button onClick={() => setOpenCreate(true)}>
-                      <Plus className="mr-2 h-4 w-4" /> New request
-                    </Button>
-                  )
+                  <Button
+                    onClick={() => setOpenCreate(true)}
+                    disabled={!canGenerate || quotaExhausted}
+                  >
+                    <Plus className="mr-2 h-4 w-4" /> {t("requests.newRequest")}
+                  </Button>
                 }
               />
             </div>
@@ -152,33 +234,35 @@ function RequestsPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Document type</TableHead>
-                    <TableHead>Organization</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Locked</TableHead>
-                    <TableHead>Submitted</TableHead>
-                    <TableHead>Verified date</TableHead>
-                    <TableHead>Format</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead className="w-10">S.No</TableHead>
+                    <TableHead>{t("requests.table.docType")}</TableHead>
+                    <TableHead>{t("requests.table.organization")}</TableHead>
+                    <TableHead>{t("requests.table.status")}</TableHead>
+                    <TableHead>{t("requests.table.locked")}</TableHead>
+                    <TableHead>{t("requests.table.submitted")}</TableHead>
+                    <TableHead>{t("requests.table.verifiedDate")}</TableHead>
+                    <TableHead>{t("requests.table.format")}</TableHead>
+                    <TableHead className="text-right">{t("requests.table.actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {items.map((r) => (
+                  {items.map((r, i) => (
                     <TableRow key={r.uuid}>
-                      <TableCell data-label="Document" className="font-medium text-foreground">
+                      <TableCell className="w-10 text-muted-foreground">
+                        {(page - 1) * 10 + i + 1}
+                      </TableCell>
+                      <TableCell data-label={t("requests.table.docType")} className="font-medium text-foreground">
                         {r.document_type}
                       </TableCell>
-                      <TableCell data-label="Organization" className="text-muted-foreground">
+                      <TableCell data-label={t("requests.table.organization")} className="text-muted-foreground">
                         {r.issuing_org_name ?? (
-                          <span className="italic">
-                            {r.unmatched_org_name ?? "—"} (unmatched)
-                          </span>
+                          <span className="italic">{r.unmatched_org_name ?? "—"} {t("requests.table.unmatched")}</span>
                         )}
                       </TableCell>
-                      <TableCell data-label="Status">
+                      <TableCell data-label={t("requests.table.status")}> 
                         <StatusBadge status={r.status} />
                       </TableCell>
-                      <TableCell data-label="Locked">
+                      <TableCell data-label={t("requests.table.locked")}> 
                         {r.locked_by_name ? (
                           <span className="inline-flex items-center gap-1 text-xs text-warning-foreground">
                             <Lock className="h-3 w-3" /> {r.locked_by_name}
@@ -187,16 +271,22 @@ function RequestsPage() {
                           <span className="text-xs text-muted-foreground">—</span>
                         )}
                       </TableCell>
-                      <TableCell data-label="Submitted" className="text-xs text-muted-foreground">
+                      <TableCell data-label={t("requests.table.submitted")} className="text-xs text-muted-foreground">
                         {formatDate(r.submitted_at)}
                       </TableCell>
-                      <TableCell data-label="Verified date" className="text-xs text-muted-foreground">
+                      <TableCell
+                        data-label={t("requests.table.verifiedDate")}
+                        className="text-xs text-muted-foreground"
+                      >
                         {r.status === "under_review" ? "—" : formatDate(r.verified_at)}
                       </TableCell>
-                      <TableCell data-label="Format" className="text-xs uppercase text-muted-foreground">
+                      <TableCell
+                        data-label={t("requests.table.format")}
+                        className="text-xs uppercase text-muted-foreground"
+                      >
                         {r.document_format ?? "PDF"}
                       </TableCell>
-                      <TableCell data-label="Actions" className="text-right">
+                      <TableCell data-label={t("requests.table.actions")} className="text-right">
                         <div className="flex flex-wrap items-center justify-start gap-1 sm:justify-end">
                           <Button
                             size="icon"
@@ -206,7 +296,7 @@ function RequestsPage() {
                           >
                             <Eye className="h-4 w-4" />
                           </Button>
-                          {r.status === "under_review" && !isLocked && !r.locked_by && (
+                          {r.status === "under_review" && !r.locked_by && (
                             <Button
                               size="icon"
                               variant="ghost"
@@ -216,6 +306,9 @@ function RequestsPage() {
                               <Pencil className="h-4 w-4" />
                             </Button>
                           )}
+                          {/*
+                            TODO: re-enable delete for org admins when allowed.
+                            Currently org admins cannot delete requests.
                           {r.status !== "verified" && !r.locked_by && (
                             <Button
                               size="icon"
@@ -226,18 +319,14 @@ function RequestsPage() {
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           )}
+                          */}
                         </div>
                       </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
-              <Pagination
-                page={page}
-                totalPages={totalPages}
-                total={total}
-                onChange={setPage}
-              />
+              <Pagination page={page} totalPages={totalPages} total={total} onChange={setPage} />
             </>
           )}
         </CardContent>
@@ -246,8 +335,11 @@ function RequestsPage() {
       <CreateRequestDialog
         open={openCreate}
         onOpenChange={setOpenCreate}
-        onCreated={() => {
-          qc.invalidateQueries({ queryKey: ["myRequests"] });
+        onCreated={async () => {
+          await Promise.all([
+            qc.invalidateQueries({ queryKey: ["myRequests"] }),
+            qc.invalidateQueries({ queryKey: ["quota-status"] }),
+          ]);
           setOpenCreate(false);
         }}
       />
@@ -255,8 +347,8 @@ function RequestsPage() {
       <ConfirmDialog
         open={!!toDelete}
         onOpenChange={(o) => !o && setToDelete(null)}
-        title="Delete this request?"
-        description="This will permanently remove the request. This action cannot be undone."
+        title={t("requests.deleteTitle")}
+        description={t("requests.deleteDesc")}
         onConfirm={() => {
           if (toDelete) del.mutate(toDelete);
           setToDelete(null);
@@ -276,13 +368,155 @@ function RequestsPage() {
     </div>
   );
 }
+function QuotaSummary({
+  usedToday,
+  dailyQuota,
+  remaining,
+  label,
+  planName,
+  exhausted,
+}: {
+  usedToday: number;
+  dailyQuota: number;
+  remaining: number;
+  label: string;
+  planName?: string | null;
+  exhausted: boolean;
+}) {
+  const { t } = useTranslation();
+  const percent =
+    dailyQuota > 0 ? Math.min(100, Math.round((usedToday / dailyQuota) * 100)) : 0;
 
-export function TableSkeleton({ rows = 6 }: { rows?: number }) {
   return (
-    <div className="space-y-3 p-4">
-      {Array.from({ length: rows }).map((_, i) => (
-        <Skeleton key={i} className="h-10 w-full" />
-      ))}
+    <div className="grid gap-4 sm:grid-cols-3">
+      <StatCard
+        icon={Gauge}
+        title={t("requests.quota.summaryTitle", "Daily usage")}
+        value={
+          <span className="tabular-nums">
+            {t("requests.quota.usedWithLimit", "used of total", {
+              used: usedToday,
+              total: dailyQuota,
+            })}
+          </span>
+        }
+        hint={t("requests.quota.usageDesc", "verification requests used today")}
+        tone={exhausted ? "muted" : "accent"}
+      >
+        <ProgressBar percent={percent} exhausted={exhausted} />
+      </StatCard>
+
+      <StatCard
+        icon={ChartColumnIncreasing}
+        title={t("requests.quota.planLabel", "Current plan")}
+        value={planName || label}
+        hint={
+          exhausted
+            ? t("requests.quota.limitReached", "Quota exhausted")
+            : t("requests.quota.remainingLabel", "Remaining today")
+        }
+      >
+        <div
+          className={`mt-1 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium ${
+            exhausted
+              ? "bg-destructive/10 text-destructive"
+              : "bg-success/10 text-success"
+          }`}
+        >
+          <span className={`h-1.5 w-1.5 rounded-full ${exhausted ? "bg-destructive" : "bg-success"}`} />
+          <span className="tabular-nums">{remaining}</span>
+          {!exhausted && (
+            <span className="text-muted-foreground">
+              {t("requests.quota.remaining", "remaining")}
+            </span>
+          )}
+        </div>
+      </StatCard>
+
+      <StatCard
+        icon={Activity}
+        title={t("requests.quota.today", "Requests today")}
+        value={<span className="tabular-nums">{usedToday}</span>}
+        hint={
+          exhausted
+            ? t("requests.quota.exhausted")
+            : `${remaining} ${t("requests.quota.remaining", "remaining")}`
+        }
+        tone={exhausted ? "muted" : "default"}
+      >
+        <TriangleAlert
+          className={`mt-1 h-4 w-4 ${exhausted ? "text-destructive" : "text-success"}`}
+        />
+      </StatCard>
+    </div>
+  );
+}
+
+function StatCard({
+  icon: Icon,
+  title,
+  value,
+  hint,
+  tone = "default",
+  children,
+}: {
+  icon: React.ElementType;
+  title: string;
+  value: ReactNode;
+  hint?: string;
+  tone?: "default" | "accent" | "muted";
+  children?: ReactNode;
+}) {
+  return (
+    <Card className="border-border/70 shadow-none">
+      <CardContent className="p-4">
+        <div className="flex items-start gap-3">
+          <div
+            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
+              tone === "accent"
+                ? "bg-primary/10 text-primary"
+                : tone === "muted"
+                  ? "bg-muted text-muted-foreground"
+                  : "bg-muted/40 text-foreground"
+            }`}
+          >
+            <Icon className="h-4.5 w-4.5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-medium text-muted-foreground">{title}</p>
+            <p className="text-base font-semibold text-foreground">{value}</p>
+            {hint ? (
+              <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{hint}</p>
+            ) : null}
+          </div>
+        </div>
+        {children}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ProgressBar({ percent, exhausted }: { percent: number; exhausted: boolean }) {
+  return (
+    <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+      <div
+        className={`h-full ${exhausted ? "bg-destructive/80" : "bg-primary/70"}`}
+        style={{ width: `${percent}%` }}
+      />
+    </div>
+  );
+}
+
+export function TableSkeleton() {
+  const { t } = useTranslation();
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="flex flex-col items-center justify-center gap-3 py-14"
+    >
+      <DvarifLoader size="md" />
+      <p className="text-sm text-muted-foreground">{t("requests.loading")}</p>
     </div>
   );
 }
@@ -294,8 +528,9 @@ function CreateRequestDialog({
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
-  onCreated: () => void;
+  onCreated: () => void | Promise<void>;
 }) {
+  const { t } = useTranslation();
   const orgs = useQuery({
     queryKey: ["orgs-for-request"],
     queryFn: () => requestsService.organizations(),
@@ -317,13 +552,12 @@ function CreateRequestDialog({
   const orgOptions = useMemo(() => orgs.data ?? [], [orgs.data]);
 
   const submit = async () => {
-    if (!documentType.trim()) return toast.error("Document type is required");
-    if (!file) return toast.error("Attach a document");
-    if (!orgUuid) return toast.error("Select an issuing organization");
-    if (isOther && !otherOrgName.trim())
-      return toast.error("Enter the organization name");
+    if (!documentType.trim()) return toast.error(t("requests.docTypeRequired"));
+    if (!file) return toast.error(t("requests.attachDocument"));
+    if (!orgUuid) return toast.error(t("requests.selectIssuingOrg"));
+    if (isOther && !otherOrgName.trim()) return toast.error(t("requests.enterOrgName"));
     if (otherOrgEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(otherOrgEmail))
-      return toast.error("Enter a valid email address");
+      return toast.error(t("requests.validEmail"));
     setSubmitting(true);
     try {
       const form = new FormData();
@@ -340,7 +574,7 @@ function CreateRequestDialog({
         form.append("issuing_organization_uuid", orgUuid);
       }
       await requestsService.create(form);
-      toast.success("Request submitted");
+      toast.success(t("requests.requestSubmitted"));
       setDocumentType("");
       setOrgUuid("");
       setOtherOrgName("");
@@ -349,9 +583,9 @@ function CreateRequestDialog({
       setOtherOrgWebsite("");
       setRemarks("");
       setFile(null);
-      onCreated();
+      await onCreated();
     } catch (err: any) {
-      toast.error(err?.response?.data?.message ?? "Failed to submit request");
+      toast.error(err?.response?.data?.message ?? t("requests.submitFailed"));
     } finally {
       setSubmitting(false);
     }
@@ -361,20 +595,20 @@ function CreateRequestDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>New verification request</DialogTitle>
+          <DialogTitle>{t("requests.create.title")}</DialogTitle>
           <DialogDescription>
-            Send a document to another organization in the Dvarif network for review.
+            {t("requests.create.description")}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-5">
           {/* Document type */}
           <div className="space-y-2">
-            <Label>Document type</Label>
+            <Label>{t("requests.table.docType")}</Label>
             <Input
               value={documentType}
               onChange={(e) => setDocumentType(e.target.value)}
-              placeholder="e.g. Employment letter, Degree transcript"
+              placeholder={t("requests.create.docTypePlaceholder")}
             />
           </div>
 
@@ -385,12 +619,12 @@ function CreateRequestDialog({
             <div className="flex items-center gap-2">
               <Building2 className="h-4 w-4 text-muted-foreground" />
               <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Target organization
+                {t("requests.create.targetOrg")}
               </Label>
             </div>
             <Select value={orgUuid} onValueChange={setOrgUuid}>
               <SelectTrigger>
-                <SelectValue placeholder="Select an organization" />
+                <SelectValue placeholder={t("requests.create.selectOrg")} />
               </SelectTrigger>
               <SelectContent>
                 {orgOptions.map((o) => (
@@ -400,7 +634,7 @@ function CreateRequestDialog({
                 ))}
                 <Separator className="my-1" />
                 <SelectItem value="__other__">
-                  <span className="text-muted-foreground">Other (not listed)</span>
+                  <span className="text-muted-foreground">{t("requests.create.otherNotListed")}</span>
                 </SelectItem>
               </SelectContent>
             </Select>
@@ -408,18 +642,18 @@ function CreateRequestDialog({
 
           {isOther ? (
             <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-3">
-              <p className="text-xs font-medium text-muted-foreground">Organization details</p>
+              <p className="text-xs font-medium text-muted-foreground">{t("requests.create.orgDetails")}</p>
               <div className="space-y-2">
-                <Label>Organization name</Label>
+                <Label>{t("requests.create.orgName")}</Label>
                 <Input
                   value={otherOrgName}
                   onChange={(e) => setOtherOrgName(e.target.value)}
-                  placeholder="Enter organization name"
+                  placeholder={t("requests.create.orgNamePlaceholder")}
                 />
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label>Email (optional)</Label>
+                  <Label>{t("requests.create.emailOptional")}</Label>
                   <Input
                     type="email"
                     value={otherOrgEmail}
@@ -428,7 +662,7 @@ function CreateRequestDialog({
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Phone (optional)</Label>
+                  <Label>{t("requests.create.phoneOptional")}</Label>
                   <Input
                     value={otherOrgPhone}
                     onChange={(e) => setOtherOrgPhone(e.target.value)}
@@ -437,7 +671,7 @@ function CreateRequestDialog({
                 </div>
               </div>
               <div className="space-y-2">
-                <Label>Website (optional)</Label>
+                <Label>{t("requests.create.websiteOptional")}</Label>
                 <Input
                   value={otherOrgWebsite}
                   onChange={(e) => setOtherOrgWebsite(e.target.value)}
@@ -445,7 +679,7 @@ function CreateRequestDialog({
                 />
               </div>
               <p className="text-xs text-muted-foreground">
-                Our admin team will attempt to onboard this organization for review.
+                {t("requests.create.onboardNote")}
               </p>
             </div>
           ) : null}
@@ -454,7 +688,7 @@ function CreateRequestDialog({
 
           {/* Document */}
           <div className="space-y-2">
-            <Label>Document</Label>
+            <Label>{t("requests.create.document")}</Label>
             <label
               htmlFor="doc-file"
               className="flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-lg border-2 border-dashed border-border bg-muted/25 px-4 py-5 text-center transition-colors hover:border-primary/50 hover:bg-muted/40"
@@ -463,11 +697,9 @@ function CreateRequestDialog({
                 <UploadCloud className="h-5 w-5 text-primary" />
               </div>
               <span className="text-sm font-medium text-foreground">
-                {file ? file.name : "Click to upload"}
+                {file ? file.name : t("requests.create.clickToUpload")}
               </span>
-              <span className="text-xs text-muted-foreground">
-                PDF or JPEG &middot; Max 10MB
-              </span>
+              <span className="text-xs text-muted-foreground">{t("requests.create.fileHint")}</span>
               <input
                 id="doc-file"
                 type="file"
@@ -480,23 +712,23 @@ function CreateRequestDialog({
 
           {/* Remarks */}
           <div className="space-y-2">
-            <Label>Remarks (optional)</Label>
+            <Label>{t("requests.create.remarksOptional")}</Label>
             <Textarea
               rows={3}
               value={remarks}
               onChange={(e) => setRemarks(e.target.value)}
-              placeholder="Any context that will help the reviewer…"
+              placeholder={t("requests.create.remarksPlaceholder")}
             />
           </div>
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
-            Cancel
+            {t("requests.create.cancel")}
           </Button>
           <Button onClick={submit} disabled={submitting}>
             <FileCheck2 className="mr-2 h-4 w-4" />
-            Submit request
+            {t("requests.create.submit")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -513,6 +745,7 @@ function EditRequestDialog({
   onOpenChange: () => void;
   onDone: () => void;
 }) {
+  const { t } = useTranslation();
   const orgs = useQuery({
     queryKey: ["orgs-for-request"],
     queryFn: () => requestsService.organizations(),
@@ -556,12 +789,11 @@ function EditRequestDialog({
 
   const submit = async () => {
     if (!request) return;
-    if (!documentType.trim()) return toast.error("Document type is required");
-    if (!orgUuid) return toast.error("Select an issuing organization");
-    if (isOther && !otherOrgName.trim())
-      return toast.error("Enter the organization name");
+    if (!documentType.trim()) return toast.error(t("requests.docTypeRequired"));
+    if (!orgUuid) return toast.error(t("requests.selectIssuingOrg"));
+    if (isOther && !otherOrgName.trim()) return toast.error(t("requests.enterOrgName"));
     if (otherOrgEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(otherOrgEmail))
-      return toast.error("Enter a valid email address");
+      return toast.error(t("requests.validEmail"));
 
     setSubmitting(true);
     try {
@@ -581,10 +813,10 @@ function EditRequestDialog({
         form.append("document", file);
       }
       await requestsService.updateSent(request.uuid, form);
-      toast.success("Request updated");
+      toast.success(t("requests.requestUpdated"));
       onDone();
     } catch (err: any) {
-      toast.error(err?.response?.data?.message ?? "Failed to update request");
+      toast.error(err?.response?.data?.message ?? t("requests.updateFailed"));
     } finally {
       setSubmitting(false);
     }
@@ -594,27 +826,27 @@ function EditRequestDialog({
     <Dialog open={open} onOpenChange={(o) => !o && onOpenChange()}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Edit verification request</DialogTitle>
+          <DialogTitle>{t("requests.edit.title")}</DialogTitle>
           <DialogDescription>
-            Update the details of your request before it's reviewed.
+            {t("requests.edit.description")}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label>Document type</Label>
+            <Label>{t("requests.table.docType")}</Label>
             <Input
               value={documentType}
               onChange={(e) => setDocumentType(e.target.value)}
-              placeholder="e.g. Employment letter, Degree transcript"
+              placeholder={t("requests.edit.docTypePlaceholder")}
             />
           </div>
 
           <div className="space-y-2">
-            <Label>Issuing organization</Label>
+            <Label>{t("requests.edit.issuingOrg")}</Label>
             <Select value={orgUuid} onValueChange={setOrgUuid}>
               <SelectTrigger>
-                <SelectValue placeholder="Select an organization" />
+                <SelectValue placeholder={t("requests.edit.selectOrg")} />
               </SelectTrigger>
               <SelectContent>
                 {orgOptions.map((o) => (
@@ -622,7 +854,7 @@ function EditRequestDialog({
                     {o.name}
                   </SelectItem>
                 ))}
-                <SelectItem value="__other__">Other (not listed)</SelectItem>
+                <SelectItem value="__other__">{t("requests.edit.otherNotListed")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -630,16 +862,16 @@ function EditRequestDialog({
           {isOther ? (
             <>
               <div className="space-y-2">
-                <Label>Organization name</Label>
+                <Label>{t("requests.edit.orgName")}</Label>
                 <Input
                   value={otherOrgName}
                   onChange={(e) => setOtherOrgName(e.target.value)}
-                  placeholder="Enter organization name"
+                  placeholder={t("requests.edit.orgNamePlaceholder")}
                 />
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label>Email (optional)</Label>
+                  <Label>{t("requests.edit.emailOptional")}</Label>
                   <Input
                     type="email"
                     value={otherOrgEmail}
@@ -648,7 +880,7 @@ function EditRequestDialog({
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Phone (optional)</Label>
+                  <Label>{t("requests.edit.phoneOptional")}</Label>
                   <Input
                     value={otherOrgPhone}
                     onChange={(e) => setOtherOrgPhone(e.target.value)}
@@ -657,7 +889,7 @@ function EditRequestDialog({
                 </div>
               </div>
               <div className="space-y-2">
-                <Label>Website (optional)</Label>
+                <Label>{t("requests.edit.websiteOptional")}</Label>
                 <Input
                   value={otherOrgWebsite}
                   onChange={(e) => setOtherOrgWebsite(e.target.value)}
@@ -668,7 +900,7 @@ function EditRequestDialog({
           ) : null}
 
           <div className="space-y-2">
-            <Label>Document{file ? "" : " (optional — re-upload to replace)"}</Label>
+            <Label>{file ? "" : t("requests.edit.documentOptional")}</Label>
             {request?.document_path && !file && (
               <a
                 href={resolveAssetUrl(request.document_path) ?? request.document_path}
@@ -677,7 +909,9 @@ function EditRequestDialog({
                 className="flex items-center gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-foreground hover:bg-muted/60"
               >
                 <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <span className="truncate">Current document ({request.document_format ?? "file"})</span>
+                <span className="truncate">
+                  {t("requests.edit.currentDocument", { format: request.document_format ?? "file" })}
+                </span>
                 <ExternalLink className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground" />
               </a>
             )}
@@ -687,11 +921,9 @@ function EditRequestDialog({
             >
               <UploadCloud className="mb-2 h-5 w-5 text-muted-foreground" />
               <span className="text-sm font-medium text-foreground">
-                {file ? file.name : "Click to upload or drag & drop"}
+                {file ? file.name : t("requests.edit.clickToUpload")}
               </span>
-              <span className="mt-0.5 text-xs text-muted-foreground">
-                PDF or JPEG · Max 10MB
-              </span>
+              <span className="mt-0.5 text-xs text-muted-foreground">{t("requests.edit.fileHint")}</span>
               <input
                 id="edit-doc-file"
                 type="file"
@@ -703,26 +935,39 @@ function EditRequestDialog({
           </div>
 
           <div className="space-y-2">
-            <Label>Remarks (optional)</Label>
+            <Label>{t("requests.edit.remarksOptional")}</Label>
             <Textarea
               rows={3}
               value={remarks}
               onChange={(e) => setRemarks(e.target.value)}
-              placeholder="Any context that will help the reviewer…"
+              placeholder={t("requests.edit.remarksPlaceholder")}
             />
           </div>
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={onOpenChange} disabled={submitting}>
-            Cancel
+            {t("requests.edit.cancel")}
           </Button>
           <Button onClick={submit} disabled={submitting}>
             <Pencil className="mr-2 h-4 w-4" />
-            Save changes
+            {t("requests.edit.saveChanges")}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -2,8 +2,7 @@ import axios from "axios";
 import { authStore } from "./auth";
 
 const baseURL =
-  (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_API_BASE_URL) ||
-  "/api/v1";
+  (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_API_BASE_URL) || "/api/v1";
 
 const isServer = typeof window === "undefined";
 
@@ -50,10 +49,24 @@ api.interceptors.response.use(
 
     const originalRequest = error?.config;
 
+    const AUTH_ENDPOINTS = [
+      "/auth/login",
+      "/auth/verify-otp",
+      "/auth/resend-otp",
+      "/auth/user/forgot-password",
+      "/auth/user/reset-password",
+      "/auth/user/set-password",
+      "/admin/auth/login",
+    ];
+    const isAuthEndpoint = AUTH_ENDPOINTS.some(
+      (p) => typeof originalRequest?.url === "string" && originalRequest.url.includes(p),
+    );
+
     if (
       error?.response?.status === 401 &&
       originalRequest &&
-      !originalRequest._retry
+      !originalRequest._retry &&
+      !isAuthEndpoint
     ) {
       if (isRefreshing) {
         return new Promise<string>((resolve, reject) => {
@@ -73,7 +86,13 @@ api.interceptors.response.use(
         });
         const newToken = data?.data?.accessToken ?? data?.accessToken;
         if (newToken) {
-          window.localStorage.setItem("dvarif_token", newToken);
+          // Only re-seed the refreshed token if a live session is still present.
+          // After a logout the user object is removed, so we must NOT write the
+          // refreshed token back, otherwise the login page's beforeLoad would
+          // see it and bounce the user away from the login screen.
+          if (window.localStorage.getItem("dvarif_user")) {
+            window.localStorage.setItem("dvarif_token", newToken);
+          }
           processQueue(null, newToken);
           originalRequest.headers.Authorization = `Bearer ${newToken}`;
           return api(originalRequest);
@@ -81,9 +100,16 @@ api.interceptors.response.use(
         throw new Error("No token in refresh response");
       } catch (refreshError) {
         processQueue(refreshError, null);
+        const wasAdmin = window.localStorage
+          .getItem("dvarif_user")
+          ?.includes('"role":"admin"');
         authStore.clear();
-        if (!window.location.pathname.startsWith("/login")) {
-          window.location.href = "/login";
+        if (
+          !window.location.pathname.startsWith("/login") &&
+          !window.location.pathname.startsWith("/system-admin/login") &&
+          !window.location.pathname.startsWith("/system-admin/")
+        ) {
+          window.location.href = wasAdmin ? "/system-admin/login" : "/login";
         }
         return Promise.reject(refreshError);
       } finally {
