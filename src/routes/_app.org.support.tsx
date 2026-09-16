@@ -13,7 +13,7 @@ export const Route = createFileRoute("/_app/org/support")({
       throw redirect({ to: "/dashboard" });
     }
   },
-  head: () => ({ meta: [{ title: "Support — Dvarif" }] }),
+  head: () => ({ meta: [{ title: "Support — Dverif" }] }),
   component: () => <Outlet />,
 });
 

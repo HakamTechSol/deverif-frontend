@@ -78,13 +78,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Dvarif — Document Verification Platform" },
+      { title: "Dverif — Document Verification Platform" },
       {
         name: "description",
         content:
-          "Dvarif is an enterprise document verification network for HR teams, admins, and organizations.",
+          "Dverif is an enterprise document verification network for HR teams, admins, and organizations.",
       },
-      { property: "og:title", content: "Dvarif — Document Verification Platform" },
+      { property: "og:title", content: "Dverif — Document Verification Platform" },
       {
         property: "og:description",
         content:
@@ -128,7 +128,7 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
   useEffect(() => {
-    const saved = window.localStorage.getItem("dvarif_theme");
+    const saved = window.localStorage.getItem("Dverif_theme");
     if (saved === "dark") document.documentElement.classList.add("dark");
   }, []);
 

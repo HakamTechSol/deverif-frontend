@@ -1,7 +1,7 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
-import { DvarifLoader } from "@/components/common/DvarifLoader";
+import { DverifLoader } from "@/components/common/DvarifLoader";
 
 import logoFull from "@/assets/logo-full.png";
 import { Button } from "@/components/ui/button";
@@ -12,8 +12,8 @@ import { authService } from "@/services";
 export const Route = createFileRoute("/set-password")({
   head: () => ({
     meta: [
-      { title: "Set your password — Dvarif" },
-      { name: "description", content: "Set your password to activate your Dvarif account." },
+      { title: "Set your password — Dverif" },
+      { name: "description", content: "Set your password to activate your Dverif account." },
     ],
   }),
   component: SetPasswordPage,
@@ -55,7 +55,7 @@ function SetPasswordPage() {
           <div className="mb-8 flex justify-center">
             <img
               src={logoFull}
-              alt="Dvarif"
+              alt="Dverif"
               className="h-12 w-auto object-contain dark:invert dark:brightness-0"
             />
           </div>
@@ -79,7 +79,7 @@ function SetPasswordPage() {
         <div className="mb-8 flex justify-center">
           <img
             src={logoFull}
-            alt="Dvarif"
+            alt="Dverif"
             className="h-12 w-auto object-contain dark:invert dark:brightness-0"
           />
         </div>
@@ -100,7 +100,7 @@ function SetPasswordPage() {
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? (
                 <>
-                  <DvarifLoader size="xs" className="mr-2" /> Setting password…
+                  <DverifLoader size="xs" className="mr-2" /> Setting password…
                 </>
               ) : (
                 "Set password"

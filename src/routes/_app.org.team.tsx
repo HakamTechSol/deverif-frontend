@@ -11,6 +11,6 @@ export const Route = createFileRoute("/_app/org/team")({
     if (user.org_role === "sub_admin" && parseFeatureAccess(user.feature_access).manage_employees) return;
     throw redirect({ to: "/dashboard" });
   },
-  head: () => ({ meta: [{ title: "My Team — Dvarif" }] }),
+  head: () => ({ meta: [{ title: "My Team — Dverif" }] }),
   component: () => <Outlet />,
 });

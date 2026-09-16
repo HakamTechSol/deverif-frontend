@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2, ExternalLink, XCircle } from "lucide-react";
-import { DvarifLoader } from "@/components/common/DvarifLoader";
+import { DverifLoader } from "@/components/common/DvarifLoader";
 
 import logoMark from "@/assets/logo-mark.png";
 import { Button } from "@/components/ui/button";
@@ -12,8 +12,8 @@ import { formatDateTime } from "@/lib/utils";
 export const Route = createFileRoute("/verify/$qrToken")({
   head: () => ({
     meta: [
-      { title: "Verify Document — Dvarif" },
-      { name: "description", content: "Confirm a document was officially verified on Dvarif." },
+      { title: "Verify Document — Dverif" },
+      { name: "description", content: "Confirm a document was officially verified on Dverif." },
     ],
   }),
   component: VerifyPage,
@@ -33,14 +33,14 @@ function VerifyPage() {
       <header className="border-b border-border bg-background">
         <div className="mx-auto flex w-full max-w-3xl items-center justify-between px-4 py-4">
           <div className="flex items-center gap-2">
-            <img src={logoMark} alt="Dvarif" className="h-8 w-8" />
-            <span className="text-lg font-bold text-foreground">Dvarif</span>
+            <img src={logoMark} alt="Dverif" className="h-8 w-8" />
+            <span className="text-lg font-bold text-foreground">Dverif</span>
           </div>
           <Link
             to="/"
             className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
           >
-            dvarif.com
+            Dverif.com
           </Link>
         </div>
       </header>
@@ -50,7 +50,7 @@ function VerifyPage() {
           {result.isLoading ? (
             <Card className="border-border/70 bg-background shadow-none">
               <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
-                <DvarifLoader size="md" />
+                <DverifLoader size="md" />
                 <p className="text-sm text-muted-foreground">Verifying certificate…</p>
               </CardContent>
             </Card>
@@ -68,7 +68,7 @@ function VerifyPage() {
                 </p>
                 <Button asChild variant="outline" className="mt-2">
                   <Link to="/">
-                    Go to dvarif.com <ExternalLink className="ml-1.5 h-3.5 w-3.5" />
+                    Go to Dverif.com <ExternalLink className="ml-1.5 h-3.5 w-3.5" />
                   </Link>
                 </Button>
               </CardContent>
@@ -82,7 +82,7 @@ function VerifyPage() {
                   </div>
                   <h1 className="text-2xl font-bold text-foreground">Document verified</h1>
                   <p className="max-w-md text-sm leading-relaxed text-muted-foreground">
-                    The document shown below was officially verified through Dvarif and its
+                    The document shown below was officially verified through Dverif and its
                     authenticity has been confirmed by the issuing organization.
                   </p>
                 </div>
@@ -133,7 +133,7 @@ function VerifyPage() {
 
       <footer className="border-t border-border bg-background py-6">
         <p className="text-center text-xs text-muted-foreground">
-          © {new Date().getFullYear()} Dvarif. Secure document verification.
+          © {new Date().getFullYear()} Dverif. Secure document verification.
         </p>
       </footer>
     </div>

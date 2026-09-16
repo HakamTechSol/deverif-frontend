@@ -177,8 +177,8 @@
   }
 }
 
-/* --- Dvarif branded loader --- */
-@keyframes dvarif-loader-pulse {
+/* --- Dverif branded loader --- */
+@keyframes Dverif-loader-pulse {
   0%,
   100% {
     opacity: 0.7;
@@ -190,7 +190,7 @@
   }
 }
 
-@keyframes dvarif-loader-halo {
+@keyframes Dverif-loader-halo {
   0% {
     transform: scale(0.9);
     opacity: 0.45;
@@ -202,25 +202,34 @@
   }
 }
 
-.dvarif-loader__mark {
-  animation: dvarif-loader-pulse 1.5s ease-in-out infinite;
+.Dverif-loader__mark {
+  animation: Dverif-loader-pulse 1.5s ease-in-out infinite;
 }
 
-.dvarif-loader__halo {
+.Dverif-loader__halo {
   border-radius: 9999px;
   background: color-mix(in oklab, var(--color-primary) 22%, transparent);
-  animation: dvarif-loader-halo 1.8s ease-out infinite;
+  animation: Dverif-loader-halo 1.8s ease-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .dvarif-loader__mark {
+  .Dverif-loader__mark {
     animation: none;
     opacity: 0.85;
   }
 
-  .dvarif-loader__halo {
+  .Dverif-loader__halo {
     animation: none;
     transform: scale(1.2);
     opacity: 0.15;
   }
+}
+
+@media (max-width: 639px) {
+  table:has(td[data-label]) td[data-label="Actions"] { align-items: center; }
+  table:has(td[data-label]) td[data-label="Actions"]::before { align-self: center; }
+  table:has(td[data-label]) td[data-label="Actions"] > * { justify-self: end; max-width: 100%; }
+  table:has(td[data-label]) td[data-label="Actions"] > .flex,
+  table:has(td[data-label]) td[data-label="Actions"] > .inline-flex { flex-wrap: wrap; justify-content: flex-end; gap: 0.25rem; }
+  table:has(td[data-label]) td[data-label="Actions"] button { flex-shrink: 0; }
 }

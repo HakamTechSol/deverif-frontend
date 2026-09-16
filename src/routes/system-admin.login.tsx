@@ -5,8 +5,8 @@ import { useTranslation } from "react-i18next";
 import { ShieldCheck, ArrowLeft, Mail } from "lucide-react";
 
 import logoFull from "@/assets/logo-full.png";
-import authCoverBg from "@/assets/auth-cover-login-bg.svg";
-import { DvarifLoader } from "@/components/common/DvarifLoader";
+import adminLoginBg from "@/assets/admin-login.png";
+import { DverifLoader } from "@/components/common/DvarifLoader";
 import { Button } from "@/components/ui/button";
 import { PasswordInput } from "@/components/common/PasswordInput";
 import { Input } from "@/components/ui/input";
@@ -23,15 +23,15 @@ export const Route = createFileRoute("/system-admin/login")({
     // Only bounce an already-authenticated admin to the dashboard. A regular
     // org/user token (or a stale token left behind by a logout race) must NOT
     // send the system admin away from their login page.
-    const token = window.localStorage.getItem("dvarif_token");
-    const user = window.localStorage.getItem("dvarif_user");
+    const token = window.localStorage.getItem("Dverif_token");
+    const user = window.localStorage.getItem("Dverif_user");
     if (token && user && user.includes('"role":"admin"')) {
       throw redirect({ to: "/dashboard" });
     }
   },
   head: () => ({
     meta: [
-      { title: "System Admin Sign In — Dvarif" },
+      { title: "System Admin Sign In — Dverif" },
       { name: "description", content: "Restricted system administrator access." },
     ],
   }),
@@ -97,18 +97,20 @@ function SystemAdminLoginPage() {
           <div className="mb-10 flex justify-center lg:justify-start">
             <img
               src={logoFull}
-              alt="Dvarif — Document Verification Platform"
+              alt="Dverif — Document Verification Platform"
               className="h-14 w-auto object-contain dark:invert dark:brightness-0 dark:contrast-100"
             />
           </div>
 
           <div className="mb-8 text-center lg:text-left">
-            <div className="mb-4 inline-flex items-center justify-center rounded-full bg-primary/10 p-3">
-              <ShieldCheck className="h-6 w-6 text-primary" />
+            <div className="mb-4 inline-flex items-center gap-3">
+              <span className="inline-flex items-center justify-center rounded-full bg-primary/10 p-3">
+                <ShieldCheck className="h-6 w-6 text-primary" />
+              </span>
+              <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+                {t("auth.adminTitle")}
+              </h1>
             </div>
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-              {t("auth.adminTitle")}
-            </h1>
             <p className="mt-2 text-sm text-muted-foreground">{t("auth.adminSubtitle")}</p>
           </div>
 
@@ -153,7 +155,7 @@ function SystemAdminLoginPage() {
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? (
                 <>
-                  <DvarifLoader size="xs" className="mr-2" /> {t("auth.signingIn")}
+                  <DverifLoader size="xs" className="mr-2" /> {t("auth.signingIn")}
                 </>
               ) : (
                 t("auth.signIn")
@@ -164,18 +166,12 @@ function SystemAdminLoginPage() {
       </div>
 
       {/* Marketing column */}
-      <div className="relative hidden overflow-hidden border-l border-border bg-background lg:block">
+      <div className="relative hidden items-center justify-center overflow-hidden border-l border-border bg-background lg:flex">
         <img
-          src={authCoverBg}
+          src={adminLoginBg}
           alt=""
-          className="absolute inset-0 h-full w-full object-cover origin-center"
+          className="max-h-[45vh] w-auto max-w-full object-contain"
         />
-        <div className="absolute inset-0 bg-background/50 backdrop-blur-[2px]" />
-        <div className="relative flex h-full items-center justify-center p-12">
-          <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card/70 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur">
-            <ShieldCheck className="h-4 w-4" /> {t("auth.adminTitle")}
-          </div>
-        </div>
       </div>
     </div>
   );
@@ -302,7 +298,7 @@ function AdminOtpScreen({
           <div className="mb-10 flex justify-center lg:justify-start">
             <img
               src={logoFull}
-              alt="Dvarif — Document Verification Platform"
+              alt="Dverif — Document Verification Platform"
               className="h-14 w-auto object-contain dark:invert dark:brightness-0 dark:contrast-100"
             />
           </div>
@@ -357,7 +353,7 @@ function AdminOtpScreen({
             >
               {loading ? (
                 <>
-                  <DvarifLoader size="xs" className="mr-2" /> {t("auth.verifying")}
+                  <DverifLoader size="xs" className="mr-2" /> {t("auth.verifying")}
                 </>
               ) : (
                 t("auth.verifyCode")
@@ -379,18 +375,12 @@ function AdminOtpScreen({
         </div>
       </div>
 
-      <div className="relative hidden overflow-hidden border-l border-border bg-background lg:block">
+      <div className="relative hidden items-center justify-center overflow-hidden border-l border-border bg-background lg:flex">
         <img
-          src={authCoverBg}
+          src={adminLoginBg}
           alt=""
-          className="absolute inset-0 h-full w-full object-cover origin-center"
+          className="max-h-[45vh] w-auto max-w-full object-contain"
         />
-        <div className="absolute inset-0 bg-background/50 backdrop-blur-[2px]" />
-        <div className="relative flex h-full items-center justify-center p-12">
-          <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card/70 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur">
-            <ShieldCheck className="h-4 w-4" /> {t("auth.adminTitle")}
-          </div>
-        </div>
       </div>
     </div>
   );

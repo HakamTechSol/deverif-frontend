@@ -2,12 +2,13 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Download, FileText, Plus, Trash2, Wallet, Users } from "lucide-react";
+import { Download, FileText, Lock, Plus, Trash2, Wallet, Users } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { authStore, useAuth } from "@/lib/auth";
 import { parseFeatureAccess } from "@/lib/utils";
 import { usePermissions } from "@/lib/permissions";
+import { useOrgSubscription } from "@/hooks/useOrgSubscription";
 import { AccessDenied } from "@/components/common/RequireOrgFeature";
 import { PageHeader } from "@/components/common/PageHeader";
 import { SearchInput } from "@/components/common/SearchInput";
@@ -53,7 +54,7 @@ export const Route = createFileRoute("/_app/org/payroll")({
     if (user.org_role === "sub_admin" && parseFeatureAccess(user.feature_access).payroll) return;
     throw redirect({ to: "/dashboard" });
   },
-  head: () => ({ meta: [{ title: "Payroll — Dvarif" }] }),
+  head: () => ({ meta: [{ title: "Payroll — Dverif" }] }),
   component: OrgPayrollPage,
 });
 
@@ -74,6 +75,7 @@ function OrgPayrollPage() {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const { user } = useAuth();
+  const { isLocked } = useOrgSubscription();
 
   const [tab, setTab] = useState<"employees" | "records">("employees");
 
@@ -256,7 +258,7 @@ function OrgPayrollPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `dvarif-payroll.csv`;
+      a.download = `Dverif-payroll.csv`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -275,7 +277,7 @@ function OrgPayrollPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `dvarif-payslip-${record.uuid.slice(0, 8)}.pdf`;
+      a.download = `Dverif-payslip-${record.uuid.slice(0, 8)}.pdf`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -317,10 +319,10 @@ function OrgPayrollPage() {
                 className="w-40 shrink-0 justify-center"
                 variant="outline"
                 onClick={exportCsv}
-                disabled={exporting || items.length === 0}
+                disabled={isLocked || exporting || items.length === 0}
               >
-                <Download className="mr-1.5 h-3.5 w-3.5" />
-                {exporting ? t("payroll.exporting") : t("payroll.exportCsv")}
+                {isLocked ? <Lock className="mr-1.5 h-3.5 w-3.5" /> : <Download className="mr-1.5 h-3.5 w-3.5" />}
+                {isLocked ? "Subscription Required" : exporting ? t("payroll.exporting") : t("payroll.exportCsv")}
               </Button>
             </div>
           ) : (
@@ -330,11 +332,11 @@ function OrgPayrollPage() {
               </span>
               <Button
                 className="shrink-0 justify-center"
-                disabled={validSelected.size === 0}
+                disabled={isLocked || validSelected.size === 0}
                 onClick={() => setPeriodOpen(true)}
               >
-                <Plus className="mr-1.5 h-4 w-4" />
-                {t("payroll.generatePayroll")}
+                {isLocked ? <Lock className="mr-1.5 h-4 w-4" /> : <Plus className="mr-1.5 h-4 w-4" />}
+                {isLocked ? "Subscription Required" : t("payroll.generatePayroll")}
               </Button>
             </div>
           )
@@ -414,7 +416,7 @@ function OrgPayrollPage() {
                               aria-label={emp.full_name}
                             />
                           </TableCell>
-                          <TableCell className="whitespace-nowrap">
+                          <TableCell data-label="Employee" className="whitespace-nowrap">
                             <div className="text-sm font-medium text-foreground">
                               {emp.full_name}
                             </div>
@@ -422,10 +424,10 @@ function OrgPayrollPage() {
                               <div className="text-xs text-muted-foreground">{emp.email}</div>
                             ) : null}
                           </TableCell>
-                          <TableCell className="whitespace-nowrap text-sm text-muted-foreground hidden sm:table-cell">
+                          <TableCell data-label="Designation" className="whitespace-nowrap text-sm text-muted-foreground hidden sm:table-cell">
                             {emp.designation ?? "—"}
                           </TableCell>
-                          <TableCell className="whitespace-nowrap text-sm text-muted-foreground hidden md:table-cell">
+                          <TableCell data-label="Department" className="whitespace-nowrap text-sm text-muted-foreground hidden md:table-cell">
                             {emp.department ?? "—"}
                           </TableCell>
                         </TableRow>
@@ -533,10 +535,10 @@ function OrgPayrollPage() {
                       <TableBody>
                         {items.map((r, i) => (
                           <TableRow key={r.uuid}>
-                            <TableCell className="w-10 text-muted-foreground">
+                            <TableCell data-label="S.No" className="w-10 text-muted-foreground">
                               {(page - 1) * 10 + i + 1}
                             </TableCell>
-                            <TableCell className="whitespace-nowrap">
+                            <TableCell data-label="Employee" className="whitespace-nowrap">
                               <div className="text-sm font-medium text-foreground">
                                 {r.employee_name ?? "—"}
                               </div>
@@ -544,22 +546,22 @@ function OrgPayrollPage() {
                                 {r.employee_email ?? ""}
                               </div>
                             </TableCell>
-                            <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                            <TableCell data-label="Period" className="whitespace-nowrap text-sm text-muted-foreground">
                               {MONTHS[Number(r.month) - 1]} {r.year}
                             </TableCell>
-                            <TableCell className="whitespace-nowrap text-right text-sm text-muted-foreground">
+                            <TableCell data-label="Basic" className="whitespace-nowrap text-right text-sm text-muted-foreground">
                               {money(r.basic_salary)}
                             </TableCell>
-                            <TableCell className="whitespace-nowrap text-right text-sm text-muted-foreground">
+                            <TableCell data-label="Allowances" className="whitespace-nowrap text-right text-sm text-muted-foreground">
                               {money(r.allowances)}
                             </TableCell>
-                            <TableCell className="whitespace-nowrap text-right text-sm text-muted-foreground">
+                            <TableCell data-label="Deductions" className="whitespace-nowrap text-right text-sm text-muted-foreground">
                               {money(r.deductions)}
                             </TableCell>
-                            <TableCell className="whitespace-nowrap text-right text-sm font-semibold text-foreground">
+                            <TableCell data-label="Net" className="whitespace-nowrap text-right text-sm font-semibold text-foreground">
                               {money(r.net_salary)}
                             </TableCell>
-                            <TableCell className="whitespace-nowrap text-right">
+                            <TableCell data-label="Payslip" className="whitespace-nowrap text-right">
                               <Button
                                 size="sm"
                                 variant="ghost"
@@ -570,15 +572,16 @@ function OrgPayrollPage() {
                                 {downloading === r.uuid ? "…" : t("payroll.payslip")}
                               </Button>
                             </TableCell>
-                            <TableCell className="whitespace-nowrap text-right">
+                            <TableCell data-label="—" className="whitespace-nowrap text-right">
                               {canDelete ? (
                                 <Button
                                   size="sm"
                                   variant="ghost"
                                   className="text-muted-foreground hover:text-destructive"
+                                  disabled={isLocked}
                                   onClick={() => setDeleteTarget(r)}
                                 >
-                                  <Trash2 className="h-3.5 w-3.5" />
+                                  {isLocked ? <Lock className="h-3.5 w-3.5" /> : <Trash2 className="h-3.5 w-3.5" />}
                                 </Button>
                               ) : null}
                             </TableCell>

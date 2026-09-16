@@ -126,25 +126,25 @@ function PayrollPage() {
                 <TableBody>
                   {items.map((r, i) => (
                     <TableRow key={r.uuid}>
-                      <TableCell className="w-10 text-muted-foreground">
+                      <TableCell data-label="S.No" className="w-10 text-muted-foreground">
                         {(page - 1) * 10 + i + 1}
                       </TableCell>
-                      <TableCell className="font-medium">
+                      <TableCell data-label="Period" className="font-medium">
                         {getMonthName(r.month)} {r.year}
                       </TableCell>
-                      <TableCell className="text-muted-foreground">
+                      <TableCell data-label="Basic" className="text-muted-foreground">
                         {money(r.basic_salary)}
                       </TableCell>
-                      <TableCell className="text-muted-foreground">
+                      <TableCell data-label="Allowances" className="text-muted-foreground">
                         {money(r.allowances)}
                       </TableCell>
-                      <TableCell className="text-muted-foreground">
+                      <TableCell data-label="Deductions" className="text-muted-foreground">
                         {money(r.deductions)}
                       </TableCell>
-                      <TableCell className="font-medium text-foreground">
+                      <TableCell data-label="Net Salary" className="font-medium text-foreground">
                         {money(r.net_salary)}
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell data-label="Payslip" className="text-right">
                         <Button size="sm" variant="ghost" className="h-8" onClick={() => setSelected(r)}>
                           <Wallet className="mr-1.5 h-3.5 w-3.5" /> {t("orgPayroll.payslip", "Payslip")}
                         </Button>

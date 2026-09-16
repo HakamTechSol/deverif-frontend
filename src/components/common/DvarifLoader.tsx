@@ -8,7 +8,7 @@ const sizeClasses = {
   lg: "h-14 w-14 rounded-xl",
 } as const;
 
-export function DvarifLoader({
+export function DverifLoader({
   size = "md",
   label,
   fullscreen = false,
@@ -26,11 +26,11 @@ export function DvarifLoader({
       aria-hidden={fullscreen || label ? true : undefined}
       className={cn("relative inline-flex shrink-0 items-center justify-center", className)}
     >
-      {showHalo ? <span className="dvarif-loader__halo absolute inset-0" /> : null}
+      {showHalo ? <span className="Dverif-loader__halo absolute inset-0" /> : null}
       <img
         src={logoMark}
         alt=""
-        className={cn("dvarif-loader__mark relative object-contain", sizeClasses[size])}
+        className={cn("Dverif-loader__mark relative object-contain", sizeClasses[size])}
       />
     </span>
   );

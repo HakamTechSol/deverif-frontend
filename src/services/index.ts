@@ -13,11 +13,13 @@ export type Organization = {
   subscription_status?: "active" | "expired" | "none";
   subscription_start?: string | null;
   subscription_expiry?: string | null;
-  subscription_plan?: "monthly" | "yearly" | null;
   subscription_plan_id?: number | null;
   subscription_plan_name?: string | null;
   users_count?: number;
   employees_count?: number;
+  requests_count?: number;
+  admin_name?: string | null;
+  admin_email?: string | null;
   created_at?: string;
 };
 
@@ -41,14 +43,13 @@ export type UserRecord = {
   status: "active" | "inactive";
   org_role?: "employee" | "org_admin" | "sub_admin";
   feature_access?: FeatureAccess | null;
-  subscription_plan?: "free" | "basic" | "premium";
-  subscription_expiry?: string | null;
   profile_image?: string | null;
   is_verified?: "yes" | "no";
   created_at?: string;
   organization_uuid?: string | null;
   organization_name?: string | null;
   organization_logo?: string | null;
+  invitation_pending?: boolean;
 };
 
 export type VerificationRequest = {
@@ -59,6 +60,10 @@ export type VerificationRequest = {
   unmatched_org_uuid?: string | null;
   unmatched_org_name?: string | null;
   submission_remarks?: string | null;
+  document_owner_cnic?: string | null;
+  document_owner_name?: string | null;
+  has_prior_verification?: boolean;
+  prior_verified_at?: string | null;
   verification_remarks?: string | null;
   status: "under_review" | "verified" | "unverified";
   document_path?: string;
@@ -94,6 +99,7 @@ export type UnmatchedOrganization = {
   status: "pending" | "contacted" | "converted" | "ignored";
   request_count: number;
   created_at: string;
+  assigned_organization?: { uuid: UUID; name: string } | null;
 };
 
 export type UnmatchedOrgDetail = {
@@ -103,7 +109,7 @@ export type UnmatchedOrgDetail = {
     document_type: string;
     document_format?: string;
     document_path?: string;
-    status: "under_review" | "verified" | "unverified";
+status: "under_review" | "verified" | "unverified";
     submitted_at: string;
     verified_at?: string | null;
     submission_remarks?: string | null;
@@ -114,6 +120,7 @@ export type UnmatchedOrgDetail = {
     locked_by_name?: string | null;
     requester_name?: string;
     requester_email?: string;
+    requester_org_uuid?: string | null;
   }>;
 };
 
@@ -138,6 +145,7 @@ export type EmployeeRecord = {
   current_salary?: string | number | null;
   linked_user_uuid?: UUID | null;
   linked_user_email?: string | null;
+  linked_user_profile_image?: string | null;
   added_by_uuid?: UUID | null;
   added_by_name?: string | null;
   promoted_by_uuid?: UUID | null;
@@ -174,7 +182,6 @@ export type OrgUserRecord = {
   status: "active" | "inactive";
   org_role: "employee" | "org_admin" | "sub_admin";
   feature_access?: FeatureAccess | null;
-  subscription_plan?: "free" | "basic" | "premium";
   created_at?: string;
   employee_uuid?: UUID | null;
   designation?: string | null;
@@ -190,7 +197,6 @@ export type OrgAdminUserRecord = {
   status: "active" | "inactive";
   org_role: "org_admin" | "sub_admin";
   feature_access?: FeatureAccess | null;
-  subscription_plan?: "free" | "basic" | "premium";
   created_at?: string;
 };
 
@@ -219,6 +225,11 @@ export type PlanSummary = {
   status: string;
 };
 
+export type PlanFeature = {
+  text: string;
+  highlight?: boolean;
+};
+
 export type OrgSubscription = {
   status: "active" | "expired" | "none" | "pending_payment";
   plan: "monthly" | "yearly" | null;
@@ -226,7 +237,7 @@ export type OrgSubscription = {
   monthly_price: number | null;
   daily_request_quota: number | null;
   description?: string | null;
-  features?: string[];
+  features?: PlanFeature[];
   expiry: string | null;
   start: string | null;
 } | null;
@@ -249,6 +260,8 @@ export type QuotaStatus = {
 export type CustomPlanRequest = {
   uuid: UUID;
   message: string | null;
+  requested_quota: number | null;
+  requested_price: number | null;
   status: "pending" | "approved" | "denied";
   approved_daily_quota: number | null;
   approved_price: number | null;
@@ -289,7 +302,7 @@ export type SubscriptionPlan = {
   monthly_price: number;
   daily_request_quota: number;
   description?: string | null;
-  features?: string[];
+  features?: PlanFeature[];
   billing_period: "monthly" | "yearly";
   is_public?: number;
   is_custom?: number;
@@ -313,6 +326,8 @@ export type SubscriptionCheckout = {
   failed_at?: string | null;
   organization_uuid?: string | null;
   organization_name?: string | null;
+  subscription_status?: string | null;
+  subscription_expiry?: string | null;
 };
 
 export type SubscriptionStatusResponse = {
@@ -346,7 +361,6 @@ export type DashboardStats = {
     uuid: string;
     name: string;
     subscription_expiry: string;
-    subscription_plan: string | null;
   }>;
 };
 
@@ -512,6 +526,10 @@ export const requestsService = {
       .then((r) => r.data),
   myInboxCount: () =>
     api.get<{ count: number }>("/verification-requests/my/inbox/count").then((r) => r.data.count),
+  requestDetail: (uuid: UUID) =>
+    api
+      .get<{ request: VerificationRequest }>(`/verification-requests/my/inbox/${uuid}`)
+      .then((r) => r.data.request),
   verify: (
     uuid: UUID,
     data: {
@@ -583,9 +601,9 @@ export const orgSubscriptionService = {
     api
       .get<{ items: CustomPlanRequest[] }>("/org/subscription/custom-plan-requests")
       .then((r) => r.data.items),
-  requestCustomPlan: (message: string) =>
+  requestCustomPlan: (data: { message?: string; requested_quota: number; requested_price?: number | null }) =>
     api
-      .post<{ request: CustomPlanRequest }>("/org/subscription/custom-plan-requests", { message })
+      .post<{ request: CustomPlanRequest }>("/org/subscription/custom-plan-requests", data)
       .then((r) => r.data.request),
   selfSubscribe: (planUuid: UUID, amount?: number) =>
     api
@@ -629,8 +647,16 @@ export const adminService = {
   deleteUser: (uuid: UUID) => api.delete(`/admin/users/${uuid}`).then((r) => r.data),
   resendInvite: (uuid: UUID) => api.post(`/admin/users/${uuid}/resend-invite`).then((r) => r.data),
 
-  organizations: (params: { page?: number; limit?: number; search?: string } = {}) =>
+  organizations: (params: { page?: number; limit?: number; search?: string; without_admin?: boolean } = {}) =>
     api.get<Paginated<Organization>>("/admin/organizations", { params }).then((r) => r.data),
+  organizationTypes: () =>
+    api.get<{ items: { id: number; name: string }[] }>("/admin/organization-types").then((r) => r.data.items),
+  createOrganizationType: (name: string) =>
+    api
+      .post<{ organization_type: { id: number; name: string } }>("/admin/organization-types", { name })
+      .then((r) => r.data.organization_type),
+  deleteOrganizationType: (id: number) =>
+    api.delete(`/admin/organization-types/${id}`).then((r) => r.data),
   createOrganization: (form: FormData) =>
     api
       .post<{ organization: Organization }>("/admin/organizations", form)
@@ -1006,6 +1032,12 @@ export type AttendanceRecord = {
   organization_name?: string | null;
 };
 
+export type IpRule = {
+  id: number;
+  ip_address: string;
+  rule_type: "allow" | "deny";
+};
+
 /* Org-admin attendance + allowed office-network IPs */
 export const orgAttendanceService = {
   list: (
@@ -1019,15 +1051,15 @@ export const orgAttendanceService = {
     } = {},
   ) => api.get<Paginated<AttendanceRecord>>("/org/attendance", { params }).then((r) => r.data),
   ips: () =>
-    api.get<{ allowedIps: string[] }>("/org/attendance/ips").then((r) => r.data.allowedIps),
+    api.get<{ allowedIps: string[]; rules: IpRule[] }>("/org/attendance/ips").then((r) => r.data),
   addIp: (ip: string) =>
     api
-      .post<{ allowedIps: string[] }>("/org/attendance/ips", { ip })
-      .then((r) => r.data.allowedIps),
-  removeIp: (ip: string) =>
+      .post<{ allowedIps: string[]; rules: IpRule[] }>("/org/attendance/ips", { ip })
+      .then((r) => r.data),
+  removeIp: (id: number) =>
     api
-      .delete<{ allowedIps: string[] }>("/org/attendance/ips", { params: { ip } })
-      .then((r) => r.data.allowedIps),
+      .delete<{ allowedIps: string[]; rules: IpRule[] }>(`/org/attendance/ips/${id}`)
+      .then((r) => r.data),
 };
 
 /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ SALARY / PAYROLL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
@@ -1323,6 +1355,35 @@ export const dashboardService = {
   auto: () => api.get<DashboardStats>("/dashboard").then((r) => r.data),
   admin: () => api.get<DashboardStats>("/dashboard/admin").then((r) => r.data),
   user: () => api.get<DashboardStats>("/dashboard/user").then((r) => r.data),
+  analytics: () => api.get<AdminAnalytics>("/dashboard/analytics").then((r) => r.data),
+  orgAnalytics: () => api.get<OrgDashboardAnalytics>("/org/dashboard/analytics").then((r) => r.data),
+};
+
+export type AdminAnalytics = {
+  requests_per_month: { month: string; count: number }[];
+  request_status_breakdown: { status: string; count: number }[];
+  orgs_registered_per_month: { month: string; count: number }[];
+  top_organizations_by_requests: { org_name: string; request_count: number }[];
+};
+
+export type OrgDashboardAnalytics = {
+  active_employee_count: number;
+  pending_leave_requests_count: number;
+  today_attendance: { present: number; total: number };
+  this_month_payroll_total: number;
+  quota_status: {
+    free_daily_requests: number;
+    plan_quota: number;
+    total_allowance: number;
+    requests_used: number;
+    total_requests: number;
+    requests_remaining: number;
+    plan: { uuid: string | null; name: string | null; daily_request_quota: number };
+  } | null;
+  headcount_by_department: { department: string; count: number }[];
+  today_attendance_breakdown: { present: number; late: number; absent: number; total: number };
+  monthly_payroll_trend: { month: string; total: number }[];
+  leave_utilization: { leave_type: string; days_used: number }[];
 };
 
 /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ NOTIFICATIONS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */

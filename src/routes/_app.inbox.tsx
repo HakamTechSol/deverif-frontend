@@ -1,9 +1,9 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
-import { CheckCircle2, ExternalLink, Eye, Inbox as InboxIcon, XCircle } from "lucide-react";
+import { CheckCircle2, ExternalLink, Eye, Inbox as InboxIcon, XCircle, BadgeCheck } from "lucide-react";
 
 import { PageHeader } from "@/components/common/PageHeader";
 import { SearchInput } from "@/components/common/SearchInput";
@@ -38,10 +38,18 @@ import { formatDate, formatDateTime, resolveAssetUrl } from "@/lib/utils";
 import { tDocType } from "@/i18n";
 import { useOrgSubscription } from "@/hooks/useOrgSubscription";
 import { usePermissions } from "@/lib/permissions";
+import { authStore } from "@/lib/auth";
 import { Lock } from "lucide-react";
 
 export const Route = createFileRoute("/_app/inbox")({
-  head: () => ({ meta: [{ title: "Inbox — Dvarif" }] }),
+  beforeLoad: () => {
+    if (typeof window === "undefined") return;
+    const user = authStore.get().user;
+    if (!user || user.role !== "user" || (user.org_role !== "org_admin" && user.org_role !== "sub_admin")) {
+      throw redirect({ to: "/dashboard" });
+    }
+  },
+  head: () => ({ meta: [{ title: "Inbox — Dverif" }] }),
   component: InboxPage,
 });
 
@@ -76,6 +84,15 @@ function InboxPage() {
     notificationService.markReadByReference(reqUuid).then(() => {
       qc.invalidateQueries({ queryKey: ["notifications-unread"] });
     });
+  };
+
+  const openReview = async (r: VerificationRequest) => {
+    try {
+      const detail = await requestsService.requestDetail(r.uuid);
+      setActive(detail);
+    } catch {
+      setActive(r);
+    }
   };
 
   useEffect(() => {
@@ -223,7 +240,7 @@ function InboxPage() {
                               <Lock className="mr-1 h-3 w-3" /> {t("common.locked")}
                             </Button>
                           ) : r.status === "under_review" && canApprove ? (
-                            <Button size="sm" variant="outline" onClick={() => setActive(r)}>
+                            <Button size="sm" variant="outline" onClick={() => openReview(r)}>
                               {t("inbox.review")}
                             </Button>
                           ) : (
@@ -405,6 +422,17 @@ function VerifyDialog({
             </div>
           </>
         ) : null}
+
+        {request?.has_prior_verification && !!request.prior_verified_at && (
+          <div className="flex items-start gap-2 rounded-md border border-amber-400/40 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-700 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-300">
+            <BadgeCheck className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>
+              {t("inbox.preVerified", {
+                date: formatDate(request.prior_verified_at),
+              })}
+            </span>
+          </div>
+        )}
 
         <DialogFooter className="gap-2">
           <Button

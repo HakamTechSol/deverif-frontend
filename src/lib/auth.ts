@@ -25,8 +25,8 @@ let cachedSnapshot: { token: string | null; user: AuthUser | null } = { token: n
 
 function read(): { token: string | null; user: AuthUser | null } {
   if (typeof window === "undefined") return { token: null, user: null };
-  const token = window.localStorage.getItem("dvarif_token");
-  const raw = window.localStorage.getItem("dvarif_user");
+  const token = window.localStorage.getItem("Dverif_token");
+  const raw = window.localStorage.getItem("Dverif_user");
   if (token === cachedToken && raw === cachedRaw) return cachedSnapshot;
   let user: AuthUser | null = null;
   try {
@@ -49,17 +49,17 @@ export const authStore = {
     };
   },
   setSession(token: string, user: AuthUser) {
-    window.localStorage.setItem("dvarif_token", token);
-    window.localStorage.setItem("dvarif_user", JSON.stringify(user));
+    window.localStorage.setItem("Dverif_token", token);
+    window.localStorage.setItem("Dverif_user", JSON.stringify(user));
     emit();
   },
   updateUser(user: AuthUser) {
-    window.localStorage.setItem("dvarif_user", JSON.stringify(user));
+    window.localStorage.setItem("Dverif_user", JSON.stringify(user));
     emit();
   },
   clear() {
-    window.localStorage.removeItem("dvarif_token");
-    window.localStorage.removeItem("dvarif_user");
+    window.localStorage.removeItem("Dverif_token");
+    window.localStorage.removeItem("Dverif_user");
     emit();
   },
 };

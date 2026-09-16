@@ -2,14 +2,13 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Eye, FileCheck2, Trash2, Lock } from "lucide-react";
+import { Eye, FileCheck2 } from "lucide-react";
 
 import { PageHeader } from "@/components/common/PageHeader";
 import { SearchInput } from "@/components/common/SearchInput";
 import { Pagination } from "@/components/common/Pagination";
 import { EmptyState } from "@/components/common/EmptyState";
 import { StatusBadge } from "@/components/common/StatusBadge";
-import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { RequestDetailModal } from "@/components/common/RequestDetailModal";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -34,7 +33,7 @@ import { adminService, type UUID, type VerificationRequest } from "@/services";
 import { formatDate } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/admin/requests")({
-  head: () => ({ meta: [{ title: "Verification Requests — Dvarif Admin" }] }),
+  head: () => ({ meta: [{ title: "Verification Requests — Dverif Admin" }] }),
   component: AdminRequestsPage,
 });
 
@@ -45,7 +44,6 @@ function AdminRequestsPage() {
   const [status, setStatus] = useState<string>("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [toDelete, setToDelete] = useState<UUID | null>(null);
   const [viewing, setViewing] = useState<VerificationRequest | null>(null);
 
   const list = useQuery({
@@ -59,15 +57,6 @@ function AdminRequestsPage() {
         dateFrom: dateFrom || undefined,
         dateTo: dateTo || undefined,
       }),
-  });
-
-  const del = useMutation({
-    mutationFn: (uuid: UUID) => adminService.deleteRequest(uuid),
-    onSuccess: () => {
-      toast.success("Request removed");
-      qc.invalidateQueries({ queryKey: ["admin-requests"] });
-    },
-    onError: (e: any) => toast.error(e?.response?.data?.message ?? "Delete failed"),
   });
 
   const items = list.data?.items ?? [];
@@ -139,7 +128,6 @@ function AdminRequestsPage() {
                     <TableHead>Requester</TableHead>
                     <TableHead>Issuing org</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Locked</TableHead>
                     <TableHead>Submitted</TableHead>
                     <TableHead>Verified date</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
@@ -148,7 +136,7 @@ function AdminRequestsPage() {
                 <TableBody>
                   {items.map((r, i) => (
                     <TableRow key={r.uuid}>
-                      <TableCell className="w-10 text-muted-foreground">
+                      <TableCell data-label="S.No" className="w-10 text-muted-foreground">
                         {(page - 1) * 10 + i + 1}
                       </TableCell>
                       <TableCell data-label="Document" className="font-medium text-foreground">
@@ -167,15 +155,6 @@ function AdminRequestsPage() {
                       <TableCell data-label="Status">
                         <StatusBadge status={r.status} />
                       </TableCell>
-                      <TableCell data-label="Locked">
-                        {r.locked_by_name ? (
-                          <span className="inline-flex items-center gap-1 text-xs text-warning-foreground">
-                            <Lock className="h-3 w-3" /> {r.locked_by_name}
-                          </span>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
                       <TableCell data-label="Submitted" className="text-xs text-muted-foreground">
                         {formatDate(r.submitted_at)}
                       </TableCell>
@@ -192,16 +171,6 @@ function AdminRequestsPage() {
                           >
                             <Eye className="h-4 w-4" />
                           </Button>
-                          {r.status !== "verified" && !r.locked_by && (
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                            onClick={() => setToDelete(r.uuid)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        )}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -218,16 +187,6 @@ function AdminRequestsPage() {
           )}
         </CardContent>
       </Card>
-
-      <ConfirmDialog
-        open={!!toDelete}
-        onOpenChange={(o) => !o && setToDelete(null)}
-        title="Delete this request?"
-        onConfirm={() => {
-          if (toDelete) del.mutate(toDelete);
-          setToDelete(null);
-        }}
-      />
 
       <RequestDetailModal request={viewing} onClose={() => setViewing(null)} />
     </div>

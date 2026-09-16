@@ -13,7 +13,7 @@ export const api = axios.create({
 
 api.interceptors.request.use((config) => {
   if (!isServer) {
-    const token = window.localStorage.getItem("dvarif_token");
+    const token = window.localStorage.getItem("Dverif_token");
     if (token) {
       config.headers = config.headers ?? {};
       (config.headers as Record<string, string>).Authorization = `Bearer ${token}`;
@@ -48,6 +48,8 @@ api.interceptors.response.use(
     if (isServer) return Promise.reject(error);
 
     const originalRequest = error?.config;
+    const status = error?.response?.status;
+    const msg = (error?.response?.data?.message ?? error?.response?.data?.error ?? "") as string;
 
     const AUTH_ENDPOINTS = [
       "/auth/login",
@@ -62,8 +64,18 @@ api.interceptors.response.use(
       (p) => typeof originalRequest?.url === "string" && originalRequest.url.includes(p),
     );
 
+    // Force-logout deactivated accounts on any API call.
+    if (status === 403 && /inactive|deactivated/i.test(msg) && !isAuthEndpoint) {
+      const wasAdmin = window.localStorage
+        .getItem("Dverif_user")
+        ?.includes('"role":"admin"');
+      authStore.clear();
+      window.location.href = wasAdmin ? "/system-admin/login" : "/login";
+      return Promise.reject(error);
+    }
+
     if (
-      error?.response?.status === 401 &&
+      status === 401 &&
       originalRequest &&
       !originalRequest._retry &&
       !isAuthEndpoint
@@ -90,8 +102,8 @@ api.interceptors.response.use(
           // After a logout the user object is removed, so we must NOT write the
           // refreshed token back, otherwise the login page's beforeLoad would
           // see it and bounce the user away from the login screen.
-          if (window.localStorage.getItem("dvarif_user")) {
-            window.localStorage.setItem("dvarif_token", newToken);
+          if (window.localStorage.getItem("Dverif_user")) {
+            window.localStorage.setItem("Dverif_token", newToken);
           }
           processQueue(null, newToken);
           originalRequest.headers.Authorization = `Bearer ${newToken}`;
@@ -101,7 +113,7 @@ api.interceptors.response.use(
       } catch (refreshError) {
         processQueue(refreshError, null);
         const wasAdmin = window.localStorage
-          .getItem("dvarif_user")
+          .getItem("Dverif_user")
           ?.includes('"role":"admin"');
         authStore.clear();
         if (

@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
@@ -9,6 +9,7 @@ import {
   CalendarPlus,
   CheckCircle2,
   Eye,
+  Lock,
   Pencil,
   Plus,
   Trash2,
@@ -16,7 +17,9 @@ import {
   XCircle,
 } from "lucide-react";
 
+import { authStore } from "@/lib/auth";
 import { useAuth } from "@/lib/auth";
+import { useOrgSubscription } from "@/hooks/useOrgSubscription";
 import { PageHeader } from "@/components/common/PageHeader";
 import { SearchInput } from "@/components/common/SearchInput";
 import { EmptyState } from "@/components/common/EmptyState";
@@ -61,7 +64,14 @@ import {
 import { countDays, formatDate, formatDateTime, parseFeatureAccess } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/org/leaves")({
-  head: () => ({ meta: [{ title: "Leave Requests — Dvarif" }] }),
+  beforeLoad: () => {
+    if (typeof window === "undefined") return;
+    const user = authStore.get().user;
+    if (!user || user.role !== "user" || (user.org_role !== "org_admin" && user.org_role !== "sub_admin")) {
+      throw redirect({ to: "/dashboard" });
+    }
+  },
+  head: () => ({ meta: [{ title: "Leave Requests — Dverif" }] }),
   component: OrgLeavesPage,
 });
 
@@ -88,6 +98,7 @@ function OrgLeavesContent() {
   const { t } = useTranslation();
   const { user } = useAuth();
   const qc = useQueryClient();
+  const { isLocked } = useOrgSubscription();
   const canDelete = user?.org_role === "org_admin";
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
@@ -153,9 +164,11 @@ function OrgLeavesContent() {
               <Button
                 size="sm"
                 variant="outline"
+                disabled={isLocked}
                 onClick={() => setTypeDialog({ open: true, editing: null })}
               >
-                <Plus className="mr-1 h-3 w-3" /> {t("orgLeaves.addType")}
+                {isLocked ? <Lock className="mr-1 h-3 w-3" /> : <Plus className="mr-1 h-3 w-3" />}
+                {isLocked ? "Subscription Required" : t("orgLeaves.addType")}
               </Button>
             </CardHeader>
             <CardContent>
@@ -175,18 +188,20 @@ function OrgLeavesContent() {
                           size="icon"
                           variant="ghost"
                           className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                          disabled={isLocked}
                           onClick={() => setTypeDialog({ open: true, editing: lt })}
                         >
-                          <Pencil className="h-3.5 w-3.5" />
+                          {isLocked ? <Lock className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}
                         </Button>
                         {canDelete ? (
                           <Button
                             size="icon"
                             variant="ghost"
                             className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                            disabled={isLocked}
                             onClick={() => setDeletingType(lt)}
                           >
-                            <Trash2 className="h-3.5 w-3.5" />
+                            {isLocked ? <Lock className="h-3.5 w-3.5" /> : <Trash2 className="h-3.5 w-3.5" />}
                           </Button>
                         ) : null}
                       </div>
@@ -271,10 +286,10 @@ function OrgLeavesContent() {
                       <TableBody>
                         {items.map((r, i) => (
                           <TableRow key={r.uuid}>
-                            <TableCell className="w-10 text-muted-foreground">
+                            <TableCell data-label="S.No" className="w-10 text-muted-foreground">
                               {(page - 1) * 10 + i + 1}
                             </TableCell>
-                            <TableCell className="whitespace-nowrap">
+                            <TableCell data-label="Employee" className="whitespace-nowrap">
                               <div className="text-sm font-medium text-foreground">
                                 {r.employee_name ?? "—"}
                               </div>
@@ -282,45 +297,47 @@ function OrgLeavesContent() {
                                 {r.employee_email ?? ""}
                               </div>
                             </TableCell>
-                            <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                            <TableCell data-label="Leave Type" className="whitespace-nowrap text-sm text-muted-foreground">
                               {r.leave_type_name}
                             </TableCell>
-                            <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                            <TableCell data-label="Dates" className="whitespace-nowrap text-sm text-muted-foreground">
                               {formatDate(r.start_date)} → {formatDate(r.end_date)}
                             </TableCell>
-                            <TableCell className="whitespace-nowrap text-sm text-foreground">
+                            <TableCell data-label="Days" className="whitespace-nowrap text-sm text-foreground">
                               {countDays(r.start_date, r.end_date)}
                             </TableCell>
-                            <TableCell className="whitespace-nowrap">
+                            <TableCell data-label="Status" className="whitespace-nowrap">
                               <StatusBadge status={r.status} />
                             </TableCell>
-                            <TableCell className="text-right whitespace-nowrap">
+                            <TableCell data-label="Actions" className="text-right whitespace-nowrap">
                               {r.status === "pending" ? (
                                 <div className="flex items-center justify-end gap-1">
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="h-7 text-xs"
-                                    onClick={() => {
-                                      setDecideAction("approved");
-                                      setConfirming(r);
-                                    }}
-                                  >
-                                    <CheckCircle2 className="mr-1 h-3.5 w-3.5 text-success" />{" "}
-                                    {t("orgLeaves.approve")}
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="h-7 text-xs"
-                                    onClick={() => {
-                                      setDecideAction("rejected");
-                                      setConfirming(r);
-                                    }}
-                                  >
-                                    <XCircle className="mr-1 h-3.5 w-3.5 text-destructive" />{" "}
-                                    {t("orgLeaves.reject")}
-                                  </Button>
+                                   <Button
+                                     size="sm"
+                                     variant="outline"
+                                     className="h-7 text-xs"
+                                     disabled={isLocked}
+                                     onClick={() => {
+                                       setDecideAction("approved");
+                                       setConfirming(r);
+                                     }}
+                                   >
+                                     {isLocked ? <Lock className="mr-1 h-3.5 w-3.5" /> : <CheckCircle2 className="mr-1 h-3.5 w-3.5 text-success" />}
+                                     {t("orgLeaves.approve")}
+                                   </Button>
+                                   <Button
+                                     size="sm"
+                                     variant="outline"
+                                     className="h-7 text-xs"
+                                     disabled={isLocked}
+                                     onClick={() => {
+                                       setDecideAction("rejected");
+                                       setConfirming(r);
+                                     }}
+                                   >
+                                     {isLocked ? <Lock className="mr-1 h-3.5 w-3.5" /> : <XCircle className="mr-1 h-3.5 w-3.5 text-destructive" />}
+                                     {t("orgLeaves.reject")}
+                                   </Button>
                                 </div>
                               ) : (
                                 <span className="text-xs text-muted-foreground">
@@ -402,6 +419,7 @@ function OrgLeavesContent() {
 function AllocationsTab() {
   const { t } = useTranslation();
   const qc = useQueryClient();
+  const { isLocked } = useOrgSubscription();
   const thisYear = new Date().getFullYear();
   const [year, setYear] = useState(thisYear);
   const [historyEmp, setHistoryEmp] = useState<string | null>(null);
@@ -582,7 +600,7 @@ function AllocationsTab() {
               <TableBody>
                 {filteredEmployees.map((emp) => (
                   <TableRow key={emp.employee_uuid}>
-                    <TableCell className="whitespace-nowrap">
+                    <TableCell data-label="Employee" className="whitespace-nowrap">
                       <div className="text-sm font-medium text-foreground">{emp.full_name}</div>
                       <div className="text-xs text-muted-foreground">{emp.email}</div>
                     </TableCell>
@@ -595,11 +613,16 @@ function AllocationsTab() {
                           ? setCell.variables.allocated_days
                           : null;
                       return (
-                        <TableCell key={a.leave_type_id} className="whitespace-nowrap">
+                        <TableCell
+                          key={a.leave_type_id}
+                          data-label={leaveTypes.find((lt) => lt.id === a.leave_type_id)?.name ?? ""}
+                          className="whitespace-nowrap"
+                        >
                           <AllocationCell
                             value={a.allocated_days}
                             remaining={a.remaining_days}
                             busy={cellsState !== null}
+                            locked={isLocked}
                             onCommit={(val) =>
                               setCell.mutate({
                                 employee_uuid: emp.employee_uuid,
@@ -611,7 +634,7 @@ function AllocationsTab() {
                         </TableCell>
                       );
                     })}
-                    <TableCell>
+                    <TableCell data-label="History">
                       <Button
                         size="icon"
                         variant="ghost"
@@ -644,11 +667,13 @@ function AllocationCell({
   value,
   remaining,
   busy,
+  locked,
   onCommit,
 }: {
   value: number;
   remaining: number;
   busy: boolean;
+  locked?: boolean;
   onCommit: (allocated_days: number) => void;
 }) {
   const [local, setLocal] = useState<string>(String(value));
@@ -682,7 +707,7 @@ function AllocationCell({
         onKeyDown={(e) => {
           if (e.key === "Enter") (e.target as HTMLInputElement).blur();
         }}
-        disabled={busy}
+        disabled={busy || locked}
         className="h-7 w-20 rounded-md border border-border bg-transparent px-2 text-sm text-foreground outline-none focus:border-ring disabled:opacity-50"
       />
       <span
@@ -751,19 +776,19 @@ function HistoryDialog({
               <TableBody>
                 {history.allocations.map((a, i) => (
                   <TableRow key={`${a.year}-${a.leave_type_name}-${i}`}>
-                    <TableCell className="whitespace-nowrap text-sm text-foreground">
+                    <TableCell data-label="Year" className="whitespace-nowrap text-sm text-foreground">
                       {a.year}
                     </TableCell>
-                    <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                    <TableCell data-label="Leave Type" className="whitespace-nowrap text-sm text-muted-foreground">
                       {a.leave_type_name}
                     </TableCell>
-                    <TableCell className="whitespace-nowrap text-sm text-foreground">
+                    <TableCell data-label="Allocated" className="whitespace-nowrap text-sm text-foreground">
                       {a.allocated_days}
                     </TableCell>
-                    <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                    <TableCell data-label="Used" className="whitespace-nowrap text-sm text-muted-foreground">
                       {a.used_days}
                     </TableCell>
-                    <TableCell className="whitespace-nowrap text-sm text-foreground">
+                    <TableCell data-label="Remaining" className="whitespace-nowrap text-sm text-foreground">
                       {a.remaining_days}
                     </TableCell>
                   </TableRow>

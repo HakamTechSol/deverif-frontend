@@ -1,15 +1,17 @@
 import { createFileRoute, Link, useParams, useSearch } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState, type ReactNode } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, Calculator, FileUp, Mail, Phone, Pencil, Plus, Save, Trash2, Upload, UserRound, X, BriefcaseBusiness, Building2, CalendarDays, ShieldCheck } from "lucide-react";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { ArrowLeft, Calculator, FileUp, Lock, Mail, Phone, Pencil, Plus, Save, Trash2, Upload, UserRound, X, BriefcaseBusiness, Building2, CalendarDays, ShieldCheck } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { EmployeeDocPicker, type StagedDoc } from "@/components/employees/EmployeeDocPicker";
 
 import { PageHeader } from "@/components/common/PageHeader";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { AccessDenied } from "@/components/common/RequireOrgFeature";
 import { useAuth } from "@/lib/auth";
 import { usePermissions } from "@/lib/permissions";
+import { useOrgSubscription } from "@/hooks/useOrgSubscription";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -40,15 +42,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { orgService, orgEmployeeSalaryService, salaryComponentService, type EmployeeDocument, type EmployeeRecord, type EmployeeSalaryComponent, type SalaryComponent, type SalaryHistoryEntry, type UUID } from "@/services";
-import { formatCNIC, formatDate, formatDateTime, formatFileSize, resolveAssetUrl } from "@/lib/utils";
-import { DvarifLoader } from "@/components/common/DvarifLoader";
+import { digitsOnly, formatCNIC, formatDate, formatDateTime, formatFileSize, resolveAssetUrl } from "@/lib/utils";
+import { DverifLoader } from "@/components/common/DvarifLoader";
 
 export const Route = createFileRoute("/_app/org/team/$uuid")({
   validateSearch: (search: Record<string, unknown>): { edit?: boolean; salary?: boolean } => ({
     edit: search.edit === true || undefined,
     salary: search.salary === true || undefined,
   }),
-  head: () => ({ meta: [{ title: "Employee — Dvarif" }] }),
+  head: () => ({ meta: [{ title: "Employee — Dverif" }] }),
   component: EmployeeDetailPage,
 });
 
@@ -85,7 +87,7 @@ function EmployeeDetailPage() {
   const qc = useQueryClient();
   const [editing, setEditing] = useState(search.edit === true);
   const perms = usePermissions();
-  if (!perms.isOrgAdmin && !perms.manage_employees) return <AccessDenied feature="manage_employees" />;
+  const { isLocked } = useOrgSubscription();
 
   const empQ = useQuery({
     queryKey: ["org-employee", uuid],
@@ -100,6 +102,15 @@ function EmployeeDetailPage() {
   const emp = empQ.data;
   const docs = docsQ.data ?? [];
 
+  const departmentsQ = useQuery({
+    queryKey: ["org-departments"],
+    queryFn: () => orgService.departments.list(),
+  });
+  const designationsQ = useQuery({
+    queryKey: ["org-designations"],
+    queryFn: () => orgService.designations.list(),
+  });
+
   const original = {
     full_name: emp?.full_name ?? "",
     email: emp?.email ?? "",
@@ -112,11 +123,40 @@ function EmployeeDetailPage() {
   };
 
   const [form, setForm] = useState(original);
-  const formKey = emp?.uuid;
+  const [stagedDocs, setStagedDocs] = useState<StagedDoc[]>([]);
 
-  const isDirty = (Object.keys(original) as (keyof typeof original)[]).some(
+  // Reset form once employee data loads (initially original has empty defaults).
+  useEffect(() => {
+    if (emp?.uuid) setForm(original);
+  }, [emp?.uuid]);
+
+  // Reset staged documents when leaving edit mode.
+  useEffect(() => {
+    if (!editing) setStagedDocs([]);
+  }, [editing]);
+
+  const isFormDirty = (Object.keys(original) as (keyof typeof original)[]).some(
     (k) => form[k] !== original[k]
   );
+  const hasPendingDocs = stagedDocs.length > 0;
+  const isDirty = isFormDirty || hasPendingDocs;
+
+  const uploadDocsMut = useMutation({
+    mutationFn: async () => {
+      for (const d of stagedDocs) {
+        const fd = new FormData();
+        fd.append("documents", d.file);
+        if (d.name.trim()) fd.append("document_type", d.name.trim());
+        await orgService.employeeDocuments.upload(uuid, fd);
+      }
+    },
+    onSuccess: () => {
+      setStagedDocs([]);
+      docsQ.refetch();
+      toast.success("Documents uploaded");
+    },
+    onError: (e) => toast.error(apiErrorMessage(e, "Upload failed")),
+  });
 
   const updateMut = useMutation({
     mutationFn: (data: Record<string, unknown>) => orgService.updateEmployee(uuid, data),
@@ -129,7 +169,14 @@ function EmployeeDetailPage() {
     onError: (e) => toast.error(apiErrorMessage(e, "Save failed")),
   });
 
-  const save = () => {
+  const save = async () => {
+    if (hasPendingDocs) {
+      try {
+        await uploadDocsMut.mutateAsync();
+      } catch {
+        return; // Upload failed — toast already shown.
+      }
+    }
     const data: Record<string, unknown> = {
       full_name: form.full_name.trim(),
       email: form.email.trim() || undefined,
@@ -143,28 +190,31 @@ function EmployeeDetailPage() {
     updateMut.mutate(data);
   };
 
+  if (!perms.isOrgAdmin && !perms.manage_employees) return <AccessDenied feature="manage_employees" />;
+
   return (
     <div className="space-y-6">
       <PageHeader
-        title={emp?.full_name ?? "Employee"}
-        description="Full employee record"
+          title={emp?.full_name ?? "Employee"}
+          description="Full employee record"
         actions={
           editing ? (
             <>
-              <Button variant="ghost" onClick={() => { setForm(original); setEditing(false); }}>
+              <Button variant="ghost" disabled={isLocked} onClick={() => { setForm(original); setStagedDocs([]); setEditing(false); }}>
                 Cancel
               </Button>
               <Button
                 onClick={save}
-                disabled={!isDirty}
-                loading={updateMut.isPending}
+                disabled={isLocked || !isDirty}
+                loading={updateMut.isPending || uploadDocsMut.isPending}
               >
                 <Save className="mr-1.5 h-4 w-4" /> Save
               </Button>
             </>
           ) : (
-            <Button size="sm" onClick={() => setEditing(true)}>
-              <Pencil className="mr-1.5 h-3.5 w-3.5" /> Edit
+            <Button size="sm" disabled={isLocked} onClick={() => setEditing(true)}>
+              {isLocked ? <Lock className="mr-1.5 h-3.5 w-3.5" /> : <Pencil className="mr-1.5 h-3.5 w-3.5" />}
+              {isLocked ? "Subscription Required" : "Edit"}
             </Button>
           )
         }
@@ -178,7 +228,7 @@ function EmployeeDetailPage() {
       </Link>
 
       {empQ.isLoading ? (
-        <DvarifLoader />
+        <DverifLoader />
       ) : !emp ? (
         <Card className="border-border/70 shadow-none">
           <CardContent className="p-6 text-sm text-muted-foreground">
@@ -187,12 +237,14 @@ function EmployeeDetailPage() {
         </Card>
       ) : (
         <DisplayContent
-          key={formKey}
+          key={emp?.uuid}
           emp={emp}
           editing={editing}
           form={form}
           setForm={setForm}
           original={original}
+          designationsQ={designationsQ}
+          departmentsQ={departmentsQ}
         />
       )}
 
@@ -202,38 +254,17 @@ function EmployeeDetailPage() {
           docs={docs}
           docsQ={docsQ}
           editing={editing}
+          stagedDocs={stagedDocs}
+          setStagedDocs={setStagedDocs}
+          onUpload={() => uploadDocsMut.mutate()}
+          uploading={uploadDocsMut.isPending}
         />
       )}
 
       {emp && <SalaryHistoryCard uuid={uuid} autoOpen={search.salary === true} onHistoryChange={() => qc.invalidateQueries({ queryKey: ["org-employee", uuid] })} />}
 
       {emp && <SalaryComponentsCard uuid={uuid} />}
-    </div>
-  );
-}
-
-function ProfileBlock({
-  icon: Icon,
-  title,
-  children,
-}: {
-  icon: React.ElementType;
-  title: string;
-  children: ReactNode;
-}) {
-  return (
-    <Card className="border-border/70 shadow-none">
-      <CardHeader className="pb-4">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            <Icon className="h-4 w-4" />
-          </div>
-          <CardTitle className="text-sm font-semibold">{title}</CardTitle>
-        </div>
-        <Separator className="mt-3" />
-      </CardHeader>
-      <CardContent className="pt-0">{children}</CardContent>
-    </Card>
+      </div>
   );
 }
 
@@ -289,8 +320,8 @@ function statusDotClass(status: EmployeeRecord["status"]) {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function DisplayContent(props: { emp: EmployeeRecord; editing: boolean; form: any; setForm: (f: any) => void; original: any }) {
-  const { emp, editing, form, setForm } = props;
+function DisplayContent(props: { emp: EmployeeRecord; editing: boolean; form: any; setForm: (f: any) => void; original: any; designationsQ: any; departmentsQ: any }) {
+  const { emp, editing, form, setForm, designationsQ, departmentsQ } = props;
 
   const initials = emp.full_name
     ?.split(" ")
@@ -311,6 +342,13 @@ function DisplayContent(props: { emp: EmployeeRecord; editing: boolean; form: an
         <div className="h-20 bg-gradient-to-r from-primary/20 via-primary/10 to-transparent" />
         <CardContent className="-mt-8 flex flex-col gap-4 sm:flex-row sm:items-end">
           <Avatar className="h-20 w-20 border-4 border-card bg-background shadow-sm">
+            {emp.linked_user_profile_image && (
+              <AvatarImage
+                src={resolveAssetUrl(emp.linked_user_profile_image)}
+                alt={emp.full_name}
+                className="object-cover"
+              />
+            )}
             <AvatarFallback className="bg-primary/10 text-xl font-semibold text-primary">
               {initials}
             </AvatarFallback>
@@ -359,72 +397,93 @@ function DisplayContent(props: { emp: EmployeeRecord; editing: boolean; form: an
         </CardContent>
       </Card>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Personal information */}
-        <ProfileBlock icon={UserRound} title="Personal Information">
-          <div className="divide-y divide-border/70">
-            <DetailRow
-              label="Full Name"
-              value={emp.full_name}
-              editing={editing}
-              input={
-                <Input
-                  value={form.full_name}
-                  onChange={(e) => setForm({ ...form, full_name: e.target.value })}
-                />
-              }
-            />
-            <DetailRow label="CNIC" value={formatCNIC(emp.cnic)} />
-            <DetailRow
-              label="Email"
-              value={emp.email ?? "—"}
-              editing={editing}
-              input={
-                <Input
-                  type="email"
-                  value={form.email}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
-                />
-              }
-            />
-            <DetailRow
-              label="Phone"
-              value={emp.phone ?? "—"}
-              editing={editing}
-              input={
-                <Input
-                  value={form.phone}
-                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                />
-              }
-            />
-            <DetailRow
-              label="Emergency Contact"
-              value={emp.emergency_contact ?? "—"}
-              editing={editing}
-              input={
-                <Input
-                  value={form.emergency_contact}
-                  onChange={(e) => setForm({ ...form, emergency_contact: e.target.value })}
-                />
-              }
-            />
-          </div>
-        </ProfileBlock>
+      <Card className="overflow-hidden border-border/70 shadow-none">
+        <CardContent className="p-0">
+          <section className="p-6">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <UserRound className="h-4 w-4" />
+              </div>
+              <CardTitle className="text-sm font-semibold">Personal Information</CardTitle>
+            </div>
+            <Separator className="my-3" />
+            <div className="divide-y divide-border/70">
+              <DetailRow
+                label="Full Name"
+                value={emp.full_name}
+                editing={editing}
+                input={
+                  <Input
+                    value={form.full_name}
+                    onChange={(e) => setForm({ ...form, full_name: e.target.value })}
+                  />
+                }
+              />
+              <DetailRow label="CNIC" value={formatCNIC(emp.cnic)} />
+              <DetailRow
+                label="Email"
+                value={emp.email ?? "—"}
+                editing={editing}
+                input={
+                  <Input
+                    type="email"
+                    value={form.email}
+                    onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  />
+                }
+              />
+              <DetailRow
+                label="Phone"
+                value={emp.phone ?? "—"}
+                editing={editing}
+                input={
+                  <Input
+                    value={form.phone}
+                    onChange={(e) => setForm({ ...form, phone: digitsOnly(e.target.value) })}
+                  />
+                }
+              />
+              <DetailRow
+                label="Emergency Contact"
+                value={emp.emergency_contact ?? "—"}
+                editing={editing}
+                input={
+                  <Input
+                    value={form.emergency_contact}
+                    onChange={(e) => setForm({ ...form, emergency_contact: e.target.value })}
+                  />
+                }
+              />
+            </div>
+          </section>
 
-        <div className="space-y-6">
+          <Separator />
+
           {/* Employment details */}
-          <ProfileBlock icon={BriefcaseBusiness} title="Employment Details">
+          <section className="p-6">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <BriefcaseBusiness className="h-4 w-4" />
+              </div>
+              <CardTitle className="text-sm font-semibold">Employment Details</CardTitle>
+            </div>
+            <Separator className="my-3" />
             <div className="divide-y divide-border/70">
               <DetailRow
                 label="Designation"
                 value={emp.designation ?? "—"}
                 editing={editing}
                 input={
-                  <Input
-                    value={form.designation}
-                    onChange={(e) => setForm({ ...form, designation: e.target.value })}
-                  />
+                  <Select value={form.designation} onValueChange={(v) => setForm({ ...form, designation: v })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select designation" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(designationsQ.data ?? []).map((d: { uuid: string; name: string }) => (
+                        <SelectItem key={d.uuid} value={d.name}>{d.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 }
               />
               <DetailRow
@@ -432,10 +491,16 @@ function DisplayContent(props: { emp: EmployeeRecord; editing: boolean; form: an
                 value={emp.department ?? "—"}
                 editing={editing}
                 input={
-                  <Input
-                    value={form.department}
-                    onChange={(e) => setForm({ ...form, department: e.target.value })}
-                  />
+                  <Select value={form.department} onValueChange={(v) => setForm({ ...form, department: v })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select department" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(departmentsQ.data ?? []).map((d: { uuid: string; name: string }) => (
+                        <SelectItem key={d.uuid} value={d.name}>{d.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 }
               />
               <DetailRow
@@ -476,10 +541,19 @@ function DisplayContent(props: { emp: EmployeeRecord; editing: boolean; form: an
               />
               <DetailRow label="Created" value={formatDate(emp.created_at)} />
             </div>
-          </ProfileBlock>
+          </section>
+
+          <Separator />
 
           {/* Platform access */}
-          <ProfileBlock icon={ShieldCheck} title="Platform Access">
+          <section className="p-6">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <ShieldCheck className="h-4 w-4" />
+              </div>
+              <CardTitle className="text-sm font-semibold">Platform Access</CardTitle>
+            </div>
+            <Separator className="my-3" />
             <div className="divide-y divide-border/70">
               <DetailRow
                 label="Platform User"
@@ -508,9 +582,9 @@ function DisplayContent(props: { emp: EmployeeRecord; editing: boolean; form: an
               <DetailRow label="Linked Email" value={emp.linked_user_email ?? "—"} />
               <DetailRow label="Added By" value={emp.added_by_name ?? "—"} />
             </div>
-          </ProfileBlock>
-        </div>
-      </div>
+          </section>
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -520,32 +594,22 @@ function DocumentsCard({
   docs,
   docsQ,
   editing,
+  stagedDocs,
+  setStagedDocs,
+  onUpload,
+  uploading,
 }: {
   uuid: UUID;
   docs: EmployeeDocument[];
   docsQ: { refetch: () => void; isLoading: boolean };
   editing: boolean;
+  stagedDocs: StagedDoc[];
+  setStagedDocs: (docs: StagedDoc[]) => void;
+  onUpload: () => void;
+  uploading: boolean;
 }) {
-  const [docFiles, setDocFiles] = useState<File[]>([]);
-  const [docType, setDocType] = useState("");
   const { user } = useAuth();
   const canDelete = user?.org_role === "org_admin";
-
-  const uploadMut = useMutation({
-    mutationFn: (files: File[]) => {
-      const fd = new FormData();
-      files.forEach((f) => fd.append("documents", f));
-      if (docType.trim()) fd.append("document_type", docType.trim());
-      return orgService.employeeDocuments.upload(uuid, fd);
-    },
-    onSuccess: () => {
-      setDocFiles([]);
-      setDocType("");
-      docsQ.refetch();
-      toast.success("Documents uploaded");
-    },
-    onError: (e) => toast.error(apiErrorMessage(e, "Upload failed")),
-  });
 
   const deleteMut = useMutation({
     mutationFn: (docUuid: UUID) => orgService.employeeDocuments.remove(docUuid),
@@ -565,55 +629,12 @@ function DocumentsCard({
         {editing && (
           <div className="space-y-2 rounded-lg border border-border p-3">
             <Label className="text-sm font-medium">Add Documents</Label>
-            <Input
-              type="text"
-              value={docType}
-              onChange={(e) => setDocType(e.target.value)}
-              placeholder="Document type (optional, e.g. CNIC, Contract)"
-              className="text-sm"
+            <EmployeeDocPicker
+              docs={stagedDocs}
+              onChange={setStagedDocs}
+              onUpload={onUpload}
+              uploading={uploading}
             />
-            <Input
-              type="file"
-              accept=".pdf,image/jpeg,image/png,image/webp,.doc,.docx,.xls,.xlsx,.txt,.csv,.zip"
-              multiple
-              onChange={(e) => {
-                const picked = Array.from(e.target.files ?? []);
-                setDocFiles((prev) => [...prev, ...picked]);
-                e.target.value = "";
-              }}
-              className="text-sm"
-            />
-            {docFiles.length > 0 && (
-              <div className="space-y-1.5">
-                {docFiles.map((f, idx) => (
-                  <div key={idx} className="flex items-center justify-between rounded-md border border-border px-2 py-1.5 text-sm">
-                    <span className="flex min-w-0 items-center gap-2">
-                      <FileUp className="h-4 w-4 shrink-0 text-muted-foreground" />
-                      <span className="truncate">{f.name}</span>
-                      <span className="shrink-0 text-xs text-muted-foreground">{formatFileSize(f.size)}</span>
-                    </span>
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="ghost"
-                      className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                      onClick={() => setDocFiles((prev) => prev.filter((_, i) => i !== idx))}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => uploadMut.mutate(docFiles)}
-                  loading={uploadMut.isPending}
-                >
-                  <Upload className="mr-1.5 h-3.5 w-3.5" /> Upload {docFiles.length} file(s)
-                </Button>
-              </div>
-            )}
           </div>
         )}
 
@@ -625,14 +646,20 @@ function DocumentsCard({
                 href={resolveAssetUrl(doc.file_path)}
                 target="_blank"
                 rel="noreferrer"
-                className="flex min-w-0 items-center gap-2 truncate text-primary hover:underline"
+                className="flex min-w-0 flex-1 items-center gap-2 text-primary hover:underline"
               >
-                <FileUp className="h-4 w-4 shrink-0" />
-                <span className="truncate">{doc.file_name}</span>
+                <FileUp className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <span className="min-w-0 flex-1 truncate">
+                  {doc.document_type && (
+                    <>
+                      <span className="font-medium">{doc.document_type}</span>
+                      <span className="mx-1 text-muted-foreground">—</span>
+                    </>
+                  )}
+                  {doc.file_name}
+                </span>
                 {doc.file_size ? (
-                  <span className="ml-1 shrink-0 text-xs text-muted-foreground">({formatFileSize(doc.file_size)})</span>
-                ) : doc.document_type ? (
-                  <span className="ml-1 shrink-0 text-xs text-muted-foreground">({doc.document_type})</span>
+                  <span className="shrink-0 text-xs text-muted-foreground">({formatFileSize(doc.file_size)})</span>
                 ) : null}
               </a>
               <div className="flex shrink-0 items-center gap-2">
@@ -683,6 +710,7 @@ function formatSalaryPeriod(effectiveFrom: string, effectiveTo: string | null): 
 function SalaryHistoryCard({ uuid, autoOpen = false, onHistoryChange }: { uuid: UUID; autoOpen?: boolean; onHistoryChange: () => void }) {
   const qc = useQueryClient();
   const { user } = useAuth();
+  const { isLocked } = useOrgSubscription();
   const canEdit = user?.org_role === "org_admin";
   const [incrementOpen, setIncrementOpen] = useState(autoOpen);
   const [newSalary, setNewSalary] = useState("");
@@ -756,8 +784,9 @@ function SalaryHistoryCard({ uuid, autoOpen = false, onHistoryChange }: { uuid: 
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="text-base">Salary History</CardTitle>
-          <Button size="sm" onClick={() => setIncrementOpen(true)}>
-            Increment Salary
+          <Button size="sm" disabled={isLocked} onClick={() => setIncrementOpen(true)}>
+            {isLocked ? <Lock className="mr-1 h-3.5 w-3.5" /> : null}
+            {isLocked ? "Subscription Required" : "Increment Salary"}
           </Button>
         </div>
       </CardHeader>
@@ -779,31 +808,33 @@ function SalaryHistoryCard({ uuid, autoOpen = false, onHistoryChange }: { uuid: 
             <TableBody>
               {history.map((h) => (
                 <TableRow key={h.uuid}>
-                  <TableCell className="font-medium">{h.year}</TableCell>
-                  <TableCell>
+                  <TableCell data-label="Year" className="font-medium">{h.year}</TableCell>
+                  <TableCell data-label="Basic Salary">
                     Rs. {Number(h.basic_salary).toLocaleString("en-PK")}
                   </TableCell>
-                  <TableCell className="text-muted-foreground">
+                  <TableCell data-label="Effective Period" className="text-muted-foreground">
                     {formatSalaryPeriod(h.effective_from, h.effective_to)}
                   </TableCell>
                   {canEdit ? (
-                    <TableCell className="text-right">
+                    <TableCell data-label="Actions" className="text-right">
                       <div className="inline-flex items-center gap-1">
                         <Button
                           size="icon"
                           variant="ghost"
                           className="h-7 w-7 text-muted-foreground hover:text-primary"
+                          disabled={isLocked}
                           onClick={() => openEdit(h)}
                         >
-                          <Pencil className="h-4 w-4" />
+                          {isLocked ? <Lock className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
                         </Button>
                         <Button
                           size="icon"
                           variant="ghost"
                           className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                          disabled={isLocked}
                           onClick={() => setToDelete(h)}
                         >
-                          <Trash2 className="h-4 w-4" />
+                          {isLocked ? <Lock className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />}
                         </Button>
                       </div>
                     </TableCell>
@@ -944,6 +975,7 @@ function formatAmount(amount: string | number) {
 function SalaryComponentsCard({ uuid }: { uuid: UUID }) {
   const qc = useQueryClient();
   const { user } = useAuth();
+  const { isLocked } = useOrgSubscription();
   const canManage = user?.org_role === "org_admin" || user?.org_role === "sub_admin";
 
   const [addOpen, setAddOpen] = useState(false);
@@ -1031,8 +1063,9 @@ function SalaryComponentsCard({ uuid }: { uuid: UUID }) {
         <div className="flex items-center justify-between">
           <CardTitle className="text-base">Salary Components</CardTitle>
           {canManage && (
-            <Button size="sm" onClick={() => { setCompId(""); setAmount(""); setAddOpen(true); }}>
-              <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Component
+            <Button size="sm" disabled={isLocked} onClick={() => { setCompId(""); setAmount(""); setAddOpen(true); }}>
+              {isLocked ? <Lock className="mr-1.5 h-3.5 w-3.5" /> : <Plus className="mr-1.5 h-3.5 w-3.5" />}
+              {isLocked ? "Subscription Required" : "Add Component"}
             </Button>
           )}
         </div>
@@ -1067,21 +1100,21 @@ function SalaryComponentsCard({ uuid }: { uuid: UUID }) {
             <TableBody>
               {assignments.map((a) => (
                 <TableRow key={a.uuid} className={a.is_active ? undefined : "opacity-60"}>
-                  <TableCell className="font-medium text-foreground">{a.name}</TableCell>
-                  <TableCell>
+                  <TableCell data-label="Name" className="font-medium text-foreground">{a.name}</TableCell>
+                  <TableCell data-label="Type">
                     <ComponentTypeBadge type={a.type} />
                   </TableCell>
-                  <TableCell className="text-right text-sm">
+                  <TableCell data-label="Amount" className="text-right text-sm">
                     {a.component_is_percentage
                       ? `${Number(a.amount)}%`
                       : formatAmount(a.amount)}
                   </TableCell>
-                  <TableCell>
+                  <TableCell data-label="Status">
                     {canManage ? (
                       <div className="flex items-center gap-2">
                         <Switch
                           checked={!!a.is_active}
-                          disabled={toggleActiveMut.isPending}
+                          disabled={isLocked || toggleActiveMut.isPending}
                           onCheckedChange={() => toggleActiveMut.mutate(a)}
                         />
                         <span className="text-xs text-muted-foreground">
@@ -1095,23 +1128,25 @@ function SalaryComponentsCard({ uuid }: { uuid: UUID }) {
                     )}
                   </TableCell>
                   {canManage ? (
-                    <TableCell className="text-right">
+                    <TableCell data-label="Actions" className="text-right">
                       <div className="inline-flex items-center gap-1">
                         <Button
                           size="icon"
                           variant="ghost"
                           className="h-7 w-7 text-muted-foreground hover:text-primary"
+                          disabled={isLocked}
                           onClick={() => { setEditingAssign(a); setEditAmount(String(Number(a.amount))); }}
                         >
-                          <Pencil className="h-4 w-4" />
+                          {isLocked ? <Lock className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
                         </Button>
                         <Button
                           size="icon"
                           variant="ghost"
                           className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                          disabled={isLocked}
                           onClick={() => setToDelete(a)}
                         >
-                          <Trash2 className="h-4 w-4" />
+                          {isLocked ? <Lock className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />}
                         </Button>
                       </div>
                     </TableCell>

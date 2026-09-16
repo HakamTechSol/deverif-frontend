@@ -1,12 +1,14 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { Info, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { Info, Lock, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
+import { authStore } from "@/lib/auth";
 import { useAuth } from "@/lib/auth";
+import { useOrgSubscription } from "@/hooks/useOrgSubscription";
 import { PageHeader } from "@/components/common/PageHeader";
 import { SearchInput } from "@/components/common/SearchInput";
 import { EmptyState } from "@/components/common/EmptyState";
@@ -36,7 +38,14 @@ import { orgAttendanceService } from "@/services";
 import { formatDate, formatDateTime, parseFeatureAccess } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/org/attendance")({
-  head: () => ({ meta: [{ title: "Attendance — Dvarif" }] }),
+  beforeLoad: () => {
+    if (typeof window === "undefined") return;
+    const user = authStore.get().user;
+    if (!user || user.role !== "user" || (user.org_role !== "org_admin" && user.org_role !== "sub_admin")) {
+      throw redirect({ to: "/dashboard" });
+    }
+  },
+  head: () => ({ meta: [{ title: "Attendance — Dverif" }] }),
   component: OrgAttendancePage,
 });
 
@@ -63,6 +72,7 @@ function OrgAttendanceContent() {
   const { t } = useTranslation();
   const { user } = useAuth();
   const qc = useQueryClient();
+  const { isLocked } = useOrgSubscription();
   const canDelete = user?.org_role === "org_admin";
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
@@ -100,7 +110,7 @@ function OrgAttendanceContent() {
   });
 
   const removeIp = useMutation({
-    mutationFn: (ip: string) => orgAttendanceService.removeIp(ip),
+    mutationFn: (id: number) => orgAttendanceService.removeIp(id),
     onSuccess: () => {
       toast.success(t("attendance.ipRemoved"));
       qc.invalidateQueries({ queryKey: ["orgAllowedIps"] });
@@ -109,7 +119,7 @@ function OrgAttendanceContent() {
   });
 
   const items = records.data?.items ?? [];
-  const allowedIps = ips.data ?? [];
+  const rules = ips.data?.rules ?? [];
 
   return (
     <div>
@@ -142,6 +152,7 @@ function OrgAttendanceContent() {
               onChange={(e) => setIpInput(e.target.value)}
               placeholder="e.g. 192.168.1.0/24 or 203.0.113.5"
               className="sm:max-w-xs"
+              disabled={isLocked}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && ipInput.trim()) addIp.mutate(ipInput.trim());
               }}
@@ -149,31 +160,32 @@ function OrgAttendanceContent() {
             <Button
               size="sm"
               onClick={() => addIp.mutate(ipInput.trim())}
-              disabled={!ipInput.trim() || addIp.isPending}
+              disabled={isLocked || !ipInput.trim() || addIp.isPending}
             >
-              <Plus className="mr-1 h-3 w-3" /> {t("attendance.addIp")}
+              {isLocked ? <Lock className="mr-1 h-3 w-3" /> : <Plus className="mr-1 h-3 w-3" />}
+              {isLocked ? "Subscription Required" : t("attendance.addIp")}
             </Button>
           </div>
-          {allowedIps.length === 0 ? (
+          {rules.length === 0 ? (
             <p className="text-sm text-muted-foreground">{t("attendance.noIpsMessage")}</p>
           ) : (
             <div className="flex flex-wrap gap-2">
-              {allowedIps.map((ip) => (
+              {rules.map((rule) => (
                 <span
-                  key={ip}
+                  key={rule.id}
                   className="inline-flex items-center gap-2 rounded-full border border-border bg-muted/40 px-3 py-1 text-xs font-medium text-foreground"
                 >
                   <ShieldCheck className="h-3.5 w-3.5 text-success" />
-                  {ip}
+                  {rule.ip_address}
                   {canDelete ? (
                     <button
                       type="button"
                       className="text-muted-foreground transition-colors hover:text-destructive"
-                      onClick={() => removeIp.mutate(ip)}
-                      disabled={removeIp.isPending}
-                      aria-label={t("attendance.removeIpLabel", { ip })}
+                      onClick={() => removeIp.mutate(rule.id)}
+                      disabled={isLocked || removeIp.isPending}
+                      aria-label={t("attendance.removeIpLabel", { ip: rule.ip_address })}
                     >
-                      <Trash2 className="h-3 w-3" />
+                      {isLocked ? <Lock className="h-3 w-3" /> : <Trash2 className="h-3 w-3" />}
                     </button>
                   ) : null}
                 </span>
@@ -264,10 +276,10 @@ function OrgAttendanceContent() {
                   <TableBody>
                     {items.map((r, i) => (
                       <TableRow key={r.uuid}>
-                        <TableCell className="w-10 text-muted-foreground">
+                        <TableCell data-label="S.No" className="w-10 text-muted-foreground">
                           {(page - 1) * 10 + i + 1}
                         </TableCell>
-                        <TableCell className="whitespace-nowrap">
+                        <TableCell data-label="Employee" className="whitespace-nowrap">
                           <div className="text-sm font-medium text-foreground">
                             {r.employee_name ?? "—"}
                           </div>
@@ -275,22 +287,22 @@ function OrgAttendanceContent() {
                             {r.employee_email ?? ""}
                           </div>
                         </TableCell>
-                        <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                        <TableCell data-label="Date" className="whitespace-nowrap text-sm text-muted-foreground">
                           {formatDate(r.date)}
                         </TableCell>
-                        <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                        <TableCell data-label="Check In" className="whitespace-nowrap text-sm text-muted-foreground">
                           {r.check_in_at ? formatDateTime(r.check_in_at) : "—"}
                           {r.check_in_ip && (
                             <div className="text-xs text-muted-foreground/70">{r.check_in_ip}</div>
                           )}
                         </TableCell>
-                        <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                        <TableCell data-label="Check Out" className="whitespace-nowrap text-sm text-muted-foreground">
                           {r.check_out_at ? formatDateTime(r.check_out_at) : "—"}
                           {r.check_out_ip && (
                             <div className="text-xs text-muted-foreground/70">{r.check_out_ip}</div>
                           )}
                         </TableCell>
-                        <TableCell className="whitespace-nowrap">
+                        <TableCell data-label="Status" className="whitespace-nowrap">
                           <StatusBadge status={r.status} />
                         </TableCell>
                       </TableRow>

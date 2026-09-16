@@ -16,11 +16,11 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { authService } from "@/services";
 import { PasswordInput } from "@/components/common/PasswordInput";
 import { authStore, useAuth } from "@/lib/auth";
-import { resolveAssetUrl } from "@/lib/utils";
+import { digitsOnly, resolveAssetUrl } from "@/lib/utils";
 import { setLanguage, getLanguage } from "@/i18n";
 
 export const Route = createFileRoute("/_app/settings")({
-  head: () => ({ meta: [{ title: "Settings — Dvarif" }] }),
+  head: () => ({ meta: [{ title: "Settings — Dverif" }] }),
   component: SettingsPage,
 });
 
@@ -146,7 +146,7 @@ function SettingsPage() {
               </div>
               <div className="space-y-2">
                 <Label>{t("settings.phone")}</Label>
-                <Input value={phone} onChange={(e) => setPhone(e.target.value)} />
+                <Input value={phone} onChange={(e) => setPhone(digitsOnly(e.target.value))} />
               </div>
               {user?.role !== "admin" && me.data?.organization_name && (
                 <div className="space-y-2">

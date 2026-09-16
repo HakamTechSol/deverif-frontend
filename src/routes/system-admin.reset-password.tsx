@@ -7,7 +7,7 @@ import logoFull from "@/assets/logo-full.png";
 import { Button } from "@/components/ui/button";
 import { PasswordInput } from "@/components/common/PasswordInput";
 import { Label } from "@/components/ui/label";
-import { DvarifLoader } from "@/components/common/DvarifLoader";
+import { DverifLoader } from "@/components/common/DvarifLoader";
 import { authService } from "@/services";
 
 export const Route = createFileRoute("/system-admin/reset-password")({
@@ -19,7 +19,7 @@ export const Route = createFileRoute("/system-admin/reset-password")({
   },
   head: () => ({
     meta: [
-      { title: "System Admin Reset Password — Dvarif" },
+      { title: "System Admin Reset Password — Dverif" },
       { name: "description", content: "Choose a new password for your administrator account." },
     ],
   }),
@@ -61,7 +61,7 @@ function AdminResetPasswordPage() {
         <div className="mb-8 flex justify-center">
           <img
             src={logoFull}
-            alt="Dvarif"
+            alt="Dverif"
             className="h-12 w-auto object-contain dark:invert dark:brightness-0"
           />
         </div>
@@ -82,7 +82,7 @@ function AdminResetPasswordPage() {
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? (
                 <>
-                  <DvarifLoader size="xs" className="mr-2" /> Updating…
+                  <DverifLoader size="xs" className="mr-2" /> Updating…
                 </>
               ) : (
                 "Update password"

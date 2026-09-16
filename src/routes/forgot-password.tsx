@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { ArrowLeft, Mail } from "lucide-react";
 
 import logoFull from "@/assets/logo-full.png";
-import { DvarifLoader } from "@/components/common/DvarifLoader";
+import { DverifLoader } from "@/components/common/DvarifLoader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,8 +13,8 @@ import { authService } from "@/services";
 export const Route = createFileRoute("/forgot-password")({
   head: () => ({
     meta: [
-      { title: "Forgot password — Dvarif" },
-      { name: "description", content: "Reset access to your Dvarif workspace." },
+      { title: "Forgot password — Dverif" },
+      { name: "description", content: "Reset access to your Dverif workspace." },
     ],
   }),
   component: ForgotPasswordPage,
@@ -45,7 +45,7 @@ function ForgotPasswordPage() {
         <div className="mb-8 flex justify-center">
           <img
             src={logoFull}
-            alt="Dvarif"
+            alt="Dverif"
             className="h-12 w-auto object-contain dark:invert dark:brightness-0"
           />
         </div>
@@ -87,7 +87,7 @@ function ForgotPasswordPage() {
                 <Button type="submit" className="w-full" disabled={loading}>
                   {loading ? (
                     <>
-                      <DvarifLoader size="xs" className="mr-2" /> Sending…
+                      <DverifLoader size="xs" className="mr-2" /> Sending…
                     </>
                   ) : (
                     "Send reset link"

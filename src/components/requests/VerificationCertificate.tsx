@@ -50,7 +50,7 @@ export function VerificationCertificate({ request }: { request: VerificationRequ
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `dvarif-certificate-${request.uuid.slice(0, 8)}.pdf`;
+      a.download = `Dverif-certificate-${request.uuid.slice(0, 8)}.pdf`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -82,7 +82,7 @@ export function VerificationCertificate({ request }: { request: VerificationRequ
         <div className="min-w-0 flex-1 space-y-3">
           <p className="text-xs leading-relaxed text-muted-foreground">
             Scan this QR code or open the link below to confirm the document was officially verified
-            on dvarif.com. The code is tamper-evident and cannot be forged for a fake record.
+            on Dverif.com. The code is tamper-evident and cannot be forged for a fake record.
           </p>
           <div className="rounded-md border border-border bg-muted/40 px-3 py-2">
             <div className="text-[10px] font-medium uppercase text-muted-foreground">

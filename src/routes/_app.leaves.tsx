@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
-import { CalendarPlus, CalendarX2 } from "lucide-react";
+import { CalendarPlus, CalendarX2, Lock } from "lucide-react";
 
 import { PageHeader } from "@/components/common/PageHeader";
 import { EmptyState } from "@/components/common/EmptyState";
@@ -41,9 +41,10 @@ import {
 import { leavesService } from "@/services";
 import { countDays, formatDate, formatDateTime } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
+import { useOrgSubscription } from "@/hooks/useOrgSubscription";
 
 export const Route = createFileRoute("/_app/leaves")({
-  head: () => ({ meta: [{ title: "Leaves — Dvarif" }] }),
+  head: () => ({ meta: [{ title: "Leaves — Dverif" }] }),
   component: LeavesPage,
 });
 
@@ -66,6 +67,7 @@ function LeavesPage() {
 function LeavesContent() {
   const qc = useQueryClient();
   const { t } = useTranslation();
+  const { isLocked } = useOrgSubscription();
   const [page, setPage] = useState(1);
   const [applyOpen, setApplyOpen] = useState(false);
 
@@ -88,8 +90,9 @@ function LeavesContent() {
         title={t("nav.leaves")}
         description={t("leaves.description")}
         actions={
-          <Button onClick={() => setApplyOpen(true)}>
-            <CalendarPlus className="mr-2 h-4 w-4" /> {t("leaves.applyForLeave")}
+          <Button disabled={isLocked} onClick={() => setApplyOpen(true)}>
+            {isLocked ? <Lock className="mr-2 h-4 w-4" /> : <CalendarPlus className="mr-2 h-4 w-4" />}
+            {isLocked ? "Subscription Required" : t("leaves.applyForLeave")}
           </Button>
         }
       />
@@ -159,10 +162,10 @@ function LeavesContent() {
                   <TableBody>
                     {items.map((r, i) => (
                       <TableRow key={r.uuid}>
-                        <TableCell className="w-10 text-muted-foreground">
+                        <TableCell data-label="S.No" className="w-10 text-muted-foreground">
                           {(page - 1) * 10 + i + 1}
                         </TableCell>
-                        <TableCell className="whitespace-nowrap font-medium text-foreground">
+                        <TableCell data-label="Leave type" className="whitespace-nowrap font-medium text-foreground">
                           {r.leave_type_name}
                           {r.reason && (
                             <div className="mt-0.5 max-w-[240px] truncate text-xs font-normal text-muted-foreground">
@@ -170,16 +173,16 @@ function LeavesContent() {
                             </div>
                           )}
                         </TableCell>
-                        <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                        <TableCell data-label="Dates" className="whitespace-nowrap text-sm text-muted-foreground">
                           {formatDate(r.start_date)} → {formatDate(r.end_date)}
                         </TableCell>
-                        <TableCell className="whitespace-nowrap text-sm text-foreground">
+                        <TableCell data-label="Days" className="whitespace-nowrap text-sm text-foreground">
                           {countDays(r.start_date, r.end_date)}
                         </TableCell>
-                        <TableCell className="whitespace-nowrap">
+                        <TableCell data-label="Status" className="whitespace-nowrap">
                           <StatusBadge status={r.status} />
                         </TableCell>
-                        <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                        <TableCell data-label="Submitted" className="whitespace-nowrap text-xs text-muted-foreground">
                           {formatDateTime(r.created_at)}
                         </TableCell>
                       </TableRow>

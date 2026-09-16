@@ -7,14 +7,14 @@ import logoFull from "@/assets/logo-full.png";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { DvarifLoader } from "@/components/common/DvarifLoader";
+import { DverifLoader } from "@/components/common/DvarifLoader";
 import { authService } from "@/services";
 import { useTranslation } from "react-i18next";
 
 export const Route = createFileRoute("/system-admin/forgot-password")({
   head: () => ({
     meta: [
-      { title: "System Admin Forgot Password — Dvarif" },
+      { title: "System Admin Forgot Password — Dverif" },
       { name: "description", content: "Reset your system administrator password." },
     ],
   }),
@@ -47,7 +47,7 @@ function AdminForgotPasswordPage() {
         <div className="mb-8 flex justify-center">
           <img
             src={logoFull}
-            alt="Dvarif"
+            alt="Dverif"
             className="h-12 w-auto object-contain dark:invert dark:brightness-0"
           />
         </div>
@@ -90,7 +90,7 @@ function AdminForgotPasswordPage() {
                 <Button type="submit" className="w-full" disabled={loading}>
                   {loading ? (
                     <>
-                      <DvarifLoader size="xs" className="mr-2" /> {t("auth.sending")}
+                      <DverifLoader size="xs" className="mr-2" /> {t("auth.sending")}
                     </>
                   ) : (
                     t("auth.sendResetLink")

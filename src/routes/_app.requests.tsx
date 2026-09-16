@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
@@ -12,7 +12,6 @@ import {
   Pencil,
   ExternalLink,
   Eye,
-  Lock,
   Building2,
   Activity,
   Gauge,
@@ -21,6 +20,7 @@ import {
 } from "lucide-react";
 
 import { PageHeader } from "@/components/common/PageHeader";
+import { SearchableSelect } from "@/components/common/SearchableSelect";
 import { usePermissions } from "@/lib/permissions";
 import { SearchInput } from "@/components/common/SearchInput";
 import { Pagination } from "@/components/common/Pagination";
@@ -64,12 +64,70 @@ import {
   type VerificationRequest,
   type UUID,
 } from "@/services";
-import { formatDate, resolveAssetUrl } from "@/lib/utils";
-import { useAuth } from "@/lib/auth";
-import { DvarifLoader } from "@/components/common/DvarifLoader";
+import { digitsOnly, formatCNIC, formatDate, parseFeatureAccess, resolveAssetUrl } from "@/lib/utils";
+import { authStore, useAuth } from "@/lib/auth";
+import { DverifLoader } from "@/components/common/DvarifLoader";
+
+const EMPLOYEE_DOCUMENT_TYPES = [
+  "Employee Application Form",
+  "CV / Resume",
+  "Recent Photograph",
+  "CNIC / National ID Copy",
+  "Passport Copy — if applicable",
+  "Educational Certificates",
+  "Educational Transcripts / Mark Sheets",
+  "Experience Certificates",
+  "Previous Employment / Relieving Letter",
+  "Reference / Recommendation Letters",
+  "Employee Information Form",
+  "Employment / Appointment Letter",
+  "Job Description",
+  "Offer Letter",
+  "Employment Contract / Agreement",
+  "NDA — Non-Disclosure Agreement",
+  "Company Policies Acknowledgment",
+  "Code of Conduct Agreement",
+  "IT / Computer Usage Policy Acknowledgment",
+  "Data Privacy / Confidentiality Agreement",
+  "Bank Account / Salary Details",
+  "Tax Information / Tax Documents",
+  "Emergency Contact Form",
+  "Medical / Fitness Certificate — if required",
+  "Background Verification Report — if applicable",
+  "Police / Character Certificate — if required",
+  "Joining / Onboarding Checklist",
+  "Employee ID Card Record",
+  "Asset Handover Form",
+  "Laptop / Computer Handover Form",
+  "SIM / Mobile / Other Equipment Handover",
+  "Leave Records",
+  "Attendance Records",
+  "Performance Evaluation Records",
+  "Training / Certification Records",
+  "Warning / Disciplinary Records — if applicable",
+  "Promotion / Salary Revision Letters",
+  "Transfer / Department Change Records",
+  "Increment Letter",
+  "Resignation Letter",
+  "Exit Interview Form",
+  "Clearance Form",
+  "Final Settlement Record",
+  "Experience / Service Certificate",
+  "Relieving Letter",
+  "Company Asset Return Form",
+  "Employee File Closing Checklist",
+];
 
 export const Route = createFileRoute("/_app/requests")({
-  head: () => ({ meta: [{ title: "My Requests — Dvarif" }] }),
+  beforeLoad: () => {
+    if (typeof window === "undefined") return;
+    const user = authStore.get().user;
+    if (!user || user.role !== "user") throw redirect({ to: "/dashboard" });
+    if (user.org_role !== "org_admin" && !parseFeatureAccess(user.feature_access).generate_request) {
+      throw redirect({ to: "/dashboard" });
+    }
+  },
+  head: () => ({ meta: [{ title: "My Requests — Dverif" }] }),
   component: RequestsPage,
 });
 
@@ -238,7 +296,6 @@ function RequestsPage() {
                     <TableHead>{t("requests.table.docType")}</TableHead>
                     <TableHead>{t("requests.table.organization")}</TableHead>
                     <TableHead>{t("requests.table.status")}</TableHead>
-                    <TableHead>{t("requests.table.locked")}</TableHead>
                     <TableHead>{t("requests.table.submitted")}</TableHead>
                     <TableHead>{t("requests.table.verifiedDate")}</TableHead>
                     <TableHead>{t("requests.table.format")}</TableHead>
@@ -261,15 +318,6 @@ function RequestsPage() {
                       </TableCell>
                       <TableCell data-label={t("requests.table.status")}> 
                         <StatusBadge status={r.status} />
-                      </TableCell>
-                      <TableCell data-label={t("requests.table.locked")}> 
-                        {r.locked_by_name ? (
-                          <span className="inline-flex items-center gap-1 text-xs text-warning-foreground">
-                            <Lock className="h-3 w-3" /> {r.locked_by_name}
-                          </span>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        )}
                       </TableCell>
                       <TableCell data-label={t("requests.table.submitted")} className="text-xs text-muted-foreground">
                         {formatDate(r.submitted_at)}
@@ -416,7 +464,7 @@ function QuotaSummary({
             : t("requests.quota.remainingLabel", "Remaining today")
         }
       >
-        <div
+        {/* <div
           className={`mt-1 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium ${
             exhausted
               ? "bg-destructive/10 text-destructive"
@@ -430,7 +478,7 @@ function QuotaSummary({
               {t("requests.quota.remaining", "remaining")}
             </span>
           )}
-        </div>
+        </div> */}
       </StatCard>
 
       <StatCard
@@ -444,9 +492,7 @@ function QuotaSummary({
         }
         tone={exhausted ? "muted" : "default"}
       >
-        <TriangleAlert
-          className={`mt-1 h-4 w-4 ${exhausted ? "text-destructive" : "text-success"}`}
-        />
+       
       </StatCard>
     </div>
   );
@@ -515,7 +561,7 @@ export function TableSkeleton() {
       aria-live="polite"
       className="flex flex-col items-center justify-center gap-3 py-14"
     >
-      <DvarifLoader size="md" />
+      <DverifLoader size="md" />
       <p className="text-sm text-muted-foreground">{t("requests.loading")}</p>
     </div>
   );
@@ -544,6 +590,8 @@ function CreateRequestDialog({
   const [otherOrgPhone, setOtherOrgPhone] = useState("");
   const [otherOrgWebsite, setOtherOrgWebsite] = useState("");
   const [remarks, setRemarks] = useState("");
+  const [documentOwnerCnic, setDocumentOwnerCnic] = useState("");
+  const [documentOwnerName, setDocumentOwnerName] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -558,12 +606,17 @@ function CreateRequestDialog({
     if (isOther && !otherOrgName.trim()) return toast.error(t("requests.enterOrgName"));
     if (otherOrgEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(otherOrgEmail))
       return toast.error(t("requests.validEmail"));
+    if (!documentOwnerName.trim()) return toast.error(t("requests.ownerNameRequired"));
+    if (!/^\d{13}$/.test(digitsOnly(documentOwnerCnic)))
+      return toast.error(t("requests.validCnic"));
     setSubmitting(true);
     try {
       const form = new FormData();
       form.append("document_type", documentType);
       form.append("submission_remarks", remarks);
       form.append("document", file);
+      form.append("document_owner_name", documentOwnerName.trim());
+      form.append("document_owner_cnic", digitsOnly(documentOwnerCnic));
       if (isOther) {
         form.append("issuing_organization_uuid", "");
         form.append("other_organization_name", otherOrgName);
@@ -582,6 +635,8 @@ function CreateRequestDialog({
       setOtherOrgPhone("");
       setOtherOrgWebsite("");
       setRemarks("");
+      setDocumentOwnerCnic("");
+      setDocumentOwnerName("");
       setFile(null);
       await onCreated();
     } catch (err: any) {
@@ -605,10 +660,12 @@ function CreateRequestDialog({
           {/* Document type */}
           <div className="space-y-2">
             <Label>{t("requests.table.docType")}</Label>
-            <Input
+            <SearchableSelect
+              items={EMPLOYEE_DOCUMENT_TYPES.map((d) => ({ value: d, label: d }))}
               value={documentType}
-              onChange={(e) => setDocumentType(e.target.value)}
-              placeholder={t("requests.create.docTypePlaceholder")}
+              onChange={setDocumentType}
+              placeholder={t("requests.create.selectDocType")}
+              searchPlaceholder={t("requests.create.searchDocType", "Search document…")}
             />
           </div>
 
@@ -622,22 +679,16 @@ function CreateRequestDialog({
                 {t("requests.create.targetOrg")}
               </Label>
             </div>
-            <Select value={orgUuid} onValueChange={setOrgUuid}>
-              <SelectTrigger>
-                <SelectValue placeholder={t("requests.create.selectOrg")} />
-              </SelectTrigger>
-              <SelectContent>
-                {orgOptions.map((o) => (
-                  <SelectItem key={o.uuid} value={o.uuid}>
-                    {o.name}
-                  </SelectItem>
-                ))}
-                <Separator className="my-1" />
-                <SelectItem value="__other__">
-                  <span className="text-muted-foreground">{t("requests.create.otherNotListed")}</span>
-                </SelectItem>
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              items={[
+                ...orgOptions.map((o) => ({ value: o.uuid, label: o.name })),
+                { value: "__other__", label: t("requests.create.otherNotListed") },
+              ]}
+              value={orgUuid}
+              onChange={setOrgUuid}
+              placeholder={t("requests.create.selectOrg")}
+              searchPlaceholder={t("requests.create.searchOrg", "Search organization…")}
+            />
           </div>
 
           {isOther ? (
@@ -665,7 +716,7 @@ function CreateRequestDialog({
                   <Label>{t("requests.create.phoneOptional")}</Label>
                   <Input
                     value={otherOrgPhone}
-                    onChange={(e) => setOtherOrgPhone(e.target.value)}
+                    onChange={(e) => setOtherOrgPhone(digitsOnly(e.target.value))}
                     placeholder="+92 300 1234567"
                   />
                 </div>
@@ -708,6 +759,29 @@ function CreateRequestDialog({
                 onChange={(e) => setFile(e.target.files?.[0] ?? null)}
               />
             </label>
+          </div>
+
+          {/* Document owner's name */}
+          <div className="space-y-2">
+            <Label>{t("requests.create.documentOwnerName")}</Label>
+            <Input
+              value={documentOwnerName}
+              onChange={(e) => setDocumentOwnerName(e.target.value)}
+              placeholder={t("requests.create.documentOwnerNamePlaceholder")}
+              maxLength={200}
+            />
+          </div>
+
+          {/* Document owner's CNIC */}
+          <div className="space-y-2">
+            <Label>{t("requests.create.documentOwnerCnic")}</Label>
+            <Input
+              value={documentOwnerCnic}
+              onChange={(e) => setDocumentOwnerCnic(formatCNIC(e.target.value))}
+              placeholder="XXXXX-XXXXXXX-X"
+              maxLength={15}
+              inputMode="numeric"
+            />
           </div>
 
           {/* Remarks */}
@@ -759,6 +833,7 @@ function EditRequestDialog({
   const [otherOrgPhone, setOtherOrgPhone] = useState("");
   const [otherOrgWebsite, setOtherOrgWebsite] = useState("");
   const [remarks, setRemarks] = useState("");
+  const [documentOwnerName, setDocumentOwnerName] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -772,6 +847,7 @@ function EditRequestDialog({
     if (request) {
       setDocumentType(request.document_type);
       setRemarks(request.submission_remarks ?? "");
+      setDocumentOwnerName(request.document_owner_name ?? "");
       setOtherOrgName(request.unmatched_org_name ?? "");
       setOtherOrgEmail("");
       setOtherOrgPhone("");
@@ -800,6 +876,7 @@ function EditRequestDialog({
       const form = new FormData();
       form.append("document_type", documentType);
       form.append("submission_remarks", remarks);
+      if (documentOwnerName.trim()) form.append("document_owner_name", documentOwnerName.trim());
       if (isOther) {
         form.append("issuing_organization_uuid", "");
         form.append("other_organization_name", otherOrgName);
@@ -883,7 +960,7 @@ function EditRequestDialog({
                   <Label>{t("requests.edit.phoneOptional")}</Label>
                   <Input
                     value={otherOrgPhone}
-                    onChange={(e) => setOtherOrgPhone(e.target.value)}
+                    onChange={(e) => setOtherOrgPhone(digitsOnly(e.target.value))}
                     placeholder="+92 300 1234567"
                   />
                 </div>
@@ -932,6 +1009,16 @@ function EditRequestDialog({
                 onChange={(e) => setFile(e.target.files?.[0] ?? null)}
               />
             </label>
+          </div>
+
+          <div className="space-y-2">
+            <Label>{t("requests.create.documentOwnerName")}</Label>
+            <Input
+              value={documentOwnerName}
+              onChange={(e) => setDocumentOwnerName(e.target.value)}
+              placeholder={t("requests.create.documentOwnerNamePlaceholder")}
+              maxLength={200}
+            />
           </div>
 
           <div className="space-y-2">

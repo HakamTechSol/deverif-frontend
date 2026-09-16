@@ -7,13 +7,14 @@ export const Route = createFileRoute("/_app/attendance")({
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { LogIn, LogOut, Clock, CalendarDays } from "lucide-react";
+import { LogIn, LogOut, Clock, CalendarDays, Lock } from "lucide-react";
 import { attendanceService, type AttendanceRecord } from "@/services";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Pagination } from "@/components/common/Pagination";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useOrgSubscription } from "@/hooks/useOrgSubscription";
 import {
   Table,
   TableBody,
@@ -30,6 +31,7 @@ import { apiErrorMessage } from "@/lib/utils";
 function AttendancePage() {
   const { t } = useTranslation();
   const qc = useQueryClient();
+  const { isLocked } = useOrgSubscription();
   const [page, setPage] = useState(1);
 
   const today = useQuery({
@@ -106,14 +108,14 @@ function AttendancePage() {
             <div className="flex-1" />
 
             {!record ? (
-              <Button onClick={doCheckIn}>
-                <LogIn className="mr-2 h-4 w-4" />{" "}
-                {t("orgAttendance.checkIn", "Check In")}
+              <Button onClick={doCheckIn} disabled={isLocked}>
+                {isLocked ? <Lock className="mr-2 h-4 w-4" /> : <LogIn className="mr-2 h-4 w-4" />}
+                {isLocked ? "Subscription Required" : t("orgAttendance.checkIn", "Check In")}
               </Button>
             ) : record.status === "checked_in" ? (
-              <Button variant="destructive" onClick={doCheckOut}>
-                <LogOut className="mr-2 h-4 w-4" />{" "}
-                {t("orgAttendance.checkOut", "Check Out")}
+              <Button variant="destructive" onClick={doCheckOut} disabled={isLocked}>
+                {isLocked ? <Lock className="mr-2 h-4 w-4" /> : <LogOut className="mr-2 h-4 w-4" />}
+                {isLocked ? "Subscription Required" : t("orgAttendance.checkOut", "Check Out")}
               </Button>
             ) : null}
           </div>
@@ -157,17 +159,17 @@ function AttendancePage() {
                 <TableBody>
                   {(history.data?.items ?? []).map((r: AttendanceRecord, i) => (
                     <TableRow key={r.uuid}>
-                      <TableCell className="w-10 text-muted-foreground">
+                      <TableCell data-label="S.No" className="w-10 text-muted-foreground">
                         {(page - 1) * 10 + i + 1}
                       </TableCell>
-                      <TableCell className="font-medium">{r.date}</TableCell>
-                      <TableCell className="text-muted-foreground">
+                      <TableCell data-label="Date" className="font-medium">{r.date}</TableCell>
+                      <TableCell data-label="Check In" className="text-muted-foreground">
                         {formatDateTime(r.check_in_at)}
                       </TableCell>
-                      <TableCell className="text-muted-foreground">
+                      <TableCell data-label="Check Out" className="text-muted-foreground">
                         {r.check_out_at ? formatDateTime(r.check_out_at) : "—"}
                       </TableCell>
-                      <TableCell>
+                      <TableCell data-label="Status">
                         <Badge
                           variant="outline"
                           className={

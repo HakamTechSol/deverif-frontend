@@ -28,7 +28,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { DvarifLoader } from "@/components/common/DvarifLoader";
+import { DverifLoader } from "@/components/common/DvarifLoader";
 import { useRoles } from "@/lib/permissions";
 import {
   marketingService,
@@ -62,7 +62,12 @@ export function SubscriptionBanner() {
   });
 
   const requestCustom = useMutation({
-    mutationFn: (message: string) => orgSubscriptionService.requestCustomPlan(message),
+    mutationFn: () =>
+      orgSubscriptionService.requestCustomPlan({
+        message: note.trim(),
+        requested_quota: Number(quota),
+        requested_price: price.trim() ? Number(price) : null,
+      }),
     onSuccess: () => {
       toast.success(t("payments.customPlanSubmitted"));
       setQuota("");
@@ -74,18 +79,19 @@ export function SubscriptionBanner() {
   });
 
   const submitCustom = () => {
-    const qty = quota.trim();
-    const cost = price.trim();
-    if (!qty || !cost) {
-      toast.error(t("subscriptionLocked.quotaPriceRequired"));
+    const quotaNum = Number(quota);
+    if (!quota.trim() || !Number.isInteger(quotaNum) || quotaNum <= 0) {
+      toast.error(t("payments.customPlanQuotaRequired"));
       return;
     }
-    const parts = [
-      `${t("subscriptionLocked.wantQuota")} ${qty} ${t("payments.requestsPerDay")}`,
-      `${t("subscriptionLocked.forPrice")} Rs. ${cost}/${t("payments.perMonth")}`,
-    ];
-    if (note.trim()) parts.push(note.trim());
-    requestCustom.mutate(parts.join(". "));
+    if (price.trim()) {
+      const priceNum = Number(price);
+      if (!Number.isFinite(priceNum) || priceNum <= 0) {
+        toast.error(t("payments.customPlanPriceInvalid"));
+        return;
+      }
+    }
+    requestCustom.mutate();
   };
 
   const checkoutMut = useMutation({
@@ -117,9 +123,11 @@ export function SubscriptionBanner() {
           {t("subscriptionLocked.contactAdmin")}
         </p>
       </div>
-      <Button size="sm" variant="outline" className="shrink-0" onClick={() => setOpen(true)}>
-        {t("subscriptionLocked.viewPlans")}
-      </Button>
+      {isStaff && (
+        <Button size="sm" variant="outline" className="shrink-0" onClick={() => setOpen(true)}>
+          {t("subscriptionLocked.viewPlans")}
+        </Button>
+      )}
 
       <Dialog open={open} onOpenChange={(o) => !o && setOpen(false)}>
         <DialogContent className="sm:max-w-lg">
@@ -144,7 +152,7 @@ export function SubscriptionBanner() {
               <div className="max-h-[38vh] space-y-2 overflow-y-auto pr-1">
                 {plans.isLoading && (
                   <div className="flex items-center justify-center py-8">
-                    <DvarifLoader />
+                    <DverifLoader />
                   </div>
                 )}
                 {plans.isError && (
@@ -181,9 +189,18 @@ export function SubscriptionBanner() {
                       {plan.features && plan.features.length > 0 && (
                         <ul className="mt-2 space-y-1">
                           {plan.features.slice(0, 4).map((f, i) => (
-                            <li key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
-                              <Check className="mt-0.5 h-3 w-3 shrink-0 text-success" />
-                              <span>{f}</span>
+                            <li
+                              key={i}
+                              className={`flex items-start gap-2 text-xs ${
+                                f.highlight
+                                  ? "font-medium text-foreground"
+                                  : "text-muted-foreground"
+                              }`}
+                            >
+                              <Check
+                                className={`mt-0.5 h-3 w-3 shrink-0 ${f.highlight ? "text-primary" : "text-success"}`}
+                              />
+                              <span>{f.text}</span>
                             </li>
                           ))}
                         </ul>
@@ -270,7 +287,23 @@ export function SubscriptionBanner() {
                             key={r.uuid}
                             className="flex items-center justify-between gap-3 rounded-md border border-border bg-muted/40 p-3 text-xs"
                           >
-                            <p className="min-w-0 flex-1 truncate text-muted-foreground">{r.message}</p>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                                {r.requested_quota != null && (
+                                  <span className="font-medium text-foreground">
+                                    {r.requested_quota} {t("payments.requestsPerDay")}
+                                  </span>
+                                )}
+                                {(r.requested_price ?? r.approved_price) != null && (
+                                  <span className="text-muted-foreground">
+                                    Rs. {Number(r.requested_price ?? r.approved_price).toLocaleString("en-PK")}
+                                  </span>
+                                )}
+                              </div>
+                              {r.message && (
+                                <p className="mt-1 truncate text-muted-foreground">{r.message}</p>
+                              )}
+                            </div>
                             <Badge
                               variant="outline"
                               className={`shrink-0 rounded-full capitalize ${

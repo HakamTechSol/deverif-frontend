@@ -6,7 +6,7 @@ import { ShieldCheck, Building2, FileCheck2, ArrowLeft, Mail } from "lucide-reac
 
 import logoFull from "@/assets/logo-full.png";
 import authCoverBg from "@/assets/auth-cover-login-bg.svg";
-import { DvarifLoader } from "@/components/common/DvarifLoader";
+import { DverifLoader } from "@/components/common/DvarifLoader";
 import { Button } from "@/components/ui/button";
 import { PasswordInput } from "@/components/common/PasswordInput";
 import { Input } from "@/components/ui/input";
@@ -19,8 +19,8 @@ import { setLanguage } from "@/i18n";
 export const Route = createFileRoute("/login")({
   head: () => ({
     meta: [
-      { title: "Sign in — Dvarif" },
-      { name: "description", content: "Sign in to your Dvarif workspace." },
+      { title: "Sign in — Dverif" },
+      { name: "description", content: "Sign in to your Dverif workspace." },
     ],
   }),
   component: LoginPage,
@@ -102,7 +102,7 @@ function LoginPage() {
           <div className="mb-10 flex justify-center lg:justify-start">
             <img
               src={logoFull}
-              alt="Dvarif — Document Verification Platform"
+              alt="Dverif — Document Verification Platform"
               className="h-14 w-auto object-contain dark:invert dark:brightness-0 dark:contrast-100"
             />
           </div>
@@ -155,7 +155,7 @@ function LoginPage() {
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? (
                 <>
-                  <DvarifLoader size="xs" className="mr-2" /> {t("auth.signingIn")}
+                  <DverifLoader size="xs" className="mr-2" /> {t("auth.signingIn")}
                 </>
               ) : (
                 t("auth.signIn")
@@ -345,7 +345,7 @@ function OtpScreen({
           <div className="mb-10 flex justify-center lg:justify-start">
             <img
               src={logoFull}
-              alt="Dvarif — Document Verification Platform"
+              alt="Dverif — Document Verification Platform"
               className="h-14 w-auto object-contain dark:invert dark:brightness-0 dark:contrast-100"
             />
           </div>
@@ -400,7 +400,7 @@ function OtpScreen({
             >
               {loading ? (
                 <>
-                  <DvarifLoader size="xs" className="mr-2" /> {t("auth.verifying")}
+                  <DverifLoader size="xs" className="mr-2" /> {t("auth.verifying")}
                 </>
               ) : (
                 t("auth.verifyCode")

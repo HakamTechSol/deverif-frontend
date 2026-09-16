@@ -41,7 +41,7 @@ import { adminService, type Organization, type UUID } from "@/services";
 import { formatDate, resolveAssetUrl } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/admin/organizations")({
-  head: () => ({ meta: [{ title: "Organizations — Dvarif Admin" }] }),
+  head: () => ({ meta: [{ title: "Organizations — Dverif Admin" }] }),
   component: AdminOrgsPage,
 });
 
@@ -73,7 +73,7 @@ function AdminOrgsPage() {
     <div>
       <PageHeader
         title="Organizations"
-        description="The verified organizations in the Dvarif network."
+        description="The verified organizations in the Dverif network."
         actions={
           <Button
             onClick={() => {
@@ -112,7 +112,6 @@ function AdminOrgsPage() {
                     <TableHead className="w-10">S.No</TableHead>
                     <TableHead>Name</TableHead>
                     <TableHead>Type</TableHead>
-                    <TableHead className="text-center">Users</TableHead>
                     <TableHead className="text-center">Employees</TableHead>
                     <TableHead>Subscription</TableHead>
                     <TableHead>Added</TableHead>
@@ -120,12 +119,14 @@ function AdminOrgsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {items.map((o, i) => (
+                  {items.map((o, i) => {
+                    const assigned = Number(o.users_count ?? 0) > 0 || Number(o.requests_count ?? 0) > 0;
+                    return (
                     <TableRow key={o.uuid}>
-                      <TableCell className="w-10 text-muted-foreground">
+                      <TableCell data-label="S.No" className="w-10 text-muted-foreground">
                         {(page - 1) * 10 + i + 1}
                       </TableCell>
-                      <TableCell className="font-medium text-foreground">
+                      <TableCell data-label="Name" className="font-medium text-foreground">
                         <div className="flex items-center gap-3">
                           {o.logo ? (
                             <img
@@ -138,29 +139,36 @@ function AdminOrgsPage() {
                               <Building2 className="h-4 w-4" />
                             </div>
                           )}
-                          {o.name}
+                          <div className="flex flex-col">
+                            <span>{o.name}</span>
+                            {o.admin_name ? (
+                              <span className="text-xs font-normal leading-tight text-muted-foreground">
+                                {o.admin_name}
+                              </span>
+                            ) : null}
+                            {o.admin_email ? (
+                              <span className="text-xs font-normal leading-tight text-muted-foreground/80">
+                                {o.admin_email}
+                              </span>
+                            ) : null}
+                          </div>
                         </div>
                       </TableCell>
-                      <TableCell className="capitalize text-muted-foreground">
+                      <TableCell data-label="Type" className="capitalize text-muted-foreground">
                         {o.organization_type?.replace("_", " ")}
                       </TableCell>
-                      <TableCell className="text-center">
-                        <span className="inline-flex min-w-7 justify-center rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
-                          {o.users_count ?? 0}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-center">
+                      <TableCell data-label="Employees" className="text-center">
                         <span className="inline-flex min-w-7 justify-center rounded-full border border-border px-2 py-0.5 text-xs font-medium text-muted-foreground">
                           {o.employees_count ?? 0}
                         </span>
                       </TableCell>
-                      <TableCell>
+                      <TableCell data-label="Subscription">
                         <OrgSubscriptionBadge org={o} />
                       </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
+                      <TableCell data-label="Added" className="text-xs text-muted-foreground">
                         {formatDate(o.created_at)}
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell data-label="Actions" className="text-right">
                         <Button
                           size="icon"
                           variant="ghost"
@@ -175,14 +183,17 @@ function AdminOrgsPage() {
                         <Button
                           size="icon"
                           variant="ghost"
-                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                          disabled={assigned}
+                          title={assigned ? "This organization is assigned and cannot be deleted" : "Delete organization"}
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive disabled:opacity-40 disabled:hover:text-muted-foreground"
                           onClick={() => setToDelete(o.uuid)}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </TableCell>
                     </TableRow>
-                  ))}
+                    );
+                  })}
                 </TableBody>
               </Table>
               <Pagination
@@ -231,16 +242,48 @@ function OrgFormDialog({
   editing: Organization | null;
   onDone: () => void;
 }) {
+  const qc = useQueryClient();
+  const typesQuery = useQuery({
+    queryKey: ["admin-org-types"],
+    queryFn: () => adminService.organizationTypes(),
+    enabled: open,
+  });
   const [name, setName] = useState("");
   const [type, setType] = useState<Organization["organization_type"]>("software_house");
   const [businessEmail, setBusinessEmail] = useState("");
   const [logo, setLogo] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [showTypeDialog, setShowTypeDialog] = useState(false);
+  const [newTypeName, setNewTypeName] = useState("");
+
+  const createType = useMutation({
+    mutationFn: (value: string) => adminService.createOrganizationType(value),
+    onSuccess: (t) => {
+      toast.success("Organization type added");
+      qc.invalidateQueries({ queryKey: ["admin-org-types"] });
+      setType(t.name as any);
+      setShowTypeDialog(false);
+      setNewTypeName("");
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.message ?? "Failed to add type"),
+  });
+
+  const deleteType = useMutation({
+    mutationFn: (id: number) => adminService.deleteOrganizationType(id),
+    onSuccess: () => {
+      toast.success("Organization type deleted");
+      qc.invalidateQueries({ queryKey: ["admin-org-types"] });
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.message ?? "Failed to delete type"),
+  });
+  const [typeToDelete, setTypeToDelete] = useState<{ id: number; name: string } | null>(null);
+
+  const typeItems = typesQuery.data ?? [];
 
   useEffect(() => {
     if (open) {
       setName(editing?.name ?? "");
-      setType((editing?.organization_type as any) ?? "software_house");
+      setType((editing?.organization_type as any) || "software_house");
       setBusinessEmail(editing?.business_email ?? "");
       setLogo(null);
     }
@@ -285,16 +328,38 @@ function OrgFormDialog({
           </div>
           <div className="space-y-2">
             <Label>Type</Label>
-            <Select value={type} onValueChange={(v) => setType(v as any)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="education">Education</SelectItem>
-                <SelectItem value="government">Government</SelectItem>
-                <SelectItem value="software_house">Software house</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="flex items-start gap-2">
+              <div className="flex-1">
+                <Select value={type} onValueChange={(v) => setType(v as any)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {typeItems.length === 0 ? (
+                      <SelectItem value="loading" disabled>
+                        Loading…
+                      </SelectItem>
+                    ) : (
+                      typeItems.map((t) => (
+                        <SelectItem key={t.id} value={t.name}>
+                          {t.name.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase())}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button
+                type="button"
+                size="icon"
+                variant="outline"
+                className="h-9 w-9 shrink-0"
+                title="Add new organization type"
+                onClick={() => setShowTypeDialog(true)}
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
           <div className="space-y-2">
             <Label>Business email</Label>
@@ -361,6 +426,70 @@ function OrgFormDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      <Dialog open={showTypeDialog} onOpenChange={setShowTypeDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Manage organization types</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <div className="max-h-52 space-y-2 overflow-y-auto pr-1">
+              {typeItems.map((t) => (
+                <div
+                  key={t.id}
+                  className="flex items-center justify-between rounded-md border px-3 py-2"
+                >
+                  <span className="text-sm capitalize">{t.name.replace(/_/g, " ")}</span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-destructive"
+                    onClick={() => setTypeToDelete({ id: t.id, name: t.name })}
+                    disabled={deleteType.isPending}
+                    aria-label={`Delete ${t.name}`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+              {typeItems.length === 0 && (
+                <p className="text-sm text-muted-foreground">No types yet.</p>
+              )}
+            </div>
+            <Label>Type name</Label>
+            <Input
+              value={newTypeName}
+              onChange={(e) => setNewTypeName(e.target.value)}
+              placeholder="e.g. Bank, University, Hospital"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && newTypeName.trim()) {
+                  createType.mutate(newTypeName);
+                }
+              }}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowTypeDialog(false)}>
+              Done
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <ConfirmDialog
+        open={!!typeToDelete}
+        onOpenChange={(o) => !o && setTypeToDelete(null)}
+        title="Delete organization type?"
+        description={
+          typeToDelete
+            ? `Delete "${typeToDelete.name}"? Organizations using this type must be reassigned first.`
+            : ""
+        }
+        onConfirm={() => {
+          if (typeToDelete) deleteType.mutate(typeToDelete.id);
+          setTypeToDelete(null);
+        }}
+      />
     </Dialog>
   );
 }

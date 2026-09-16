@@ -1,8 +1,9 @@
 import { Link, useRouter, useRouterState } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
+import notificationSound from "@/assets/NotificationSound/universfield-new-notification-040-493469.mp3";
 import {
   LayoutDashboard,
   Send,
@@ -31,6 +32,7 @@ import {
   Headset,
   Languages,
   ShieldCheck,
+  Lock,
 } from "lucide-react";
 import { Logo } from "@/components/common/Logo";
 import { Button } from "@/components/ui/button";
@@ -101,6 +103,17 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
   const { isLocked } = useOrgSubscription();
+  const moduleLockedPaths = new Set([
+    "/org/team",
+    "/org/admins",
+    "/org/leaves",
+    "/org/attendance",
+    "/org/salary-components",
+    "/org/payroll",
+    "/leaves",
+    "/attendance",
+    "/payroll",
+  ]);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const router = useRouter();
@@ -145,7 +158,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     if (!user || isAdmin || !meSync.data) return;
     const synced = meSync.data as { org_role?: "employee" | "org_admin" | "sub_admin"; feature_access?: Record<string, boolean> | null };
     const updates: Record<string, unknown> = {};
-    if (synced.org_role !== user.org_role) updates.org_role = synced.org_role ?? "org_admin";
+    if (synced.org_role !== user.org_role) updates.org_role = synced.org_role ?? "employee";
     if (synced.feature_access !== undefined) updates.feature_access = synced.feature_access;
     if (Object.keys(updates).length) authStore.updateUser({ ...user, ...updates });
   }, [meSync.data, user, isAdmin]);
@@ -196,7 +209,14 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-background">
       {/* Sidebar (desktop) */}
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 border-r border-sidebar-border bg-sidebar lg:flex lg:flex-col">
-        <SidebarInner items={items} pathname={pathname} onNavigate={() => {}} onLogout={onLogout} />
+        <SidebarInner
+          items={items}
+          pathname={pathname}
+          onNavigate={() => {}}
+          onLogout={onLogout}
+          locked={!isAdmin && isLocked}
+          lockedPaths={moduleLockedPaths}
+        />
       </aside>
 
       {/* Mobile drawer */}
@@ -212,6 +232,8 @@ export function AppShell({ children }: { children: ReactNode }) {
               pathname={pathname}
               onNavigate={() => setMobileOpen(false)}
               onLogout={onLogout}
+              locked={!isAdmin && isLocked}
+              lockedPaths={moduleLockedPaths}
             />
           </aside>
         </div>
@@ -234,11 +256,15 @@ function SidebarInner({
   pathname,
   onNavigate,
   onLogout,
+  locked,
+  lockedPaths,
 }: {
   items: NavItem[];
   pathname: string;
   onNavigate: () => void;
   onLogout: () => void;
+  locked: boolean;
+  lockedPaths: Set<string>;
 }) {
   const { t } = useTranslation();
   return (
@@ -273,6 +299,9 @@ function SidebarInner({
                 className={cn("h-4 w-4", active ? "text-sidebar-primary" : "text-muted-foreground")}
               />
               {t(it.labelKey)}
+              {locked && lockedPaths.has(it.to) ? (
+                <Lock className="ml-auto h-3.5 w-3.5 text-muted-foreground/60" />
+              ) : null}
               {it.badge && it.badge > 0 ? (
                 <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-bold text-destructive-foreground">
                   {it.badge > 99 ? "99+" : it.badge}
@@ -314,6 +343,23 @@ function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
     refetchInterval: 15_000,
     retry: false,
   });
+
+  const prevUnread = useRef<number | null>(null);
+
+  // Play a sound when a new notification arrives (unread count increases).
+  useEffect(() => {
+    const current = unreadCount.data ?? 0;
+    if (prevUnread.current === null) {
+      prevUnread.current = current;
+      return;
+    }
+    if (current > prevUnread.current) {
+      const audio = new Audio(notificationSound);
+      audio.volume = 0.6;
+      audio.play().catch(() => {});
+    }
+    prevUnread.current = current;
+  }, [unreadCount.data]);
 
   const [notifOpen, setNotifOpen] = useState(false);
 

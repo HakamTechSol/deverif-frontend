@@ -2,9 +2,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { Calculator, Pencil, Plus, Trash2 } from "lucide-react";
+import { Calculator, Lock, Pencil, Plus, Trash2 } from "lucide-react";
 
 import { useAuth } from "@/lib/auth";
+import { useOrgSubscription } from "@/hooks/useOrgSubscription";
 import { PageHeader } from "@/components/common/PageHeader";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { EmptyState } from "@/components/common/EmptyState";
@@ -59,13 +60,16 @@ function TypeBadge({ type }: { type: "allowance" | "deduction" }) {
 
 export function SalaryComponentsManager() {
   const { user } = useAuth();
+  const { isLocked } = useOrgSubscription();
   const canManage = user?.org_role === "org_admin";
   const { t } = useTranslation();
   const qc = useQueryClient();
 
+  const [typeFilter, setTypeFilter] = useState<"all" | "allowance" | "deduction">("all");
+
   const listQ = useQuery({
-    queryKey: ["org-salary-components"],
-    queryFn: () => salaryComponentService.list(),
+    queryKey: ["org-salary-components", typeFilter],
+    queryFn: () => salaryComponentService.list(typeFilter === "all" ? undefined : typeFilter),
   });
 
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -141,12 +145,25 @@ export function SalaryComponentsManager() {
         title={t("payrollComponents.title")}
         description={t("payrollComponents.desc")}
         actions={
-          <Button size="sm" onClick={openCreate}>
-            <Plus className="mr-1.5 h-3.5 w-3.5" />{" "}
-            {t("payrollComponents.addComponent")}
+          <Button size="sm" disabled={isLocked} onClick={openCreate}>
+            {isLocked ? <Lock className="mr-1.5 h-3.5 w-3.5" /> : <Plus className="mr-1.5 h-3.5 w-3.5" />}
+            {isLocked ? "Subscription Required" : t("payrollComponents.addComponent")}
           </Button>
         }
       />
+
+      <div className="flex gap-2">
+        {(["all", "allowance", "deduction"] as const).map((opt) => (
+          <Button
+            key={opt}
+            size="sm"
+            variant={typeFilter === opt ? "default" : "outline"}
+            onClick={() => setTypeFilter(opt)}
+          >
+            {t(`payrollComponents.filter${opt.charAt(0).toUpperCase() + opt.slice(1)}`, opt === "all" ? "All" : opt === "allowance" ? "Allowances" : "Deductions")}
+          </Button>
+        ))}
+      </div>
 
       <Card className="border-border/70 shadow-none">
         <CardContent className="p-0">
@@ -165,12 +182,12 @@ export function SalaryComponentsManager() {
               <TableBody>
                 {(items ?? []).map((c, i) => (
                   <TableRow key={c.uuid} className={c.is_active ? undefined : "opacity-60"}>
-                    <TableCell className="w-10 text-muted-foreground">{i + 1}</TableCell>
-                    <TableCell className="font-medium text-foreground">{c.name}</TableCell>
-                    <TableCell>
+                    <TableCell data-label="S.No" className="w-10 text-muted-foreground">{i + 1}</TableCell>
+                    <TableCell data-label={t("payrollComponents.name")} className="font-medium text-foreground">{c.name}</TableCell>
+                    <TableCell data-label={t("payrollComponents.type")}>
                       <TypeBadge type={c.type} />
                     </TableCell>
-                    <TableCell>
+                    <TableCell data-label={t("payrollComponents.calculation")}>
                       <Badge
                         variant="outline"
                         className={
@@ -184,11 +201,11 @@ export function SalaryComponentsManager() {
                           : t("payrollComponents.fixedAmount")}
                       </Badge>
                     </TableCell>
-                    <TableCell>
+                    <TableCell data-label={t("payrollComponents.status")}>
                       <div className="flex items-center gap-2">
                         <Switch
                           checked={!!c.is_active}
-                          disabled={!canManage || toggleMut.isPending}
+                          disabled={isLocked || !canManage || toggleMut.isPending}
                           onCheckedChange={() => toggleMut.mutate(c.uuid)}
                         />
                         <span className="text-xs text-muted-foreground">
@@ -198,19 +215,20 @@ export function SalaryComponentsManager() {
                         </span>
                       </div>
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell data-label="Actions" className="text-right">
                       <div className="flex items-center justify-end gap-1">
-                        <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(c)}>
-                          <Pencil className="h-4 w-4" />
+                        <Button size="icon" variant="ghost" className="h-8 w-8" disabled={isLocked} onClick={() => openEdit(c)}>
+                          {isLocked ? <Lock className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
                         </Button>
                         {canManage ? (
                           <Button
                             size="icon"
                             variant="ghost"
                             className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                            disabled={isLocked}
                             onClick={() => setToDelete(c)}
                           >
-                            <Trash2 className="h-4 w-4" />
+                            {isLocked ? <Lock className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />}
                           </Button>
                         ) : null}
                       </div>

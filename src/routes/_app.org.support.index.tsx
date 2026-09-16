@@ -178,10 +178,10 @@ function OrgSupportPage() {
                         className="cursor-pointer"
                         onClick={() => navigate({ to: "/org/support/$uuid", params: { uuid: tk.uuid } })}
                       >
-                        <TableCell className="w-10 text-muted-foreground">
+                        <TableCell data-label="S.No" className="w-10 text-muted-foreground">
                           {(page - 1) * PAGE_SIZE + i + 1}
                         </TableCell>
-                        <TableCell>
+                        <TableCell data-label="Subject">
                           <button
                             type="button"
                             className="text-left text-sm font-medium text-foreground hover:underline"
@@ -193,13 +193,13 @@ function OrgSupportPage() {
                             {tk.description}
                           </div>
                         </TableCell>
-                        <TableCell className="whitespace-nowrap">
+                        <TableCell data-label="Priority" className="whitespace-nowrap">
                           <PriorityBadge priority={tk.priority} />
                         </TableCell>
-                        <TableCell className="whitespace-nowrap">
+                        <TableCell data-label="Status" className="whitespace-nowrap">
                           <StatusBadge status={tk.status} />
                         </TableCell>
-                        <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                        <TableCell data-label="Created" className="whitespace-nowrap text-sm text-muted-foreground">
                           {formatDateTime(tk.created_at)}
                         </TableCell>
                       </TableRow>

@@ -24,7 +24,7 @@ import { formatDateTime } from "@/lib/utils";
 import { adminSupportService, type SupportReply, type SupportTicket } from "@/services";
 
 export const Route = createFileRoute("/_app/admin/support/$uuid")({
-  head: () => ({ meta: [{ title: "Support Ticket — Dvarif Admin" }] }),
+  head: () => ({ meta: [{ title: "Support Ticket — Dverif Admin" }] }),
   component: AdminSupportDetailPage,
 });
 

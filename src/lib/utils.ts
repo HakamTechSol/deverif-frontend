@@ -52,6 +52,11 @@ export function formatCNIC(value: string): string {
   return `${digits.slice(0, 5)}-${digits.slice(5, 12)}-${digits.slice(12)}`;
 }
 
+/** Keep only digits from a raw input value (for phone/number fields). */
+export function digitsOnly(value: string): string {
+  return value.replace(/\D/g, "");
+}
+
 /** Inclusive calendar-day count between two date values (YYYY-MM-DD or ISO). */
 export function countDays(startDate: string, endDate: string): number {
   const s = startDate ? new Date(startDate.replace(" ", "T")) : new Date(NaN);

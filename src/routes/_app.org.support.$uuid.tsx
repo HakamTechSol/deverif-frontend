@@ -24,7 +24,7 @@ export const Route = createFileRoute("/_app/org/support/$uuid")({
       throw redirect({ to: "/dashboard" });
     }
   },
-  head: () => ({ meta: [{ title: "Support Ticket — Dvarif" }] }),
+  head: () => ({ meta: [{ title: "Support Ticket — Dverif" }] }),
   component: OrgSupportDetailPage,
 });
 

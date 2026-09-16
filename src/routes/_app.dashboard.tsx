@@ -8,6 +8,7 @@ import {
   Building2,
   Send,
   Users,
+  UserCheck,
   AlertTriangle,
   Clock,
   ShieldCheck,
@@ -20,12 +21,25 @@ import {
   CalendarCheck,
   Lock,
 } from "lucide-react";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
+} from "recharts";
 
 import { PageHeader } from "@/components/common/PageHeader";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { DvarifLoader } from "@/components/common/DvarifLoader";
-import { dashboardService } from "@/services";
+import { DverifLoader } from "@/components/common/DvarifLoader";
+import { dashboardService, type AdminAnalytics, type OrgDashboardAnalytics } from "@/services";
 import { useAuth } from "@/lib/auth";
 import { formatDate } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -37,18 +51,19 @@ import {
   attendanceService,
   orgLeavesService,
   orgAttendanceService,
+  orgSubscriptionService,
   type LeaveBalance,
   type SalaryRecord,
 } from "@/services";
 
 export const Route = createFileRoute("/_app/dashboard")({
-  head: () => ({ meta: [{ title: "Dashboard — Dvarif" }] }),
+  head: () => ({ meta: [{ title: "Dashboard — Dverif" }] }),
   component: DashboardPage,
 });
 
 type Stat = {
   label: string;
-  value: number;
+  value: number | string;
   icon: LucideIcon;
   href: string;
   hint?: string;
@@ -88,8 +103,18 @@ function SystemAdminDashboard() {
     retry: false,
   });
 
+  const analyticsQ = useQuery({
+    queryKey: ["dashboard", "admin", "analytics"],
+    queryFn: () => dashboardService.analytics(),
+    enabled: mounted,
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const analytics = analyticsQ.data;
+
   const data = q.data;
-  const adminStats: Stat[] = [
+  const adminStatsRow1: Stat[] = [
     {
       label: t("dashboard.totalUsers"),
       value: data?.total_users ?? 0,
@@ -105,11 +130,28 @@ function SystemAdminDashboard() {
       progress: data?.organizations_progress ?? 0,
     },
     {
+      label: t("dashboard.unmatchedOrgs"),
+      value: data?.total_admin_requests ?? 0,
+      icon: AlertTriangle,
+      href: "/admin/null-requests",
+      progress: data?.unmatched_progress ?? 100,
+      hint: t("dashboard.pendingAdminReview"),
+    },
+  ];
+
+  const adminStatsRow2: Stat[] = [
+    {
+      label: t("dashboard.totalRequests"),
+      value: data?.total_verification_requests ?? 0,
+      icon: Send,
+      href: "/admin/requests",
+      progress: data?.requests_progress ?? 0,
+    },
+    {
       label: t("dashboard.verifiedRequests"),
       value: data?.verified_requests ?? 0,
       icon: ShieldCheck,
       href: "/admin/requests",
-      progress: data?.requests_progress ?? 0,
     },
     {
       label: t("dashboard.unverifiedRequests"),
@@ -123,15 +165,48 @@ function SystemAdminDashboard() {
       icon: Eye,
       href: "/admin/requests",
     },
-    {
-      label: t("dashboard.unmatchedOrgs"),
-      value: data?.total_admin_requests ?? 0,
-      icon: AlertTriangle,
-      href: "/admin/null-requests",
-      progress: data?.unmatched_progress ?? 100,
-      hint: t("dashboard.pendingAdminReview"),
-    },
   ];
+
+  const renderStatCards = (stats: Stat[], isLoading: boolean, skeletonCount: number) => (
+    (isLoading ? Array.from({ length: skeletonCount }) : stats).map((raw, i) => {
+      const s = raw as Stat | undefined;
+      return (
+        <Card key={i} className="border-border/70 shadow-none">
+          <CardContent className="p-5">
+            {s ? (
+              <>
+                <div className="flex items-start justify-between">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary">
+                    <s.icon className="h-4 w-4" />
+                  </div>
+                  <Link
+                    to={s.href}
+                    className="inline-flex items-center gap-0.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+                  >
+                    {t("dashboard.viewAll")} <ArrowUpRight className="h-3 w-3" />
+                  </Link>
+                </div>
+                <div className="mt-5">
+                  <div className="text-2xl font-semibold tracking-tight text-foreground">
+                    {s.value.toLocaleString()}
+                  </div>
+                  <div className="mt-0.5 text-sm text-muted-foreground">{s.label}</div>
+                </div>
+                <Progress value={s.progress ?? 0} className="mt-4 h-1.5" />
+                {s.hint ? (
+                  <p className="mt-2 text-[11px] text-muted-foreground">{s.hint}</p>
+                ) : null}
+              </>
+            ) : (
+              <div className="flex h-[104px] items-center justify-center">
+                <DverifLoader size="sm" />
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      );
+    })
+  );
 
   return (
     <div>
@@ -140,45 +215,12 @@ function SystemAdminDashboard() {
         description={t("dashboard.adminOverviewSub")}
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {(q.isLoading ? Array.from({ length: adminStats.length }) : adminStats).map((raw, i) => {
-          const s = raw as Stat | undefined;
-          return (
-            <Card key={i} className="border-border/70 shadow-none">
-              <CardContent className="p-5">
-                {s ? (
-                  <>
-                    <div className="flex items-start justify-between">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary">
-                        <s.icon className="h-4 w-4" />
-                      </div>
-                      <Link
-                        to={s.href}
-                        className="inline-flex items-center gap-0.5 text-xs font-medium text-muted-foreground hover:text-foreground"
-                      >
-                        {t("dashboard.viewAll")} <ArrowUpRight className="h-3 w-3" />
-                      </Link>
-                    </div>
-                    <div className="mt-5">
-                      <div className="text-2xl font-semibold tracking-tight text-foreground">
-                        {s.value.toLocaleString()}
-                      </div>
-                      <div className="mt-0.5 text-sm text-muted-foreground">{s.label}</div>
-                    </div>
-                    <Progress value={s.progress ?? 0} className="mt-4 h-1.5" />
-                    {s.hint ? (
-                      <p className="mt-2 text-[11px] text-muted-foreground">{s.hint}</p>
-                    ) : null}
-                  </>
-                ) : (
-                  <div className="flex h-[104px] items-center justify-center">
-                    <DvarifLoader size="sm" />
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          );
-        })}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {renderStatCards(adminStatsRow1, q.isLoading, 3)}
+      </div>
+
+      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {renderStatCards(adminStatsRow2, q.isLoading, 4)}
       </div>
 
       {data?.upcoming_expirations && data.upcoming_expirations.length > 0 && (
@@ -215,7 +257,6 @@ function SystemAdminDashboard() {
                         <div className="text-sm font-medium text-foreground">{exp.name}</div>
                         <div className="text-xs text-muted-foreground">
                           {t("dashboard.expires")}: {formatDate(exp.subscription_expiry)}
-                          {exp.subscription_plan ? ` (${exp.subscription_plan})` : ""}
                         </div>
                       </div>
                     </div>
@@ -238,7 +279,213 @@ function SystemAdminDashboard() {
           </CardContent>
         </Card>
       )}
+
+      {analytics && (
+        <div className="mt-6 grid gap-6 lg:grid-cols-2">
+          <div className="lg:col-span-2">
+            <RequestsPerMonthChart data={analytics.requests_per_month} />
+          </div>
+          <div className="lg:col-span-2">
+            <OrgsPerMonthChart data={analytics.orgs_registered_per_month} />
+          </div>
+          <RequestStatusChart data={analytics.request_status_breakdown} />
+          <TopOrgsChart data={analytics.top_organizations_by_requests} />
+        </div>
+      )}
+
+      {!analytics && analyticsQ.isLoading && (
+        <div className="mt-6 grid gap-6 lg:grid-cols-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i} className="border-border/70 shadow-none">
+              <CardContent className="flex h-[300px] items-center justify-center">
+                <DverifLoader size="sm" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Chart helper: format "YYYY-MM" → "MMM YY"                          */
+/* ------------------------------------------------------------------ */
+const CHART_COLORS = {
+  primary: "hsl(var(--chart-1, 142 76% 36%))",
+  secondary: "hsl(var(--chart-2, 221 83% 53%))",
+  tertiary: "hsl(var(--chart-3, 47 100% 50%))",
+  quaternary: "hsl(var(--chart-4, 0 84% 60%))",
+};
+
+const PIE_COLORS = [
+  "hsl(var(--chart-1, 142 76% 36%))",
+  "hsl(var(--chart-2, 221 83% 53%))",
+  "hsl(var(--chart-3, 47 100% 50%))",
+  "hsl(var(--chart-4, 0 84% 60%))",
+];
+
+const STATUS_LABELS: Record<string, string> = {
+  verified: "Verified",
+  unverified: "Unverified",
+  under_review: "Under Review",
+};
+
+function formatMonth(month: string) {
+  const [y, m] = month.split("-");
+  const d = new Date(Number(y), Number(m) - 1, 1);
+  return d.toLocaleDateString(undefined, { month: "short", year: "2-digit" });
+}
+
+function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <Card className="border-border/70 shadow-none">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-semibold text-foreground">{title}</CardTitle>
+      </CardHeader>
+      <CardContent className="pt-0">{children}</CardContent>
+    </Card>
+  );
+}
+
+/* ─── Requests per Month (Bar) ─── */
+function RequestsPerMonthChart({ data }: { data: AdminAnalytics["requests_per_month"] }) {
+  const chartData = data.map((d) => ({ name: formatMonth(d.month), requests: d.count }));
+
+  return (
+    <ChartCard title="Requests per Month (Last 12 Months)">
+      <div className="h-[280px] w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={chartData} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
+            <XAxis dataKey="name" interval={0} tick={{ fontSize: 11 }} className="text-muted-foreground" />
+            <YAxis allowDecimals={false} tick={{ fontSize: 11 }} className="text-muted-foreground" />
+            <RechartsTooltip
+              contentStyle={{
+                backgroundColor: "hsl(var(--card))",
+                border: "1px solid hsl(var(--border))",
+                borderRadius: "0.5rem",
+                fontSize: 12,
+              }}
+            />
+            <Bar dataKey="requests" fill={CHART_COLORS.primary} radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </ChartCard>
+  );
+}
+
+/* ─── Request Status Breakdown (Pie/Donut) ─── */
+function RequestStatusChart({ data }: { data: AdminAnalytics["request_status_breakdown"] }) {
+  const total = data.reduce((s, d) => s + d.count, 0);
+  const chartData = data.map((d) => ({
+    name: STATUS_LABELS[d.status] ?? d.status,
+    value: d.count,
+    percent: total > 0 ? ((d.count / total) * 100).toFixed(1) : "0",
+  }));
+
+  return (
+    <ChartCard title="Request Status Breakdown">
+      <div className="h-[280px] w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={chartData}
+              cx="50%"
+              cy="45%"
+              innerRadius={55}
+              outerRadius={90}
+              paddingAngle={3}
+              dataKey="value"
+              nameKey="name"
+            >
+              {chartData.map((_entry, index) => (
+                <Cell key={index} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+              ))}
+            </Pie>
+            <RechartsTooltip
+              contentStyle={{
+                backgroundColor: "hsl(var(--card))",
+                border: "1px solid hsl(var(--border))",
+                borderRadius: "0.5rem",
+                fontSize: 12,
+              }}
+            />
+            <Legend
+              verticalAlign="bottom"
+              height={36}
+              formatter={(value: string) => value}
+            />
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
+    </ChartCard>
+  );
+}
+
+/* ─── New Organizations per Month (Bar) ─── */
+function OrgsPerMonthChart({ data }: { data: AdminAnalytics["orgs_registered_per_month"] }) {
+  const chartData = data.map((d) => ({ name: formatMonth(d.month), orgs: d.count }));
+
+  return (
+    <ChartCard title="New Organizations per Month (Last 12 Months)">
+      <div className="h-[280px] w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={chartData} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
+            <XAxis dataKey="name" tick={{ fontSize: 11 }} className="text-muted-foreground" />
+            <YAxis allowDecimals={false} tick={{ fontSize: 11 }} className="text-muted-foreground" />
+            <RechartsTooltip
+              contentStyle={{
+                backgroundColor: "hsl(var(--card))",
+                border: "1px solid hsl(var(--border))",
+                borderRadius: "0.5rem",
+                fontSize: 12,
+              }}
+            />
+            <Bar dataKey="orgs" fill={CHART_COLORS.secondary} radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </ChartCard>
+  );
+}
+
+/* ─── Top 10 Organizations by Requests (Horizontal Bar) ─── */
+function TopOrgsChart({ data }: { data: AdminAnalytics["top_organizations_by_requests"] }) {
+  const chartData = [...data].reverse().map((d) => ({
+    name: d.org_name.length > 20 ? d.org_name.slice(0, 20) + "…" : d.org_name,
+    requests: d.request_count,
+  }));
+
+  return (
+    <ChartCard title="Top 10 Organizations by Requests (Last 90 Days)">
+      <div className="h-[280px] w-full">
+        {chartData.length === 0 ? (
+          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+            No organization data yet
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={chartData} layout="vertical" margin={{ top: 5, right: 20, left: 10, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
+              <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} className="text-muted-foreground" />
+              <YAxis type="category" dataKey="name" width={140} tick={{ fontSize: 11 }} className="text-muted-foreground" />
+              <RechartsTooltip
+                contentStyle={{
+                  backgroundColor: "hsl(var(--card))",
+                  border: "1px solid hsl(var(--border))",
+                  borderRadius: "0.5rem",
+                  fontSize: 12,
+                }}
+              />
+              <Bar dataKey="requests" fill={CHART_COLORS.tertiary} radius={[0, 4, 4, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+    </ChartCard>
   );
 }
 
@@ -258,7 +505,17 @@ function OrgAdminDashboard({ firstName }: { firstName: string }) {
     retry: false,
   });
 
+  const analyticsQ = useQuery({
+    queryKey: ["org-dashboard-analytics"],
+    queryFn: () => dashboardService.orgAnalytics(),
+    enabled: mounted,
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  });
+
   const data = q.data;
+  const analytics = analyticsQ.data;
+
   const userStats: Stat[] = [
     {
       label: t("dashboard.myRequestsSent"),
@@ -287,6 +544,36 @@ function OrgAdminDashboard({ firstName }: { firstName: string }) {
     },
   ];
 
+  const hrStats: Stat[] = [
+    {
+      label: "Active Employees",
+      value: analytics?.active_employee_count ?? 0,
+      icon: Users,
+      href: "/org/team",
+    },
+    {
+      label: "Pending Leaves",
+      value: analytics?.pending_leave_requests_count ?? 0,
+      icon: ClipboardCheck,
+      href: "/org/leaves",
+    },
+    {
+      label: "Today's Attendance",
+      value: analytics
+        ? `${analytics.today_attendance.present} / ${analytics.today_attendance.total}`
+        : "— / —",
+      icon: UserCheck,
+      href: "/org/attendance",
+      hint: analytics ? `${analytics.today_attendance.total - analytics.today_attendance.present} absent` : undefined,
+    },
+    {
+      label: "This Month Payroll",
+      value: analytics ? `PKR ${analytics.this_month_payroll_total.toLocaleString()}` : "—",
+      icon: Wallet,
+      href: "/org/payroll",
+    },
+  ];
+
   return (
     <div>
       <PageHeader
@@ -294,6 +581,7 @@ function OrgAdminDashboard({ firstName }: { firstName: string }) {
         description={isLocked ? t("dashboard.lockedSub") : t("dashboard.trackSub")}
       />
 
+      {/* Verification request stats */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {(q.isLoading ? Array.from({ length: userStats.length }) : userStats).map((raw, i) => {
           const s = raw as Stat | undefined;
@@ -339,7 +627,7 @@ function OrgAdminDashboard({ firstName }: { firstName: string }) {
                   </>
                 ) : (
                   <div className="flex h-[104px] items-center justify-center">
-                    <DvarifLoader size="sm" />
+                    <DverifLoader size="sm" />
                   </div>
                 )}
               </CardContent>
@@ -347,7 +635,314 @@ function OrgAdminDashboard({ firstName }: { firstName: string }) {
           );
         })}
       </div>
+
+      {/* HR overview stats */}
+      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {(analyticsQ.isLoading ? Array.from({ length: hrStats.length }) : hrStats).map((raw, i) => {
+          const s = raw as Stat | undefined;
+          return (
+            <Card key={`hr-${i}`} className="border-border/70 shadow-none">
+              <CardContent className="p-5">
+                {s ? (
+                  <>
+                    <div className="flex items-start justify-between">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary">
+                        <s.icon className="h-4 w-4" />
+                      </div>
+                      <Link
+                        to={s.href}
+                        className="inline-flex items-center gap-0.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+                      >
+                        {t("dashboard.viewAll")} <ArrowUpRight className="h-3 w-3" />
+                      </Link>
+                    </div>
+                    <div className="mt-5">
+                      <div className="text-2xl font-semibold tracking-tight text-foreground">
+                        {typeof s.value === "string" ? s.value : s.value.toLocaleString()}
+                      </div>
+                      <div className="mt-0.5 text-sm text-muted-foreground">{s.label}</div>
+                    </div>
+                    {s.hint ? (
+                      <p className="mt-2 text-[11px] text-muted-foreground">{s.hint}</p>
+                    ) : null}
+                  </>
+                ) : (
+                  <div className="flex h-[104px] items-center justify-center">
+                    <DverifLoader size="sm" />
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
+      {/* Quota usage card */}
+      {analytics?.quota_status && (
+        <div className="mt-6">
+          <QuotaUsageCard quota={analytics.quota_status} />
+        </div>
+      )}
+
+      {/* Charts */}
+      {analytics && (
+        <div className="mt-6 grid gap-6 lg:grid-cols-2">
+          <div className="lg:col-span-2">
+            <OrgHeadcountChart data={analytics.headcount_by_department} />
+          </div>
+          <div className="lg:col-span-2">
+            <OrgAttendanceDonut data={analytics.today_attendance_breakdown} />
+          </div>
+          <div className="lg:col-span-2">
+            <OrgPayrollTrendChart data={analytics.monthly_payroll_trend} />
+          </div>
+          <div className="lg:col-span-2">
+            <OrgLeaveUtilChart data={analytics.leave_utilization} />
+          </div>
+        </div>
+      )}
+
+      {!analytics && analyticsQ.isLoading && (
+        <div className="mt-6 grid gap-6 lg:grid-cols-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Card key={`skeleton-${i}`} className="border-border/70 shadow-none">
+              <CardContent className="flex h-[300px] items-center justify-center">
+                <DverifLoader size="sm" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Org Admin — HR charts                                               */
+/* ------------------------------------------------------------------ */
+
+function QuotaUsageCard({ quota }: { quota: OrgDashboardAnalytics["quota_status"] }) {
+  if (!quota) return null;
+  const pct = quota.total_allowance > 0
+    ? Math.min(100, Math.round((quota.total_requests / quota.total_allowance) * 100))
+    : 0;
+  const exhausted = quota.total_requests >= quota.total_allowance;
+
+  return (
+    <Card className="border-border/70 shadow-none">
+      <CardContent className="p-5">
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-sm font-semibold text-foreground">Request Quota Usage</div>
+          <Badge variant={exhausted ? "destructive" : "default"} className="text-[11px]">
+            {exhausted ? "Exhausted" : `${quota.requests_remaining} left`}
+          </Badge>
+        </div>
+        <div className="flex items-center gap-4">
+          <div className="relative h-16 w-16 flex-shrink-0">
+            <svg className="h-16 w-16 -rotate-90" viewBox="0 0 64 64">
+              <circle cx="32" cy="32" r="28" fill="none" className="stroke-muted" strokeWidth="6" />
+              <circle
+                cx="32" cy="32" r="28" fill="none"
+                className={exhausted ? "stroke-destructive" : "stroke-primary"}
+                strokeWidth="6"
+                strokeDasharray={`${2 * Math.PI * 28}`}
+                strokeDashoffset={`${2 * Math.PI * 28 * (1 - pct / 100)}`}
+                strokeLinecap="round"
+              />
+            </svg>
+            <div className="absolute inset-0 flex items-center justify-center text-xs font-bold text-foreground">
+              {pct}%
+            </div>
+          </div>
+          <div className="flex-1 space-y-1 text-sm">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Used today</span>
+              <span className="font-medium tabular-nums">{quota.total_requests} / {quota.total_allowance}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Free daily</span>
+              <span className="tabular-nums">{quota.free_daily_requests}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Plan quota</span>
+              <span className="tabular-nums">{quota.plan_quota}</span>
+            </div>
+            {quota.plan.name && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Plan</span>
+                <span className="font-medium">{quota.plan.name}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function OrgHeadcountChart({ data }: { data: OrgDashboardAnalytics["headcount_by_department"] }) {
+  const chartData = data.map((d) => ({
+    name: d.department.length > 18 ? d.department.slice(0, 18) + "…" : d.department,
+    employees: d.count,
+  }));
+
+  return (
+    <ChartCard title="Headcount by Department">
+      <div className="h-[280px] w-full">
+        {chartData.length === 0 ? (
+          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+            No department data yet
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={chartData} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
+              <XAxis dataKey="name" tick={{ fontSize: 11 }} className="text-muted-foreground" />
+              <YAxis allowDecimals={false} tick={{ fontSize: 11 }} className="text-muted-foreground" />
+              <RechartsTooltip
+                contentStyle={{
+                  backgroundColor: "hsl(var(--card))",
+                  border: "1px solid hsl(var(--border))",
+                  borderRadius: "0.5rem",
+                  fontSize: 12,
+                }}
+              />
+              <Bar dataKey="employees" fill={CHART_COLORS.primary} radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+    </ChartCard>
+  );
+}
+
+function OrgAttendanceDonut({ data }: { data: OrgDashboardAnalytics["today_attendance_breakdown"] }) {
+  const chartData = [
+    { name: "Present", value: data.present },
+    { name: "Late", value: data.late },
+    { name: "Absent", value: data.absent },
+  ].filter((d) => d.value > 0);
+
+  return (
+    <ChartCard title="Today's Attendance">
+      <div className="h-[280px] w-full">
+        {data.total === 0 ? (
+          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+            No employees yet
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={chartData}
+                cx="50%"
+                cy="45%"
+                innerRadius={55}
+                outerRadius={90}
+                paddingAngle={3}
+                dataKey="value"
+                nameKey="name"
+              >
+                {chartData.map((_entry, index) => (
+                  <Cell key={index} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                ))}
+              </Pie>
+              <RechartsTooltip
+                contentStyle={{
+                  backgroundColor: "hsl(var(--card))",
+                  border: "1px solid hsl(var(--border))",
+                  borderRadius: "0.5rem",
+                  fontSize: 12,
+                }}
+              />
+              <Legend
+                verticalAlign="bottom"
+                height={36}
+                formatter={(value: string) => {
+                  const item = chartData.find((d) => d.name === value);
+                  const pct = data.total > 0 ? ((item?.value ?? 0) / data.total * 100).toFixed(0) : "0";
+                  return `${value} (${pct}%)`;
+                }}
+              />
+            </PieChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+    </ChartCard>
+  );
+}
+
+function OrgPayrollTrendChart({ data }: { data: OrgDashboardAnalytics["monthly_payroll_trend"] }) {
+  const chartData = data.map((d) => ({
+    name: formatMonth(d.month),
+    cost: Number(d.total),
+  }));
+
+  return (
+    <ChartCard title="Monthly Payroll Cost (Last 12 Months)">
+      <div className="h-[280px] w-full">
+        {chartData.length === 0 ? (
+          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+            No payroll data yet
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={chartData} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
+              <XAxis dataKey="name" tick={{ fontSize: 11 }} className="text-muted-foreground" />
+              <YAxis tick={{ fontSize: 11 }} className="text-muted-foreground" />
+              <RechartsTooltip
+                contentStyle={{
+                  backgroundColor: "hsl(var(--card))",
+                  border: "1px solid hsl(var(--border))",
+                  borderRadius: "0.5rem",
+                  fontSize: 12,
+                }}
+                formatter={(value: number) => [`PKR ${value.toLocaleString()}`, "Payroll"]}
+              />
+              <Bar dataKey="cost" fill={CHART_COLORS.secondary} radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+    </ChartCard>
+  );
+}
+
+function OrgLeaveUtilChart({ data }: { data: OrgDashboardAnalytics["leave_utilization"] }) {
+  const chartData = data.map((d) => ({
+    name: d.leave_type,
+    days: d.days_used,
+  }));
+
+  return (
+    <ChartCard title="Leave Utilization by Type (This Year)">
+      <div className="h-[280px] w-full">
+        {chartData.length === 0 ? (
+          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+            No approved leaves this year
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={chartData} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
+              <XAxis dataKey="name" tick={{ fontSize: 11 }} className="text-muted-foreground" />
+              <YAxis allowDecimals={false} tick={{ fontSize: 11 }} className="text-muted-foreground" />
+              <RechartsTooltip
+                contentStyle={{
+                  backgroundColor: "hsl(var(--card))",
+                  border: "1px solid hsl(var(--border))",
+                  borderRadius: "0.5rem",
+                  fontSize: 12,
+                }}
+                formatter={(value: number) => [`${value} days`, "Approved"]}
+              />
+              <Bar dataKey="days" fill={CHART_COLORS.tertiary} radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+    </ChartCard>
   );
 }
 
@@ -438,7 +1033,7 @@ function SubAdminDashboard() {
                   </>
                 ) : (
                   <div className="flex h-[104px] items-center justify-center">
-                    <DvarifLoader size="sm" />
+                    <DverifLoader size="sm" />
                   </div>
                 )}
               </CardContent>
@@ -518,7 +1113,7 @@ function EmployeeDashboard({ firstName }: { firstName: string }) {
             </div>
             {payslipQ.isLoading ? (
               <div className="flex h-[104px] items-center justify-center">
-                <DvarifLoader size="sm" />
+                <DverifLoader size="sm" />
               </div>
             ) : payslip ? (
               <>
@@ -557,7 +1152,7 @@ function EmployeeDashboard({ firstName }: { firstName: string }) {
             </div>
             {attendanceQ.isLoading ? (
               <div className="flex h-[104px] items-center justify-center">
-                <DvarifLoader size="sm" />
+                <DverifLoader size="sm" />
               </div>
             ) : (
               <>
@@ -590,7 +1185,7 @@ function EmployeeDashboard({ firstName }: { firstName: string }) {
             </div>
             {balancesQ.isLoading ? (
               <div className="flex h-[104px] items-center justify-center">
-                <DvarifLoader size="sm" />
+                <DverifLoader size="sm" />
               </div>
             ) : balances.length === 0 ? (
               <div className="mt-5 text-sm text-muted-foreground">

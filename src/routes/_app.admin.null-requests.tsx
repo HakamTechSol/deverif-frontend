@@ -1,6 +1,6 @@
 ﻿import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { CheckCircle2, ExternalLink, Eye, XCircle, Lock, Unlock } from "lucide-react";
 
@@ -9,6 +9,7 @@ import { SearchInput } from "@/components/common/SearchInput";
 import { EmptyState } from "@/components/common/EmptyState";
 import { Pagination } from "@/components/common/Pagination";
 import { StatusBadge } from "@/components/common/StatusBadge";
+import { SearchableSelect } from "@/components/common/SearchableSelect";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -25,13 +26,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Table,
   TableBody,
   TableCell,
@@ -44,7 +38,7 @@ import { adminService, type UnmatchedOrganization, type UnmatchedOrgDetail } fro
 import { formatDate, formatDateTime, resolveAssetUrl } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/admin/null-requests")({
-  head: () => ({ meta: [{ title: "Unmatched Organizations — Dvarif Admin" }] }),
+  head: () => ({ meta: [{ title: "Unmatched Organizations — Dverif Admin" }] }),
   component: NullRequestsPage,
 });
 
@@ -136,7 +130,6 @@ function NullRequestsPage() {
                       <TableHead className="whitespace-nowrap">Organization</TableHead>
                       <TableHead className="whitespace-nowrap">Email</TableHead>
                       <TableHead className="whitespace-nowrap">Phone</TableHead>
-                      <TableHead className="whitespace-nowrap">Requests</TableHead>
                       <TableHead className="whitespace-nowrap">Status</TableHead>
                       <TableHead className="whitespace-nowrap">First seen</TableHead>
                       <TableHead className="text-right whitespace-nowrap">Actions</TableHead>
@@ -145,22 +138,19 @@ function NullRequestsPage() {
                   <TableBody>
                     {items.map((org, i) => (
                       <TableRow key={org.uuid}>
-                        <TableCell className="w-10 text-muted-foreground">
+                        <TableCell data-label="S.No" className="w-10 text-muted-foreground">
                           {(page - 1) * 20 + i + 1}
                         </TableCell>
-                        <TableCell className="font-medium text-foreground whitespace-nowrap">
+                        <TableCell data-label="Organization" className="font-medium text-foreground whitespace-nowrap">
                           {org.name}
                         </TableCell>
-                        <TableCell className="text-muted-foreground whitespace-nowrap">
+                        <TableCell data-label="Email" className="text-muted-foreground whitespace-nowrap">
                           {org.email ?? "—"}
                         </TableCell>
-                        <TableCell className="text-muted-foreground whitespace-nowrap">
+                        <TableCell data-label="Phone" className="text-muted-foreground whitespace-nowrap">
                           {org.phone ?? "—"}
                         </TableCell>
-                        <TableCell className="whitespace-nowrap">
-                          <span className="font-medium">{org.request_count}</span>
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap">
+                        <TableCell data-label="Status" className="whitespace-nowrap">
                           <Badge
                             variant="outline"
                             className={`rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${statusStyles[org.status] ?? statusStyles.pending}`}
@@ -168,10 +158,10 @@ function NullRequestsPage() {
                             {org.status}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                        <TableCell data-label="First seen" className="text-xs text-muted-foreground whitespace-nowrap">
                           {formatDate(org.created_at)}
                         </TableCell>
-                        <TableCell className="text-right whitespace-nowrap">
+                        <TableCell data-label="Actions" className="text-right whitespace-nowrap">
                           <div className="flex items-center justify-end gap-1">
                             <Button
                               size="sm"
@@ -208,7 +198,14 @@ function NullRequestsPage() {
         </CardContent>
       </Card>
 
-      <UnmatchedOrgDetailDialog uuid={detailUuid} onClose={() => setDetailUuid(null)} onAssign={(org) => { setDetailUuid(null); setAssignOrg(org); }} />
+      <UnmatchedOrgDetailDialog
+        uuid={detailUuid}
+        onClose={() => setDetailUuid(null)}
+        onAssign={(org) => {
+          setDetailUuid(null);
+          setAssignOrg(org);
+        }}
+      />
       <AssignDialog unmatchedOrg={assignOrg} onClose={() => setAssignOrg(null)} />
     </div>
   );
@@ -332,8 +329,18 @@ function UnmatchedOrgDetailDialog({
                       </Badge>
                     </TableCell>
                   </TableRow>
+                  {org.assigned_organization && (
+                    <TableRow>
+                      <TableCell className="font-medium text-muted-foreground">
+                        Assigned to
+                      </TableCell>
+                      <TableCell className="font-medium text-foreground">
+                        {org.assigned_organization.name}
+                      </TableCell>
+                    </TableRow>
+                  )}
                   <TableRow>
-                    <TableCell className="font-medium text-muted-foreground">First seen</TableCell>
+                    <TableCell className="font-medium text-muted-foreground">Request Generated</TableCell>
                     <TableCell className="text-foreground">{formatDate(org.created_at)}</TableCell>
                   </TableRow>
                 </TableBody>
@@ -354,7 +361,7 @@ function UnmatchedOrgDetailDialog({
                         <TableHead className="whitespace-nowrap">Document</TableHead>
                         <TableHead className="whitespace-nowrap">Status</TableHead>
                         <TableHead className="whitespace-nowrap">Locked</TableHead>
-                        <TableHead className="whitespace-nowrap">Submitted</TableHead>
+
                         <TableHead className="text-right whitespace-nowrap">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -366,14 +373,14 @@ function UnmatchedOrgDetailDialog({
                         const isLocked = !!r.locked_by;
                         return (
                           <TableRow key={r.uuid}>
-                            <TableCell className="w-10 text-muted-foreground">{i + 1}</TableCell>
-                            <TableCell className="whitespace-nowrap">
+                            <TableCell data-label="S.No" className="w-10 text-muted-foreground">{i + 1}</TableCell>
+                            <TableCell data-label="Requester" className="whitespace-nowrap">
                               <div className="text-sm font-medium text-foreground">{r.requester_name ?? "—"}</div>
                               <div className="text-xs text-muted-foreground">{r.requester_email ?? ""}</div>
                             </TableCell>
-                            <TableCell className="text-sm text-muted-foreground whitespace-nowrap">{r.document_type}</TableCell>
-                            <TableCell className="whitespace-nowrap"><StatusBadge status={r.status} /></TableCell>
-                            <TableCell className="whitespace-nowrap">
+                            <TableCell data-label="Document" className="text-sm text-muted-foreground whitespace-nowrap">{r.document_type}</TableCell>
+                            <TableCell data-label="Status" className="whitespace-nowrap"><StatusBadge status={r.status} /></TableCell>
+                            <TableCell data-label="Locked" className="whitespace-nowrap">
                               {isLocked ? (
                                 <span className="inline-flex items-center gap-1 text-xs text-warning-foreground">
                                   <Lock className="h-3 w-3" /> {r.locked_by_name ?? "Locked"}
@@ -382,8 +389,8 @@ function UnmatchedOrgDetailDialog({
                                 <span className="text-xs text-muted-foreground">—</span>
                               )}
                             </TableCell>
-                            <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{formatDate(r.submitted_at)}</TableCell>
-                            <TableCell className="text-right whitespace-nowrap">
+                          
+                            <TableCell data-label="Actions" className="text-right whitespace-nowrap">
                               <div className="flex items-center justify-end gap-1">
                                 {docUrl && (
                                   <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground" asChild>
@@ -527,14 +534,36 @@ function AssignDialog({
     queryFn: () => adminService.organizations({ page: 1, limit: 100 }),
     enabled: !!unmatchedOrg,
   });
+  const detail = useQuery({
+    queryKey: ["null-org-detail", unmatchedOrg?.uuid],
+    queryFn: () => adminService.unmatchedOrgDetail(unmatchedOrg!.uuid),
+    enabled: !!unmatchedOrg,
+  });
   const [orgUuid, setOrgUuid] = useState<string>("");
   const [remarks, setRemarks] = useState("");
+
+  const excludeOrgUuids = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          (detail.data?.requests ?? [])
+            .map((r) => r.requester_org_uuid)
+            .filter((id): id is string => !!id),
+        ),
+      ),
+    [detail.data],
+  );
+
+  const availableOrgs = useMemo(
+    () => (orgs.data?.items ?? []).filter((o) => !excludeOrgUuids.includes(o.uuid)),
+    [orgs.data, excludeOrgUuids],
+  );
 
   const accept = useMutation({
     mutationFn: () =>
       adminService.acceptRequest(unmatchedOrg!.uuid, {
         verification_remarks: remarks,
-        issuing_organization_uuid: orgUuid as any,
+        issuing_organization_uuid: orgUuid,
       }),
     onSuccess: () => {
       toast.success("Organization assigned and requests routed");
@@ -561,18 +590,19 @@ function AssignDialog({
         <div className="space-y-4">
           <div className="space-y-2">
             <Label>Organization</Label>
-            <Select value={orgUuid} onValueChange={setOrgUuid}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select organization" />
-              </SelectTrigger>
-              <SelectContent>
-                {(orgs.data?.items ?? []).map((o) => (
-                  <SelectItem key={o.uuid} value={o.uuid}>
-                    {o.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              items={availableOrgs.map((o) => ({ value: o.uuid, label: o.name }))}
+              value={orgUuid}
+              onChange={setOrgUuid}
+              placeholder="Select organization"
+              searchPlaceholder="Search organization…"
+              emptyText="No eligible organizations found."
+            />
+            {excludeOrgUuids.length > 0 && (
+              <p className="text-xs text-muted-foreground">
+                The requesting organization is excluded from the list.
+              </p>
+            )}
           </div>
           <div className="space-y-2">
             <Label>Verification remarks</Label>

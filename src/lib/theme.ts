@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
 export type Theme = "light" | "dark";
-const KEY = "dvarif_theme";
+const KEY = "Dverif_theme";
 
 function apply(theme: Theme) {
   const root = document.documentElement;

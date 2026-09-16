@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { orgSubscriptionService, type SubscriptionStatusResponse } from "@/services";
 
 export const Route = createFileRoute("/_app/payment/callback")({
-  head: () => ({ meta: [{ title: "Payment status — Dvarif" }] }),
+  head: () => ({ meta: [{ title: "Payment status — Dverif" }] }),
   component: PaymentCallbackPage,
 });
 

@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { MoreVertical, Plus, ShieldCheck, ShieldOff, Trash2, Pencil } from "lucide-react";
+import { MoreVertical, Lock, Plus, ShieldCheck, ShieldOff, Trash2, Pencil } from "lucide-react";
 
 import { PageHeader } from "@/components/common/PageHeader";
 import { SearchInput } from "@/components/common/SearchInput";
@@ -40,8 +40,9 @@ import {
 } from "@/components/ui/table";
 import { TableSkeleton } from "./_app.requests";
 import { authStore } from "@/lib/auth";
+import { useOrgSubscription } from "@/hooks/useOrgSubscription";
 import { orgService, type OrgAdminUserRecord, type UUID } from "@/services";
-import { formatCNIC, parseFeatureAccess } from "@/lib/utils";
+import { digitsOnly, formatCNIC, parseFeatureAccess } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/org/admins")({
   beforeLoad: () => {
@@ -91,6 +92,7 @@ function apiErrorMessage(e: unknown, fallback: string) {
 function OrgAdminsPage() {
   const { t } = useTranslation();
   const qc = useQueryClient();
+  const { isLocked } = useOrgSubscription();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [openForm, setOpenForm] = useState(false);
@@ -145,11 +147,13 @@ function OrgAdminsPage() {
         actions={
           <Button
             size="sm"
+            disabled={isLocked}
             onClick={() => {
               setOpenForm(true);
             }}
           >
-            <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Sub-Admin
+            {isLocked ? <Lock className="mr-1.5 h-3.5 w-3.5" /> : <Plus className="mr-1.5 h-3.5 w-3.5" />}
+            {isLocked ? "Subscription Required" : "Add Sub-Admin"}
           </Button>
         }
       />
@@ -196,14 +200,14 @@ function OrgAdminsPage() {
                     const granted = ELEVATED_PERMISSIONS.filter((p) => perms[p.key]);
                     return (
                       <TableRow key={u.uuid}>
-                        <TableCell className="w-10 text-muted-foreground">
+                        <TableCell data-label="S.No" className="w-10 text-muted-foreground">
                           {(page - 1) * 10 + i + 1}
                         </TableCell>
-                        <TableCell>
+                        <TableCell data-label="Name">
                           <div className="font-medium text-foreground">{u.full_name}</div>
                           <div className="text-xs text-muted-foreground">{u.email}</div>
                         </TableCell>
-                        <TableCell>
+                        <TableCell data-label="Status">
                           <Badge
                             variant="outline"
                             className={
@@ -215,7 +219,7 @@ function OrgAdminsPage() {
                             {u.status === "inactive" ? "Invite pending" : "Active"}
                           </Badge>
                         </TableCell>
-                        <TableCell>
+                        <TableCell data-label="Permissions">
                           {granted.length === 0 ? (
                             <span className="text-xs text-muted-foreground">—</span>
                           ) : (
@@ -232,10 +236,10 @@ function OrgAdminsPage() {
                             </div>
                           )}
                         </TableCell>
-                        <TableCell className="text-muted-foreground">
+                        <TableCell data-label="Created" className="text-muted-foreground">
                           {u.created_at ? new Date(String(u.created_at).replace(" ", "T")).toLocaleDateString() : "—"}
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell data-label="Actions" className="text-right">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button size="icon" variant="ghost" className="h-8 w-8">
@@ -246,26 +250,32 @@ function OrgAdminsPage() {
                             <DropdownMenuLabel>Sub-admin actions</DropdownMenuLabel>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
+                              disabled={isLocked}
                               onClick={() => setEditing(u)}
                             >
-                              <Pencil className="mr-2 h-4 w-4" /> Edit Permissions
+                              {isLocked ? <Lock className="mr-2 h-4 w-4" /> : <Pencil className="mr-2 h-4 w-4" />}
+                              Edit Permissions
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
+                              disabled={isLocked}
                               className="text-destructive focus:text-destructive"
                               onClick={() =>
                                 setRevoking({ uuid: u.uuid, name: u.full_name, action: "demote" })
                               }
                             >
-                              <ShieldOff className="mr-2 h-4 w-4" /> Demote to Member
+                              {isLocked ? <Lock className="mr-2 h-4 w-4" /> : <ShieldOff className="mr-2 h-4 w-4" />}
+                              Demote to Member
                             </DropdownMenuItem>
                               <DropdownMenuItem
+                                disabled={isLocked}
                                 className="text-destructive focus:text-destructive"
                                 onClick={() =>
                                   setRevoking({ uuid: u.uuid, name: u.full_name, action: "deactivate" })
                                 }
                               >
-                                <Trash2 className="mr-2 h-4 w-4" /> Deactivate Account
+                                {isLocked ? <Lock className="mr-2 h-4 w-4" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                                Deactivate Account
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -318,7 +328,7 @@ function OrgAdminsPage() {
           setRevoking(null);
         }}
       />
-    </div>
+      </div>
   );
 }
 
@@ -501,7 +511,7 @@ function CreateSubAdminDialog({
             </div>
             <div className="space-y-1.5">
               <Label>Phone</Label>
-              <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone number" />
+              <Input value={phone} onChange={(e) => setPhone(digitsOnly(e.target.value))} placeholder="Phone number" />
               {errors.phone && <p className="text-xs text-destructive">{errors.phone}</p>}
             </div>
           </div>

@@ -6,7 +6,7 @@ import ur from "./locales/ur.json";
 export const SUPPORTED_LANGUAGES = ["en", "ur"] as const;
 export type Language = (typeof SUPPORTED_LANGUAGES)[number];
 
-const STORAGE_KEY = "dvarif_lang";
+const STORAGE_KEY = "Dverif_lang";
 
 function isLanguage(v: unknown): v is Language {
   return v === "en" || v === "ur";
@@ -17,7 +17,7 @@ export function detectLanguage(): Language {
   const stored = window.localStorage.getItem(STORAGE_KEY);
   if (isLanguage(stored)) return stored;
   try {
-    const raw = window.localStorage.getItem("dvarif_user");
+    const raw = window.localStorage.getItem("Dverif_user");
     const user = raw ? JSON.parse(raw) : null;
     if (isLanguage(user?.preferred_language)) return user.preferred_language;
   } catch {

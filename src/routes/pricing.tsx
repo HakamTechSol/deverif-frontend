@@ -16,11 +16,11 @@ import { marketingService } from "@/services";
 export const Route = createFileRoute("/pricing")({
   head: () => ({
     meta: [
-      { title: "Pricing — Dvarif" },
+      { title: "Pricing — Dverif" },
       {
         name: "description",
         content:
-          "Choose a Dvarif plan for your team. Every organization gets 1 free verification request per day.",
+          "Choose a Dverif plan for your team. Every organization gets 1 free verification request per day.",
       },
     ],
   }),
@@ -40,7 +40,7 @@ function PricingPage() {
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4">
           <div className="flex items-center gap-2 font-semibold text-foreground">
             <ShieldCheck className="h-5 w-5 text-primary" />
-            Dvarif
+            Dverif
           </div>
           <nav className="flex items-center gap-3">
             <Link to="/login" className="text-sm text-muted-foreground hover:text-foreground">
@@ -102,9 +102,16 @@ function PricingPage() {
                       1 free request per day (always included)
                     </li>
                     {(plan.features ?? []).map((f, i) => (
-                      <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
-                        <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" />
-                        {f}
+                      <li
+                        key={i}
+                        className={`flex items-start gap-2 text-sm ${
+                          f.highlight ? "font-semibold text-foreground" : "text-muted-foreground"
+                        }`}
+                      >
+                        <Check
+                          className={`mt-0.5 h-4 w-4 shrink-0 ${f.highlight ? "text-primary" : "text-success"}`}
+                        />
+                        {f.text}
                       </li>
                     ))}
                     {(plan.features ?? []).length === 0 && (
@@ -131,7 +138,7 @@ function PricingPage() {
       {/* Footer */}
       <footer className="border-t border-border">
         <div className="mx-auto max-w-5xl px-4 py-6 text-center text-xs text-muted-foreground">
-          © {new Date().getFullYear()} Dvarif — Document Verification Platform
+          © {new Date().getFullYear()} Dverif — Document Verification Platform
         </div>
       </footer>
     </div>

@@ -1,10 +1,11 @@
-import { createFileRoute, useSearch } from "@tanstack/react-router";
+﻿import { createFileRoute, useSearch } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Plus, Wallet, CreditCard, RefreshCw, Ban, Sparkles, Check, X, Layers, Pencil, Trash2, Power, ArrowUpRight, Clock } from "lucide-react";
+import { Plus, Wallet, Sparkles, Check, X, Layers, Pencil, Trash2, Power, ArrowUpRight, Clock, Star } from "lucide-react";
 
 import { PageHeader } from "@/components/common/PageHeader";
+import { SearchableSelect } from "@/components/common/SearchableSelect";
 import { SearchInput } from "@/components/common/SearchInput";
 import { Pagination } from "@/components/common/Pagination";
 import { EmptyState } from "@/components/common/EmptyState";
@@ -30,7 +31,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Table,
   TableBody,
@@ -40,20 +40,26 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { TableSkeleton } from "./_app.requests";
-import { adminService, type Organization, type CustomPlanRequest, type SubscriptionPlan, type SubscriptionCheckout } from "@/services";
+import {
+  adminService,
+  type CustomPlanRequest,
+  type SubscriptionPlan,
+  type SubscriptionCheckout,
+  type PlanFeature,
+} from "@/services";
 import { formatDate } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/admin/payments")({
   validateSearch: (search: Record<string, unknown>): { tab?: string } => ({
     tab: typeof search.tab === "string" ? search.tab : undefined,
   }),
-  head: () => ({ meta: [{ title: "Payments — Dvarif Admin" }] }),
+  head: () => ({ meta: [{ title: "Payments â€” Dverif Admin" }] }),
   component: AdminPaymentsPage,
 });
 
 function AdminPaymentsPage() {
   const search = useSearch({ from: "/_app/admin/payments" });
-  const initialTab = search.tab && ["history", "subscriptions", "self-subscriptions", "custom-plans", "plans"].includes(search.tab)
+  const initialTab = search.tab && ["history", "self-subscriptions", "custom-plans", "plans"].includes(search.tab)
     ? search.tab
     : "history";
 
@@ -61,16 +67,13 @@ function AdminPaymentsPage() {
     <div>
       <PageHeader
         title="Payments"
-        description="Review platform payments, record manual receipts, and manage organization subscriptions."
+        description="Review platform payments, record manual receipts, and track organization subscriptions."
       />
 
       <Tabs defaultValue={initialTab}>
-        <TabsList className="mb-4 grid w-full grid-cols-5 sm:inline-flex sm:w-auto">
+        <TabsList className="mb-4 grid w-full grid-cols-4 sm:inline-flex sm:w-auto">
           <TabsTrigger value="history">
             <Wallet className="mr-1.5 h-4 w-4" /> Payment History
-          </TabsTrigger>
-          <TabsTrigger value="subscriptions">
-            <CreditCard className="mr-1.5 h-4 w-4" /> Organization Subscriptions
           </TabsTrigger>
           <TabsTrigger value="self-subscriptions">
             <Clock className="mr-1.5 h-4 w-4" /> Self-subscriptions
@@ -85,10 +88,6 @@ function AdminPaymentsPage() {
 
         <TabsContent value="history">
           <PaymentHistoryTab />
-        </TabsContent>
-
-        <TabsContent value="subscriptions">
-          <OrgSubscriptionsTab />
         </TabsContent>
 
         <TabsContent value="self-subscriptions">
@@ -107,7 +106,7 @@ function AdminPaymentsPage() {
   );
 }
 
-/* ─────────── Payment History Tab ─────────── */
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Payment History Tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function PaymentHistoryTab() {
   const qc = useQueryClient();
   const [page, setPage] = useState(1);
@@ -142,7 +141,7 @@ function PaymentHistoryTab() {
               setSearch(v);
               setPage(1);
             }}
-            placeholder="Search reference or user…"
+            placeholder="Search reference or userâ€¦"
           />
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
             <Input
@@ -200,7 +199,7 @@ function PaymentHistoryTab() {
                     <TableCell className="w-10 text-muted-foreground">{(page - 1) * 10 + i + 1}</TableCell>
                     <TableCell data-label="Reference" className="font-mono text-xs">{p.transaction_reference}</TableCell>
                     <TableCell data-label="User" className="text-muted-foreground">
-                      {p.full_name ?? "—"}
+                      {p.full_name ?? "â€”"}
                       <div className="text-xs">{p.email}</div>
                     </TableCell>
                     <TableCell data-label="Method">
@@ -239,311 +238,7 @@ function PaymentHistoryTab() {
   );
 }
 
-/* ─────────── Organization Subscriptions Tab ─────────── */
-function OrgSubscriptionsTab() {
-  const qc = useQueryClient();
-  const [page, setPage] = useState(1);
-  const [search, setSearch] = useState("");
-  const [assignOrg, setAssignOrg] = useState<{ org: Organization; planUuid: string; amount: string } | null>(null);
-  const [cancelOrg, setCancelOrg] = useState<Organization | null>(null);
-
-  const list = useQuery({
-    queryKey: ["admin-orgs-subs", page, search],
-    queryFn: () => adminService.organizations({ page, limit: 10, search }),
-  });
-
-  const plansQuery = useQuery({
-    queryKey: ["admin-plans"],
-    queryFn: () => adminService.plans(),
-  });
-  // ALL plans from the subscription_plans table — standard (Plan A/B) AND
-  // custom plans (is_custom=1, e.g. "Custom Plan — HakamTechSol"). Custom
-  // plans carry their own price/quota and appear as assignable options below.
-  const assignablePlans = plansQuery.data?.items ?? [];
-
-  const setSub = useMutation({
-    mutationFn: ({
-      uuid,
-      plan_uuid,
-      amount,
-    }: {
-      uuid: string;
-      plan_uuid: string;
-      amount: number;
-    }) => adminService.setOrganizationSubscription(uuid, { plan_uuid, amount }),
-    onSuccess: (_, vars) => {
-      const label = assignablePlans.find((p) => p.uuid === vars.plan_uuid)?.name ?? "Plan";
-      toast.success(`Subscription set to ${label}`);
-      qc.invalidateQueries({ queryKey: ["admin-orgs-subs"] });
-      qc.invalidateQueries({ queryKey: ["admin-orgs"] });
-      qc.invalidateQueries({ queryKey: ["org-subscription"] });
-      qc.invalidateQueries({ queryKey: ["plan"] });
-    },
-    onError: (e: any) => toast.error(e?.response?.data?.message ?? "Failed to set subscription"),
-  });
-
-  const cancelSub = useMutation({
-    mutationFn: (uuid: string) => adminService.cancelOrganizationSubscription(uuid),
-    onSuccess: () => {
-      toast.success("Subscription cancelled");
-      setCancelOrg(null);
-      qc.invalidateQueries({ queryKey: ["admin-orgs-subs"] });
-      qc.invalidateQueries({ queryKey: ["admin-orgs"] });
-      qc.invalidateQueries({ queryKey: ["org-subscription"] });
-      qc.invalidateQueries({ queryKey: ["plan"] });
-    },
-    onError: (e: any) => toast.error(e?.response?.data?.message ?? "Failed to cancel subscription"),
-  });
-
-  const items = list.data?.items ?? [];
-
-  const subscriptionBadge = (org: Organization) => {
-    if (org.subscription_status === "active" && org.subscription_expiry) {
-      const expiryDate = new Date(String(org.subscription_expiry).replace(" ", "T"));
-      if (isNaN(expiryDate.getTime())) {
-        return (
-          <Badge className="rounded-full border-success/30 bg-success/10 text-success" variant="outline">
-            Active
-          </Badge>
-        );
-      }
-      const now = new Date();
-      const daysLeft = Math.max(0, Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
-      return (
-        <Badge className="rounded-full border-success/30 bg-success/10 text-success" variant="outline">
-          Active
-          <span className="ml-1 text-xs font-normal">({daysLeft}d left)</span>
-        </Badge>
-      );
-    }
-    if (org.subscription_status === "expired") {
-      return (
-        <Badge className="rounded-full border-destructive/30 bg-destructive/10 text-destructive" variant="outline">
-          Expired
-        </Badge>
-      );
-    }
-    return (
-      <Badge variant="outline" className="rounded-full text-muted-foreground">
-        None
-      </Badge>
-    );
-  };
-
-  const isActive = (org?: Organization) => org?.subscription_status === "active";
-
-  const openAssign = (org: Organization) => {
-    // Preselect the org's currently-active plan, if it exists in the list.
-    const current =
-      assignablePlans.find((p) => p.uuid === org.subscription_plan_name || p.id === org.subscription_plan_id)?.uuid ||
-      (org.subscription_plan_name && assignablePlans.find((p) => p.name === org.subscription_plan_name)?.uuid) ||
-      assignablePlans[0]?.uuid ||
-      "";
-    setAssignOrg({ org, planUuid: current, amount: "" });
-  };
-
-  const confirmAssign = () => {
-    if (!assignOrg || !assignOrg.planUuid) return;
-    const amt = Number(assignOrg.amount) || 0;
-    setSub.mutate({ uuid: assignOrg.org.uuid, plan_uuid: assignOrg.planUuid, amount: amt });
-    setAssignOrg(null);
-  };
-
-  return (
-    <Card className="border-border/70 shadow-none">
-      <CardContent className="p-0">
-        <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between">
-          <SearchInput
-            value={search}
-            onChange={(v) => {
-              setSearch(v);
-              setPage(1);
-            }}
-            placeholder="Search organizations…"
-          />
-        </div>
-        {list.isLoading ? (
-          <TableSkeleton />
-        ) : items.length === 0 ? (
-          <div className="p-6">
-            <EmptyState icon={CreditCard} title="No organizations" />
-          </div>
-        ) : (
-          <>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-10">S.No</TableHead>
-                  <TableHead>Organization</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Plan</TableHead>
-                  <TableHead>Expiry Date</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {items.map((org, i) => (
-                  <TableRow key={org.uuid}>
-                    <TableCell className="w-10 text-muted-foreground">{(page - 1) * 10 + i + 1}</TableCell>
-                    <TableCell data-label="Organization" className="font-medium text-foreground">{org.name}</TableCell>
-                    <TableCell data-label="Status">{subscriptionBadge(org)}</TableCell>
-                    <TableCell data-label="Plan" className="capitalize text-muted-foreground">
-                      {org.subscription_plan ?? "—"}
-                    </TableCell>
-                    <TableCell data-label="Expiry Date" className="text-xs text-muted-foreground">
-                      {org.subscription_expiry ? formatDate(org.subscription_expiry) : "—"}
-                    </TableCell>
-                    <TableCell data-label="Actions" className="text-right">
-                      <div className="flex flex-wrap items-center justify-start gap-1 sm:justify-end">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 text-xs"
-                          disabled={setSub.isPending || plansQuery.isLoading}
-                          onClick={() => openAssign(org)}
-                        >
-                          <Sparkles className="mr-1 h-3 w-3" />
-                          {isActive(org) ? "Change Plan" : "Assign Plan"}
-                        </Button>
-                        {isActive(org) && (
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            className="h-7 text-xs"
-                            disabled={cancelSub.isPending}
-                            onClick={() => setCancelOrg(org)}
-                          >
-                            <Ban className="mr-1 h-3 w-3" />
-                            Cancel
-                          </Button>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-            <Pagination
-              page={page}
-              total={list.data?.total ?? 0}
-              totalPages={list.data?.totalPages ?? 1}
-              onChange={setPage}
-            />
-          </>
-        )}
-      </CardContent>
-
-      {/* Change Plan dialog */}
-      <Dialog open={!!assignOrg} onOpenChange={(o) => !o && setAssignOrg(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>{isActive(assignOrg?.org) ? "Change plan" : "Assign plan"}</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            Assign a plan to{" "}
-            <span className="font-medium text-foreground">{assignOrg?.org.name}</span>. This will restart
-            the subscription from today.
-          </p>
-          <div className="space-y-3">
-            <div className="space-y-2">
-              <Label>Select plan</Label>
-              <RadioGroup
-                value={assignOrg?.planUuid}
-                onValueChange={(v) => setAssignOrg((prev) => (prev ? { ...prev, planUuid: v } : null))}
-              >
-                {assignablePlans.map((p) => {
-                  const isCustom = p.is_custom === 1;
-                  const isCurrent = assignOrg?.org.subscription_plan_id === p.id ||
-                    assignOrg?.org.subscription_plan_name === p.name;
-                  return (
-                    <div
-                      key={p.uuid}
-                      className={`flex items-start justify-between gap-3 rounded-lg border px-3 py-2.5 ${
-                        isCustom ? "border-primary/40 bg-primary/5" : "border-border"
-                      }`}
-                    >
-                      <label className="flex cursor-pointer items-start gap-3" htmlFor={`plan-${p.uuid}`}>
-                        <RadioGroupItem value={p.uuid} id={`plan-${p.uuid}`} className="mt-0.5" />
-                        <span>
-                          <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                            {p.name}
-                            {isCustom && (
-                              <Badge variant="outline" className="rounded-full text-primary">
-                                Custom
-                              </Badge>
-                            )}
-                            {isCurrent && (
-                              <Badge variant="outline" className="rounded-full text-success">
-                                Current
-                              </Badge>
-                            )}
-                          </span>
-                          <span className="mt-0.5 block text-xs text-muted-foreground">
-                            Rs. {p.monthly_price?.toLocaleString()} / month · {p.daily_request_quota?.toLocaleString()} requests/day
-                            {p.billing_period ? ` · ${p.billing_period === "monthly" ? "Monthly" : "Yearly"} billing` : " · Monthly billing"}
-                          </span>
-                        </span>
-                      </label>
-                    </div>
-                  );
-                })}
-              </RadioGroup>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="assign-amount">Amount received (Rs.) — optional</Label>
-              <Input
-                id="assign-amount"
-                type="number"
-                min="0"
-                placeholder="Leave empty if no payment"
-                value={assignOrg?.amount ?? ""}
-                onChange={(e) => setAssignOrg((prev) => (prev ? { ...prev, amount: e.target.value } : null))}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAssignOrg(null)}>
-              Cancel
-            </Button>
-            <Button onClick={confirmAssign} disabled={setSub.isPending || !assignOrg?.planUuid}>
-              {setSub.isPending ? "Assigning…" : "Assign plan"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Cancel subscription dialog */}
-      <Dialog open={!!cancelOrg} onOpenChange={(o) => !o && setCancelOrg(null)}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Cancel subscription?</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            This will cancel the subscription for{" "}
-            <span className="font-medium text-foreground">{cancelOrg?.name}</span>. Their access will end
-            immediately and they will need a new subscription to create or verify requests.
-          </p>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCancelOrg(null)}>
-              Go back
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => {
-                if (cancelOrg) cancelSub.mutate(cancelOrg.uuid);
-              }}
-              disabled={cancelSub.isPending}
-            >
-              {cancelSub.isPending ? "Cancelling…" : "Cancel subscription"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </Card>
-  );
-}
-
-/* ─────────── Add Manual Payment Dialog ─────────── */
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Add Manual Payment Dialog â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function PaymentFormDialog({
   open,
   onOpenChange,
@@ -559,7 +254,19 @@ function PaymentFormDialog({
     enabled: open,
   });
 
-  const [userUuid, setUserUuid] = useState("");
+  // Only organizations that already have users (assigned) show up here; each
+  // org keeps the UUID of its first user for the payment record.
+  const orgs = Array.from(
+    (users.data?.items ?? []).reduce((map, u) => {
+      if (u.organization_uuid && u.organization_name && !map.has(u.organization_uuid)) {
+        map.set(u.organization_uuid, { name: u.organization_name, userUuid: u.uuid });
+      }
+      return map;
+    }, new Map<string, { name: string; userUuid: string }>()).entries(),
+    ([uuid, o]) => ({ uuid, ...o })
+  );
+
+  const [org, setOrg] = useState<{ uuid: string; name: string; userUuid: string } | null>(null);
   const [amount, setAmount] = useState<string>("");
   const [method, setMethod] = useState<"jazzcash" | "easypaisa" | "manual">("manual");
   const [ref, setRef] = useState("");
@@ -567,12 +274,12 @@ function PaymentFormDialog({
   const [submitting, setSubmitting] = useState(false);
 
   const submit = async () => {
-    if (!userUuid || !amount || !ref || !purpose)
+    if (!org || !amount || !ref || !purpose)
       return toast.error("All fields are required");
     setSubmitting(true);
     try {
       await adminService.createPayment({
-        user_uuid: userUuid,
+        user_uuid: org.userUuid,
         amount: Number(amount),
         payment_method: method,
         transaction_reference: ref,
@@ -595,20 +302,14 @@ function PaymentFormDialog({
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label>User</Label>
-            <Select value={userUuid} onValueChange={setUserUuid}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select user" />
-              </SelectTrigger>
-              <SelectContent>
-                {(users.data?.items ?? []).map((u) => (
-                  <SelectItem key={u.uuid} value={u.uuid}>
-                    {u.organization_name ?? u.full_name}
-                    <span className="ml-1 text-muted-foreground">({u.full_name})</span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label>Organization</Label>
+            <SearchableSelect
+              items={orgs.map((o) => ({ value: o.uuid, label: o.name }))}
+              value={org?.uuid ?? ""}
+              onChange={(v) => setOrg(orgs.find((o) => o.uuid === v) ?? null)}
+              placeholder="Select organization"
+              searchPlaceholder="Search organization…"
+            />
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-2">
@@ -659,7 +360,7 @@ function PaymentFormDialog({
   );
 }
 
-/* ─────────── Self-subscriptions Tab ─────────── */
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Self-subscriptions Tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function SelfSubscriptionTab() {
   const [status, setStatus] = useState<"pending" | "completed" | "failed" | "expired" | "cancelled" | "all">("all");
   const [page, setPage] = useState(1);
@@ -689,6 +390,38 @@ function SelfSubscriptionTab() {
     }
   };
 
+  const orgStatusBadge = (c: SubscriptionCheckout) => {
+    if (c.subscription_status === "active" && c.subscription_expiry) {
+      const expiryDate = new Date(String(c.subscription_expiry).replace(" ", "T"));
+      if (!isNaN(expiryDate.getTime())) {
+        const daysLeft = Math.max(0, Math.ceil((expiryDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+        return (
+          <Badge variant="outline" className="rounded-full border-success/30 bg-success/10 text-success">
+            Active
+            <span className="ml-1 text-xs font-normal">({daysLeft}d left)</span>
+          </Badge>
+        );
+      }
+      return (
+        <Badge variant="outline" className="rounded-full border-success/30 bg-success/10 text-success">
+          Active
+        </Badge>
+      );
+    }
+    if (c.subscription_status === "expired") {
+      return (
+        <Badge variant="outline" className="rounded-full border-destructive/30 bg-destructive/10 text-destructive">
+          Expired
+        </Badge>
+      );
+    }
+    return (
+      <Badge variant="outline" className="rounded-full text-muted-foreground">
+        None
+      </Badge>
+    );
+  };
+
   return (
     <Card className="border-border/70 shadow-none">
       <CardContent className="p-6">
@@ -697,8 +430,8 @@ function SelfSubscriptionTab() {
           <h3 className="text-sm font-semibold text-foreground">Self-subscriptions</h3>
         </div>
         <p className="mb-4 text-xs text-muted-foreground">
-          Organizations that subscribed directly through the Safepay gateway. Each row is a self-service
-          checkout initiated by an org admin.
+          All Safepay/gateway subscriptions for organizations. Each row is a self-service checkout
+          initiated by an org admin; the Org Status column shows each organization's current subscription state.
         </p>
 
         <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -734,6 +467,7 @@ function SelfSubscriptionTab() {
                     <TableHead>Gateway</TableHead>
                     <TableHead>Amount</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Org Status</TableHead>
                     <TableHead>Date</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -741,15 +475,16 @@ function SelfSubscriptionTab() {
                   {list.data.items.map((c: SubscriptionCheckout, i: number) => (
                     <TableRow key={c.uuid}>
                       <TableCell className="w-10 text-muted-foreground">{(page - 1) * 10 + i + 1}</TableCell>
-                      <TableCell className="font-medium">{c.organization_name ?? "—"}</TableCell>
-                      <TableCell className="capitalize">{c.plan_name ?? "—"}</TableCell>
-                      <TableCell className="capitalize text-muted-foreground">{c.gateway ?? "—"}</TableCell>
+                      <TableCell className="font-medium">{c.organization_name ?? "â€”"}</TableCell>
+                      <TableCell className="capitalize">{c.plan_name ?? "â€”"}</TableCell>
+                      <TableCell className="capitalize text-muted-foreground">{c.gateway ?? "â€”"}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">
                         {c.amount != null
                           ? `Rs. ${Number(c.amount).toLocaleString()}${c.currency ? ` ${c.currency}` : ""}`
-                          : "—"}
+                          : "â€”"}
                       </TableCell>
                       <TableCell>{checkoutBadge(c.status)}</TableCell>
+                      <TableCell>{orgStatusBadge(c)}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">
                         {formatDate(c.completed_at ?? c.created_at)}
                       </TableCell>
@@ -771,7 +506,7 @@ function SelfSubscriptionTab() {
   );
 }
 
-/* ─────────── Custom Plan Requests Tab ─────────── */
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Custom Plan Requests Tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function CustomPlanRequestsTab() {
   const qc = useQueryClient();
   const [status, setStatus] = useState<"pending" | "approved" | "denied" | "all">("pending");
@@ -816,8 +551,8 @@ function CustomPlanRequestsTab() {
   });
 
   const openApprove = (r: CustomPlanRequest) => {
-    setDailyQuota(String(r.approved_daily_quota ?? ""));
-    setPrice(String(r.approved_price ?? ""));
+    setDailyQuota(String(r.requested_quota ?? r.approved_daily_quota ?? ""));
+    setPrice(String(r.requested_price ?? r.approved_price ?? ""));
     setApproveTarget(r);
   };
 
@@ -868,8 +603,9 @@ function CustomPlanRequestsTab() {
                   <TableHead>Organization</TableHead>
                   <TableHead>Requested by</TableHead>
                   <TableHead>Message</TableHead>
+                  <TableHead>Requested quota / budget</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Quota / Price</TableHead>
+                  <TableHead>Approved quota / price</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -877,11 +613,25 @@ function CustomPlanRequestsTab() {
                 {list.data.items.map((r: CustomPlanRequest, i: number) => (
                   <TableRow key={r.uuid}>
                     <TableCell className="w-10 text-muted-foreground">{i + 1}</TableCell>
-                    <TableCell className="font-medium">{r.organization_name ?? "—"}</TableCell>
+                    <TableCell className="font-medium">{r.organization_name ?? "â€”"}</TableCell>
                     <TableCell className="text-xs text-muted-foreground">
-                      {r.requested_by_name ?? "—"}
+                      {r.requested_by_name ?? "â€”"}
                     </TableCell>
                     <TableCell className="max-w-xs truncate text-muted-foreground">{r.message}</TableCell>
+                    <TableCell className="text-xs">
+                      {r.requested_quota != null ? (
+                        <span className="font-medium text-foreground">
+                          {r.requested_quota}/day
+                          {r.requested_price != null && (
+                            <span className="font-normal text-muted-foreground">
+                              {" "}Â· Rs. {Number(r.requested_price).toLocaleString()}
+                            </span>
+                          )}
+                        </span>
+                      ) : (
+                        "â€”"
+                      )}
+                    </TableCell>
                     <TableCell>
                       <Badge
                         variant="outline"
@@ -898,8 +648,8 @@ function CustomPlanRequestsTab() {
                     </TableCell>
                     <TableCell className="text-xs">
                       {r.approved_daily_quota
-                        ? `${r.approved_daily_quota}/day · Rs. ${Number(r.approved_price ?? 0).toLocaleString()}`
-                        : "—"}
+                        ? `${r.approved_daily_quota}/day Â· Rs. ${Number(r.approved_price ?? 0).toLocaleString()}`
+                        : "â€”"}
                     </TableCell>
                     <TableCell className="text-right">
                       {r.status === "pending" ? (
@@ -918,7 +668,7 @@ function CustomPlanRequestsTab() {
                           </Button>
                         </div>
                       ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
+                        <span className="text-xs text-muted-foreground">â€”</span>
                       )}
                     </TableCell>
                   </TableRow>
@@ -937,7 +687,23 @@ function CustomPlanRequestsTab() {
           <div className="space-y-4">
             <div className="rounded-md border border-border bg-muted/40 p-3 text-xs">
               <div className="font-medium text-foreground">{approveTarget?.organization_name}</div>
-              <div className="mt-1 text-muted-foreground">{approveTarget?.message}</div>
+              {(approveTarget?.requested_quota != null || approveTarget?.requested_price != null) && (
+                <div className="mt-1 text-muted-foreground">
+                  Requested:{" "}
+                  {approveTarget?.requested_quota != null && (
+                    <span className="text-foreground">{approveTarget.requested_quota}/day</span>
+                  )}
+                  {approveTarget?.requested_price != null && (
+                    <span className="text-foreground">
+                      {approveTarget?.requested_quota != null ? " Â· " : ""}
+                      Rs. {Number(approveTarget.requested_price).toLocaleString()}
+                    </span>
+                  )}
+                </div>
+              )}
+              {approveTarget?.message && (
+                <div className="mt-1 text-muted-foreground">{approveTarget.message}</div>
+              )}
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-2">
@@ -963,7 +729,7 @@ function CustomPlanRequestsTab() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setApproveTarget(null)}>Cancel</Button>
             <Button onClick={confirmApprove} disabled={approve.isPending}>
-              {approve.isPending ? "Approving…" : "Approve plan"}
+              {approve.isPending ? "Approvingâ€¦" : "Approve plan"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -972,7 +738,7 @@ function CustomPlanRequestsTab() {
   );
 }
 
-/* ─────────── Plans Tab (admin-managed public plans) ─────────── */
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Plans Tab (admin-managed public plans) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function PlansTab() {
   const qc = useQueryClient();
   const [openForm, setOpenForm] = useState(false);
@@ -984,7 +750,7 @@ function PlansTab() {
   const [quota, setQuota] = useState<string>("");
   const [billingPeriod, setBillingPeriod] = useState<"monthly" | "yearly">("monthly");
   const [description, setDescription] = useState("");
-  const [features, setFeatures] = useState("");
+  const [features, setFeatures] = useState<PlanFeature[]>([]);
   const [isPublic, setIsPublic] = useState(true);
 
   const list = useQuery({
@@ -1034,7 +800,7 @@ function PlansTab() {
     setQuota("");
     setBillingPeriod("monthly");
     setDescription("");
-    setFeatures("");
+    setFeatures([]);
     setIsPublic(true);
     setOpenForm(true);
   };
@@ -1046,7 +812,13 @@ function PlansTab() {
     setQuota(String(p.daily_request_quota ?? ""));
     setBillingPeriod(p.billing_period ?? "monthly");
     setDescription(p.description ?? "");
-    setFeatures((p.features ?? []).join("\n"));
+    setFeatures(
+      (p.features ?? []).map((f) =>
+        typeof f === "string"
+          ? { text: f, highlight: false }
+          : { text: f.text, highlight: !!f.highlight },
+      ),
+    );
     setIsPublic(p.is_public === 1);
     setOpenForm(true);
   };
@@ -1063,7 +835,9 @@ function PlansTab() {
       daily_request_quota: q,
       billing_period: billingPeriod,
       description: description.trim() || null,
-      features: features.split("\n").map((s) => s.trim()).filter(Boolean),
+      features: features
+        .map((f) => ({ text: f.text.trim(), highlight: !!f.highlight }))
+        .filter((f) => f.text),
       is_public: isPublic ? 1 : 0,
     });
   };
@@ -1200,13 +974,56 @@ function PlansTab() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Features (one per line)</Label>
-              <Textarea
-                value={features}
-                onChange={(e) => setFeatures(e.target.value)}
-                placeholder={"50 requests/day\nEmail support"}
-                rows={3}
-              />
+              <Label>Features</Label>
+              <div className="space-y-2">
+                {features.map((f, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <Input
+                      value={f.text}
+                      onChange={(e) =>
+                        setFeatures(
+                          features.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)),
+                        )
+                      }
+                      placeholder="e.g. 50 requests/day"
+                    />
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant={f.highlight ? "default" : "outline"}
+                      className="h-9 w-9 shrink-0"
+                      title={f.highlight ? "Remove highlight" : "Highlight on pricing page"}
+                      onClick={() =>
+                        setFeatures(
+                          features.map((x, j) => (j === i ? { ...x, highlight: !x.highlight } : x)),
+                        )
+                      }
+                    >
+                      <Star className={`h-4 w-4 ${f.highlight ? "fill-current" : ""}`} />
+                    </Button>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="h-9 w-9 shrink-0 text-muted-foreground"
+                      onClick={() => setFeatures(features.filter((_, j) => j !== i))}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setFeatures([...features, { text: "", highlight: false }])}
+              >
+                <Plus className="mr-1 h-3.5 w-3.5" /> Add feature
+              </Button>
+              <p className="text-xs text-muted-foreground">
+                Star a feature to show it bold (highlighted) on the pricing page.
+              </p>
             </div>
             <div className="flex items-center justify-between rounded-md border border-border bg-muted/40 p-3">
               <div>
@@ -1219,7 +1036,7 @@ function PlansTab() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpenForm(false)}>Cancel</Button>
             <Button onClick={submitSave} disabled={save.isPending}>
-              {save.isPending ? "Saving…" : editing ? "Save changes" : "Create plan"}
+              {save.isPending ? "Savingâ€¦" : editing ? "Save changes" : "Create plan"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1243,7 +1060,7 @@ function PlansTab() {
               disabled={remove.isPending}
               onClick={() => deleteTarget && remove.mutate(deleteTarget.uuid)}
             >
-              {remove.isPending ? "Deleting…" : "Delete plan"}
+              {remove.isPending ? "Deletingâ€¦" : "Delete plan"}
             </Button>
           </DialogFooter>
         </DialogContent>

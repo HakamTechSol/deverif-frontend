@@ -56,7 +56,7 @@ import { TableSkeleton } from "./_app.requests";
 import { formatDateTime, formatDate, apiErrorMessage } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/admin/leads")({
-  head: () => ({ meta: [{ title: "Leads — Dvarif Admin" }] }),
+  head: () => ({ meta: [{ title: "Leads — Dverif Admin" }] }),
   component: AdminLeadsPage,
 });
 
@@ -261,20 +261,20 @@ function ContactLeadRow({
   return (
     <Fragment>
       <TableRow className="cursor-pointer" onClick={() => setExpanded(!expanded)}>
-        <TableCell className="w-10 text-muted-foreground">{serial}</TableCell>
-        <TableCell className="font-medium">{lead.name}</TableCell>
-        <TableCell className="text-muted-foreground">{lead.email}</TableCell>
-        <TableCell className="text-muted-foreground">{lead.phone ?? "—"}</TableCell>
-        <TableCell className="max-w-xs truncate text-muted-foreground">
+        <TableCell data-label="S.No" className="w-10 text-muted-foreground">{serial}</TableCell>
+        <TableCell data-label="Name" className="font-medium">{lead.name}</TableCell>
+        <TableCell data-label="Email" className="text-muted-foreground">{lead.email}</TableCell>
+        <TableCell data-label="Phone" className="text-muted-foreground">{lead.phone ?? "—"}</TableCell>
+        <TableCell data-label="Message" className="max-w-xs truncate text-muted-foreground">
           {lead.message ?? "—"}
         </TableCell>
-        <TableCell onClick={(e) => e.stopPropagation()}>
+        <TableCell data-label="Status" onClick={(e) => e.stopPropagation()}>
           <StatusBadge status={lead.status} />
         </TableCell>
-        <TableCell className="max-w-[200px] truncate text-xs text-muted-foreground">
+        <TableCell data-label="Latest Note" className="max-w-[200px] truncate text-xs text-muted-foreground">
           {lead.latest_note ?? "—"}
         </TableCell>
-        <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+        <TableCell data-label="Date" className="whitespace-nowrap text-xs text-muted-foreground">
           {formatDate(lead.created_at)}
         </TableCell>
         <TableCell>
@@ -555,19 +555,19 @@ function AccessRequestRow({
   return (
     <Fragment>
       <TableRow className="cursor-pointer" onClick={() => setExpanded(!expanded)}>
-        <TableCell className="w-10 text-muted-foreground">{serial}</TableCell>
-        <TableCell className="font-medium">{req.organization_name}</TableCell>
-        <TableCell className="text-muted-foreground">{req.contact_name}</TableCell>
-        <TableCell className="text-muted-foreground">{req.email}</TableCell>
-        <TableCell className="text-muted-foreground">{req.phone ?? "—"}</TableCell>
-        <TableCell className="text-muted-foreground">{req.company_size ?? "—"}</TableCell>
-        <TableCell onClick={(e) => e.stopPropagation()}>
+        <TableCell data-label="S.No" className="w-10 text-muted-foreground">{serial}</TableCell>
+        <TableCell data-label="Organization" className="font-medium">{req.organization_name}</TableCell>
+        <TableCell data-label="Contact" className="text-muted-foreground">{req.contact_name}</TableCell>
+        <TableCell data-label="Email" className="text-muted-foreground">{req.email}</TableCell>
+        <TableCell data-label="Phone" className="text-muted-foreground">{req.phone ?? "—"}</TableCell>
+        <TableCell data-label="Company Size" className="text-muted-foreground">{req.company_size ?? "—"}</TableCell>
+        <TableCell data-label="Status" onClick={(e) => e.stopPropagation()}>
           <StatusBadge status={req.status} />
         </TableCell>
-        <TableCell className="max-w-[200px] truncate text-xs text-muted-foreground">
+        <TableCell data-label="Latest Note" className="max-w-[200px] truncate text-xs text-muted-foreground">
           {req.latest_note ?? "—"}
         </TableCell>
-        <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+        <TableCell data-label="Date" className="whitespace-nowrap text-xs text-muted-foreground">
           {formatDate(req.created_at)}
         </TableCell>
         <TableCell>

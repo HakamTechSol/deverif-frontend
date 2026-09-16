@@ -1,7 +1,7 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
-import { DvarifLoader } from "@/components/common/DvarifLoader";
+import { DverifLoader } from "@/components/common/DvarifLoader";
 
 import logoFull from "@/assets/logo-full.png";
 import { Button } from "@/components/ui/button";
@@ -12,8 +12,8 @@ import { authService } from "@/services";
 export const Route = createFileRoute("/reset-password")({
   head: () => ({
     meta: [
-      { title: "Reset password — Dvarif" },
-      { name: "description", content: "Choose a new password for your Dvarif account." },
+      { title: "Reset password — Dverif" },
+      { name: "description", content: "Choose a new password for your Dverif account." },
     ],
   }),
   component: ResetPasswordPage,
@@ -54,7 +54,7 @@ function ResetPasswordPage() {
         <div className="mb-8 flex justify-center">
           <img
             src={logoFull}
-            alt="Dvarif"
+            alt="Dverif"
             className="h-12 w-auto object-contain dark:invert dark:brightness-0"
           />
         </div>
@@ -75,7 +75,7 @@ function ResetPasswordPage() {
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? (
                 <>
-                  <DvarifLoader size="xs" className="mr-2" /> Updating…
+                  <DverifLoader size="xs" className="mr-2" /> Updating…
                 </>
               ) : (
                 "Update password"

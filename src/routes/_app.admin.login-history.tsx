@@ -31,7 +31,7 @@ import { TableSkeleton } from "./_app.requests";
 import { formatDateTime } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/admin/login-history")({
-  head: () => ({ meta: [{ title: "Login History — Dvarif Admin" }] }),
+  head: () => ({ meta: [{ title: "Login History — Dverif Admin" }] }),
   component: AdminLoginHistoryPage,
 });
 
@@ -174,24 +174,24 @@ function AdminLoginHistoryPage() {
                 <TableBody>
                   {items.map((entry, i) => (
                     <TableRow key={entry.uuid}>
-                      <TableCell className="w-10 text-muted-foreground">
+                      <TableCell data-label="S.No" className="w-10 text-muted-foreground">
                         {(page - 1) * 20 + i + 1}
                       </TableCell>
-                      <TableCell>
+                      <TableCell data-label="User">
                         <div className="flex flex-col">
                           <span className="font-medium">{entry.full_name || "—"}</span>
                           <span className="text-xs text-muted-foreground">{entry.email || "—"}</span>
                         </div>
                       </TableCell>
-                      <TableCell>{typeBadge(entry.identity_type)}</TableCell>
-                      <TableCell>{successBadge(entry.success)}</TableCell>
-                      <TableCell className="font-mono text-xs text-muted-foreground">
+                      <TableCell data-label="Type">{typeBadge(entry.identity_type)}</TableCell>
+                      <TableCell data-label="Status">{successBadge(entry.success)}</TableCell>
+                      <TableCell data-label="IP Address" className="font-mono text-xs text-muted-foreground">
                         {entry.ip_address || "—"}
                       </TableCell>
-                      <TableCell className="max-w-[200px] truncate text-xs text-muted-foreground" title={entry.user_agent || ""}>
+                      <TableCell data-label="User Agent" className="max-w-[200px] truncate text-xs text-muted-foreground" title={entry.user_agent || ""}>
                         {entry.user_agent || "—"}
                       </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
+                      <TableCell data-label="Date & Time" className="text-xs text-muted-foreground">
                         {formatDateTime(entry.login_at)}
                       </TableCell>
                     </TableRow>

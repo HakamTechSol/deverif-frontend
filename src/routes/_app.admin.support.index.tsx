@@ -160,13 +160,13 @@ function AdminSupportPage() {
                           navigate({ to: "/admin/support/$uuid", params: { uuid: tk.uuid } })
                         }
                       >
-                        <TableCell className="w-10 text-muted-foreground">
+                        <TableCell data-label="S.No" className="w-10 text-muted-foreground">
                           {(page - 1) * PAGE_SIZE + i + 1}
                         </TableCell>
-                        <TableCell className="whitespace-nowrap text-sm text-foreground">
+                        <TableCell data-label="Organization" className="whitespace-nowrap text-sm text-foreground">
                           {tk.organization_name ?? "—"}
                         </TableCell>
-                        <TableCell className="whitespace-nowrap">
+                        <TableCell data-label="Raised by" className="whitespace-nowrap">
                           <div className="text-sm font-medium text-foreground">
                             {tk.raised_by_name ?? "—"}
                           </div>
@@ -174,7 +174,7 @@ function AdminSupportPage() {
                             {tk.raised_by_email ?? ""}
                           </div>
                         </TableCell>
-                        <TableCell>
+                        <TableCell data-label="Subject">
                           <button
                             type="button"
                             className="text-left text-sm font-medium text-foreground hover:underline"
@@ -185,13 +185,13 @@ function AdminSupportPage() {
                             {tk.subject}
                           </button>
                         </TableCell>
-                        <TableCell className="whitespace-nowrap">
+                        <TableCell data-label="Priority" className="whitespace-nowrap">
                           <PriorityBadge priority={tk.priority} />
                         </TableCell>
-                        <TableCell className="whitespace-nowrap">
+                        <TableCell data-label="Status" className="whitespace-nowrap">
                           <StatusBadge status={tk.status} />
                         </TableCell>
-                        <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                        <TableCell data-label="Updated at" className="whitespace-nowrap text-sm text-muted-foreground">
                           {formatDateTime(tk.updated_at)}
                         </TableCell>
                       </TableRow>

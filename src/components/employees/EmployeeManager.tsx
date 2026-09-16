@@ -1,8 +1,8 @@
-﻿import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { Contact, Eye, FileUp, Mail, MoreVertical, Plus, RefreshCw, Trash2, Upload, X } from "lucide-react";
+import { Contact, Eye, FileUp, Lock, Mail, Plus, RefreshCw, Trash2 } from "lucide-react";
 
 import { useAuth } from "@/lib/auth";
 import { PageHeader } from "@/components/common/PageHeader";
@@ -10,6 +10,7 @@ import { SearchInput } from "@/components/common/SearchInput";
 import { Pagination } from "@/components/common/Pagination";
 import { EmptyState } from "@/components/common/EmptyState";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
+import { EmployeeDocPicker, type StagedDoc } from "@/components/employees/EmployeeDocPicker";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -22,12 +23,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
   Select,
   SelectContent,
@@ -45,7 +40,7 @@ import {
 } from "@/components/ui/table";
 import { TableSkeleton } from "@/routes/_app.requests";
 import { adminService, orgService, type EmployeeDocument, type EmployeeRecord, type ManagedOption, type Organization, type UUID } from "@/services";
-import { formatCNIC, formatDate, formatFileSize, resolveAssetUrl } from "@/lib/utils";
+import { digitsOnly, formatCNIC, formatDate, formatFileSize, resolveAssetUrl } from "@/lib/utils";
 
 type EmployeeApi = {
   list: (params: { page?: number; limit?: number; search?: string }) => Promise<{
@@ -120,6 +115,7 @@ export function EmployeeManager({
   description,
   emptyTitle,
   emptyDescription,
+  locked,
 }: {
   api: EmployeeApi;
   queryKey: string;
@@ -128,6 +124,7 @@ export function EmployeeManager({
   description: string;
   emptyTitle: string;
   emptyDescription: string;
+  locked?: boolean;
 }) {
   const { user } = useAuth();
   const qc = useQueryClient();
@@ -173,12 +170,14 @@ export function EmployeeManager({
         actions={
           <Button
             size="sm"
+            disabled={locked}
             onClick={() => {
               setEditing(null);
               setOpenForm(true);
             }}
           >
-            <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Employee
+            {locked ? <Lock className="mr-1.5 h-3.5 w-3.5" /> : <Plus className="mr-1.5 h-3.5 w-3.5" />}
+            {locked ? "Subscription Required" : "Add Employee"}
           </Button>
         }
       />
@@ -192,7 +191,7 @@ export function EmployeeManager({
                 setSearch(v);
                 setPage(1);
               }}
-              placeholder="Search by name, email, CNIC, designation or department…"
+              placeholder="Search by name, email, CNIC, designation or department�"
             />
           </div>
 
@@ -221,12 +220,12 @@ export function EmployeeManager({
                 <TableBody>
                   {items.map((emp, i) => (
                     <TableRow key={emp.uuid}>
-                      <TableCell className="w-10 text-muted-foreground">
+                      <TableCell data-label="S.No" className="w-10 text-muted-foreground">
                         {(page - 1) * 10 + i + 1}
                       </TableCell>
-                      <TableCell>
+                      <TableCell data-label="Name">
                         <div className="font-medium text-foreground">{emp.full_name}</div>
-                        <div className="text-xs text-muted-foreground">{emp.email ?? "—"}</div>
+                        <div className="text-xs text-muted-foreground">{emp.email ?? "�"}</div>
                         {(() => {
                           const st = inviteStatus(emp);
                           if (st.kind === "none" || st.kind === "used") return null;
@@ -247,18 +246,18 @@ export function EmployeeManager({
                           );
                         })()}
                       </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {emp.designation ?? "—"}
+                      <TableCell data-label="Designation" className="text-muted-foreground">
+                        {emp.designation ?? "�"}
                       </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {emp.department ?? "—"}
+                      <TableCell data-label="Department" className="text-muted-foreground">
+                        {emp.department ?? "�"}
                       </TableCell>
-                      <TableCell>
+                      <TableCell data-label="Status">
                         <Badge variant="outline" className={statusBadgeClass(emp.status)}>
                           {statusLabel(emp.status)}
                         </Badge>
                       </TableCell>
-                      <TableCell>
+                      <TableCell data-label="Platform User">
                         <Badge
                           variant="outline"
                           className={
@@ -270,7 +269,7 @@ export function EmployeeManager({
                           {emp.is_platform_user === "yes" ? "Yes" : "No"}
                         </Badge>
                       </TableCell>
-                      <TableCell>
+                      <TableCell data-label="Org Role">
                         {emp.is_platform_user === "yes" && emp.linked_user_role ? (
                           <Badge
                             variant="outline"
@@ -287,14 +286,14 @@ export function EmployeeManager({
                                 : "Member"}
                           </Badge>
                         ) : (
-                          <span className="text-muted-foreground">—</span>
+                          <span className="text-muted-foreground">�</span>
                         )}
                       </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {emp.added_by_name ?? "—"}
+                      <TableCell data-label="Added By" className="text-muted-foreground">
+                        {emp.added_by_name ?? "�"}
                       </TableCell>
-                      <TableCell className="text-right">
-                        <div className="inline-flex items-center justify-end gap-1">
+                      <TableCell data-label="Actions" className="text-right">
+                        <div className="flex items-center justify-end gap-1">
                           {(() => {
                             const st = inviteStatus(emp);
                             if (st.kind === "active" || st.kind === "expired") {
@@ -304,31 +303,28 @@ export function EmployeeManager({
                                   size="sm"
                                   className="h-7 whitespace-nowrap px-2 text-xs"
                                   onClick={() => resendInviteMut.mutate(emp.uuid)}
-                                  disabled={resendInviteMut.isPending}
+                                  disabled={locked || resendInviteMut.isPending}
                                 >
-                                  <RefreshCw className="mr-1 h-3 w-3" />
+                                  {locked ? <Lock className="mr-1 h-3 w-3" /> : <RefreshCw className="mr-1 h-3 w-3" />}
                                   Resend
                                 </Button>
                               );
                             }
                             return null;
                           })()}
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button size="icon" variant="ghost" className="h-8 w-8">
-                                <MoreVertical className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-44">
-                              <DropdownMenuItem
-                                onClick={() =>
-                                  navigate({ to: "/org/team/$uuid", params: { uuid: emp.uuid } })
-                                }
-                              >
-                                <Eye className="mr-2 h-4 w-4" /> View
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                                                    <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8"
+                            onClick={() =>
+                              navigate({ to: "/org/team/$uuid", params: { uuid: emp.uuid } })
+                            }
+                            aria-label={`View ${emp.full_name}`}
+                            title="View employee"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -428,23 +424,32 @@ function EmployeeFormDialog({
     enabled: !!editing?.uuid && open,
   });
 
-  const [docFiles, setDocFiles] = useState<File[]>([]);
-  const [docType, setDocType] = useState("");
+  const [stagedDocs, setStagedDocs] = useState<StagedDoc[]>([]);
   const uploadDocsMut = useMutation({
-    mutationFn: (files: File[]) => {
-      const fd = new FormData();
-      files.forEach((f) => fd.append("documents", f));
-      if (docType.trim()) fd.append("document_type", docType.trim());
-      return orgService.employeeDocuments.upload(editing!.uuid, fd);
+    mutationFn: async () => {
+      for (const d of stagedDocs) {
+        const fd = new FormData();
+        fd.append("documents", d.file);
+        if (d.name.trim()) fd.append("document_type", d.name.trim());
+        await orgService.employeeDocuments.upload(editing!.uuid, fd);
+      }
     },
     onSuccess: () => {
-      setDocFiles([]);
-      setDocType("");
+      setStagedDocs([]);
       docsQ.refetch();
       toast.success("Documents uploaded");
     },
     onError: (e) => toast.error(apiErrorMessage(e, "Upload failed")),
   });
+
+  const uploadStagedDocs = async (employeeUuid: string) => {
+    for (const d of stagedDocs) {
+      const fd = new FormData();
+      fd.append("documents", d.file);
+      if (d.name.trim()) fd.append("document_type", d.name.trim());
+      await orgService.employeeDocuments.upload(employeeUuid, fd);
+    }
+  };
   const deleteDocMut = useMutation({
     mutationFn: (uuid: UUID) => orgService.employeeDocuments.remove(uuid),
     onSuccess: () => {
@@ -494,11 +499,8 @@ function EmployeeFormDialog({
       }
       if (isEdit) {
         await api.update(editing.uuid, data);
-        if (docFiles.length) {
-          const fd = new FormData();
-          docFiles.forEach((f) => fd.append("documents", f));
-          if (docType.trim()) fd.append("document_type", docType.trim());
-          await orgService.employeeDocuments.upload(editing.uuid, fd);
+        if (stagedDocs.length) {
+          await uploadStagedDocs(editing.uuid);
         }
         toast.success("Employee updated");
       } else {
@@ -507,15 +509,11 @@ function EmployeeFormDialog({
         if (createdRes?._email_warning) toast.warning(createdRes._email_warning);
         else if (form.email.trim()) toast.success("Employee created. Set-password email sent to " + form.email.trim() + ".");
         else toast.success("Employee created");
-        if (docFiles.length && newUuid) {
-          const fd = new FormData();
-          docFiles.forEach((f) => fd.append("documents", f));
-          if (docType.trim()) fd.append("document_type", docType.trim());
-          await orgService.employeeDocuments.upload(newUuid, fd);
+        if (stagedDocs.length && newUuid) {
+          await uploadStagedDocs(newUuid);
         }
       }
-      setDocFiles([]);
-      setDocType("");
+      setStagedDocs([]);
       onDone();
     } catch (err) {
       toast.error(apiErrorMessage(err, "Save failed"));
@@ -532,29 +530,31 @@ function EmployeeFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="max-h-[85vh] max-w-[95vw] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{isEdit ? "Edit Employee" : "Add Employee"}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-2">
-          <div className="space-y-1.5">
-            <Label>Full Name *</Label>
-            <Input
-              value={form.full_name}
-              onChange={(e) => setForm({ ...form, full_name: e.target.value })}
-              placeholder="Enter full name"
-            />
-            {errors.full_name && <p className="text-xs text-destructive">{errors.full_name}</p>}
-          </div>
-          <div className="space-y-1.5">
-            <Label>CNIC {isEdit ? "" : "*"}</Label>
-            <Input
-              value={isEdit ? formatCNIC(form.cnic) : form.cnic}
-              onChange={(e) => setForm({ ...form, cnic: isEdit ? form.cnic : formatCNICInput(e.target.value) })}
-              placeholder="XXXXX-XXXXXXX-X"
-              disabled={isEdit}
-            />
-            {errors.cnic && <p className="text-xs text-destructive">{errors.cnic}</p>}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label>Full Name *</Label>
+              <Input
+                value={form.full_name}
+                onChange={(e) => setForm({ ...form, full_name: e.target.value })}
+                placeholder="Enter full name"
+              />
+              {errors.full_name && <p className="text-xs text-destructive">{errors.full_name}</p>}
+            </div>
+            <div className="space-y-1.5">
+              <Label>CNIC {isEdit ? "" : "*"}</Label>
+              <Input
+                value={isEdit ? formatCNIC(form.cnic) : form.cnic}
+                onChange={(e) => setForm({ ...form, cnic: isEdit ? form.cnic : formatCNICInput(e.target.value) })}
+                placeholder="XXXXX-XXXXXXX-X"
+                disabled={isEdit}
+              />
+              {errors.cnic && <p className="text-xs text-destructive">{errors.cnic}</p>}
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
@@ -576,7 +576,7 @@ function EmployeeFormDialog({
               <Label>Phone</Label>
               <Input
                 value={form.phone}
-                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                onChange={(e) => setForm({ ...form, phone: digitsOnly(e.target.value) })}
                 placeholder="Phone number"
               />
             </div>
@@ -602,22 +602,6 @@ function EmployeeFormDialog({
               />
             </div>
           </div>
-          {!isEdit && (
-            <div className="space-y-1.5">
-              <Label>Current Salary</Label>
-              <Input
-                type="number"
-                min={0}
-                step="0.01"
-                value={form.current_salary}
-                onChange={(e) => setForm({ ...form, current_salary: e.target.value })}
-                placeholder="0.00"
-              />
-              <p className="text-xs text-muted-foreground">
-                Captured as this employee's starting salary on their salary history.
-              </p>
-            </div>
-          )}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
@@ -664,18 +648,36 @@ function EmployeeFormDialog({
               </Select>
             </div>
           </div>
-          <div className="space-y-1.5">
-            <Label>Status (Lifecycle)</Label>
-            <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v as EmployeeRecord["status"] })}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {STATUS_OPTIONS.map((s) => (
-                  <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="grid grid-cols-2 gap-4">
+            {!isEdit && (
+              <div className="space-y-1.5">
+                <Label>Current Salary</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={form.current_salary}
+                  onChange={(e) => setForm({ ...form, current_salary: e.target.value })}
+                  placeholder="0.00"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Captured as this employee's starting salary on their salary history.
+                </p>
+              </div>
+            )}
+            <div className="space-y-1.5">
+              <Label>Status (Lifecycle)</Label>
+              <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v as EmployeeRecord["status"] })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {STATUS_OPTIONS.map((s) => (
+                    <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           {canSelectOrg && (
             <div className="space-y-1.5">
@@ -698,73 +700,25 @@ function EmployeeFormDialog({
             </div>
           )}
 
-          <div className="space-y-2 rounded-lg border border-border p-3">
+          <div className="space-y-2 rounded-lg border border-border p-3 max-w-full">
             <div className="flex items-center justify-between">
               <Label className="text-sm font-medium">Documents</Label>
               <span className="text-xs text-muted-foreground">
-                Multiple files, each up to 10MB
+                Each file up to 10MB
               </span>
             </div>
-            <div className="space-y-1.5">
-              {isEdit && (
-                <Input
-                  type="text"
-                  value={docType}
-                  onChange={(e) => setDocType(e.target.value)}
-                  placeholder="Document type (optional, e.g. CNIC, Contract)"
-                  className="text-sm"
-                />
-              )}
-              <Input
-                type="file"
-                accept=".pdf,image/jpeg,image/png,image/webp,.doc,.docx,.xls,.xlsx,.txt,.csv,.zip"
-                multiple
-                onChange={(e) => {
-                  const picked = Array.from(e.target.files ?? []);
-                  setDocFiles((prev) => [...prev, ...picked]);
-                  e.target.value = "";
-                }}
-                className="text-sm"
-              />
-              {docFiles.length > 0 && (
-                <div className="space-y-1.5">
-                  {docFiles.map((f, idx) => (
-                    <div key={idx} className="flex items-center justify-between rounded-md border border-border px-2 py-1.5 text-sm">
-                      <span className="flex min-w-0 items-center gap-2">
-                        <FileUp className="h-4 w-4 shrink-0 text-muted-foreground" />
-                        <span className="truncate">{f.name}</span>
-                        <span className="shrink-0 text-xs text-muted-foreground">{formatFileSize(f.size)}</span>
-                      </span>
-                      <Button
-                        type="button"
-                        size="icon"
-                        variant="ghost"
-                        className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                        onClick={() => setDocFiles((prev) => prev.filter((_, i) => i !== idx))}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
-                  {!isEdit && (
-                    <p className="text-xs text-muted-foreground">
-                      {docFiles.length} file(s) selected — they will be uploaded after you save the employee.
-                    </p>
-                  )}
-                  {isEdit && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => uploadDocsMut.mutate(docFiles)}
-                      loading={uploadDocsMut.isPending}
-                    >
-                      <Upload className="mr-1.5 h-3.5 w-3.5" /> Upload {docFiles.length} file(s)
-                    </Button>
-                  )}
-                </div>
-              )}
-            </div>
+            <EmployeeDocPicker
+              docs={stagedDocs}
+              onChange={setStagedDocs}
+              onUpload={isEdit ? () => uploadDocsMut.mutate() : undefined}
+              uploading={uploadDocsMut.isPending}
+              note={
+                !isEdit && stagedDocs.length > 0
+                  ? `${stagedDocs.length} doc(s) selected — they will be uploaded after you save the employee.`
+                  : undefined
+              }
+              className="max-w-full"
+            />
             {isEdit && (
               <div className="space-y-1.5">
                 {docsQ.isLoading && <p className="text-xs text-muted-foreground">Loading documents…</p>}
@@ -774,14 +728,20 @@ function EmployeeFormDialog({
                       href={resolveAssetUrl(doc.file_path)}
                       target="_blank"
                       rel="noreferrer"
-                      className="flex min-w-0 items-center gap-2 truncate text-primary hover:underline"
+                      className="flex min-w-0 flex-1 items-center gap-2 text-primary hover:underline"
                     >
-                      <FileUp className="h-4 w-4 shrink-0" />
-                      <span className="truncate">{doc.file_name}</span>
+                      <FileUp className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <span className="min-w-0 flex-1 truncate">
+                        {doc.document_type && (
+                          <>
+                            <span className="font-medium">{doc.document_type}</span>
+                            <span className="mx-1 text-muted-foreground">—</span>
+                          </>
+                        )}
+                        {doc.file_name}
+                      </span>
                       {doc.file_size ? (
-                        <span className="ml-1 shrink-0 text-xs text-muted-foreground">({formatFileSize(doc.file_size)})</span>
-                      ) : doc.document_type ? (
-                        <span className="ml-1 shrink-0 text-xs text-muted-foreground">({doc.document_type})</span>
+                        <span className="shrink-0 text-xs text-muted-foreground">({formatFileSize(doc.file_size)})</span>
                       ) : null}
                     </a>
                     {canDelete ? (
@@ -914,6 +874,7 @@ function ManageOptionsDialog({
     </Dialog>
   );
 }
+
 
 
 

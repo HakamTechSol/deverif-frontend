@@ -32,7 +32,7 @@ import { TableSkeleton } from "./_app.requests";
 import { formatDateTime } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/admin/activity-logs")({
-  head: () => ({ meta: [{ title: "Activity Logs — Dvarif Admin" }] }),
+  head: () => ({ meta: [{ title: "Activity Logs — Dverif Admin" }] }),
   component: AdminActivityLogsPage,
 });
 
@@ -490,16 +490,16 @@ function AdminActivityLogsPage() {
                     return (
                       <Fragment key={entry.uuid}>
                         <TableRow>
-                          <TableCell className="w-10 text-muted-foreground">
+                          <TableCell data-label="S.No" className="w-10 text-muted-foreground">
                             {(page - 1) * 20 + i + 1}
                           </TableCell>
-                          <TableCell>
+                          <TableCell data-label="Activity">
                             <div className="flex flex-wrap items-center gap-2 leading-snug">
                               <span>{describeEntry(entry, details)}</span>
                               {actorBadge(entry.actor_role)}
                             </div>
                           </TableCell>
-                          <TableCell
+                          <TableCell data-label="IP Address"
                             className="font-mono text-xs text-muted-foreground"
                             title={
                               entry.ip_address === "::1"
@@ -509,7 +509,7 @@ function AdminActivityLogsPage() {
                           >
                             {formatIp(entry.ip_address)}
                           </TableCell>
-                          <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                          <TableCell data-label="Date & Time" className="whitespace-nowrap text-xs text-muted-foreground">
                             {formatDateTime(entry.created_at)}
                           </TableCell>
                           <TableCell>

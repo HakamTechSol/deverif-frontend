@@ -34,7 +34,7 @@ import { adminService, type VerificationRequest } from "@/services";
 import { formatDate, formatDateTime, resolveAssetUrl } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/admin/unresponsive")({
-  head: () => ({ meta: [{ title: "Unresponsive Requests — Dvarif Admin" }] }),
+  head: () => ({ meta: [{ title: "Unresponsive Requests — Dverif Admin" }] }),
   component: UnresponsivePage,
 });
 
@@ -120,10 +120,10 @@ function UnresponsivePage() {
                         : null;
                       return (
                         <TableRow key={r.uuid}>
-                          <TableCell className="w-10 text-muted-foreground">
+                          <TableCell data-label="S.No" className="w-10 text-muted-foreground">
                             {(page - 1) * 20 + i + 1}
                           </TableCell>
-                          <TableCell className="whitespace-nowrap">
+                          <TableCell data-label="Requester" className="whitespace-nowrap">
                             <div className="text-sm font-medium text-foreground">
                               {r.requester_name ?? "—"}
                             </div>
@@ -131,22 +131,22 @@ function UnresponsivePage() {
                               {r.requester_email ?? ""}
                             </div>
                           </TableCell>
-                          <TableCell className="whitespace-nowrap">
+                          <TableCell data-label="Document" className="whitespace-nowrap">
                             <div className="text-sm text-muted-foreground">{r.document_type}</div>
                             <div className="text-xs text-muted-foreground">
                               <StatusBadge status={r.status} />
                             </div>
                           </TableCell>
-                          <TableCell className="whitespace-nowrap text-sm text-foreground">
+                          <TableCell data-label="Organization" className="whitespace-nowrap text-sm text-foreground">
                             {r.issuing_org_name ?? "—"}
                           </TableCell>
-                          <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                          <TableCell data-label="Submitted" className="whitespace-nowrap text-xs text-muted-foreground">
                             {formatDate(r.submitted_at)}
                           </TableCell>
-                          <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                          <TableCell data-label="Flagged" className="whitespace-nowrap text-xs text-muted-foreground">
                             {formatDateTime(r.sla_flagged_at)}
                           </TableCell>
-                          <TableCell className="text-right whitespace-nowrap">
+                          <TableCell data-label="Actions" className="text-right whitespace-nowrap">
                             <div className="flex items-center justify-end gap-1">
                               {docUrl && (
                                 <Button
