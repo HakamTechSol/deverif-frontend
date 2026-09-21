@@ -10,6 +10,7 @@ import { parseFeatureAccess } from "@/lib/utils";
 import { usePermissions } from "@/lib/permissions";
 import { useOrgSubscription } from "@/hooks/useOrgSubscription";
 import { AccessDenied } from "@/components/common/RequireOrgFeature";
+import { ModuleFeatureLockedCard } from "@/components/common/SubscriptionLocked";
 import { PageHeader } from "@/components/common/PageHeader";
 import { SearchInput } from "@/components/common/SearchInput";
 import { EmptyState } from "@/components/common/EmptyState";
@@ -75,7 +76,7 @@ function OrgPayrollPage() {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const { user } = useAuth();
-  const { isLocked } = useOrgSubscription();
+  const { isLocked, isModuleFlagOff } = useOrgSubscription();
 
   const [tab, setTab] = useState<"employees" | "records">("employees");
 
@@ -306,6 +307,9 @@ function OrgPayrollPage() {
 
   const perms = usePermissions();
   if (!perms.isOrgAdmin && !perms.payroll) return <AccessDenied feature="payroll" />;
+
+  const moduleLocked = isModuleFlagOff("payroll_management");
+  if (moduleLocked) return <ModuleFeatureLockedCard feature="payroll_management" />;
 
   return (
     <div>

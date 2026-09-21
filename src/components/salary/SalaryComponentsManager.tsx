@@ -6,6 +6,7 @@ import { Calculator, Lock, Pencil, Plus, Trash2 } from "lucide-react";
 
 import { useAuth } from "@/lib/auth";
 import { useOrgSubscription } from "@/hooks/useOrgSubscription";
+import { ModuleFeatureLockedCard } from "@/components/common/SubscriptionLocked";
 import { PageHeader } from "@/components/common/PageHeader";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { EmptyState } from "@/components/common/EmptyState";
@@ -60,7 +61,7 @@ function TypeBadge({ type }: { type: "allowance" | "deduction" }) {
 
 export function SalaryComponentsManager() {
   const { user } = useAuth();
-  const { isLocked } = useOrgSubscription();
+  const { isLocked, isModuleFlagOff } = useOrgSubscription();
   const canManage = user?.org_role === "org_admin";
   const { t } = useTranslation();
   const qc = useQueryClient();
@@ -138,6 +139,9 @@ export function SalaryComponentsManager() {
   });
 
   const items = listQ.data ?? [];
+
+  const moduleLocked = isModuleFlagOff("payroll_management");
+  if (moduleLocked) return <ModuleFeatureLockedCard feature="payroll_management" />;
 
   return (
     <div className="space-y-6">

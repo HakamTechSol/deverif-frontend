@@ -42,6 +42,9 @@ import {
 import { TableSkeleton } from "./_app.requests";
 import {
   adminService,
+  MODULE_FEATURES,
+  ALL_MODULE_FLAGS_ON,
+  type ModuleFlags,
   type CustomPlanRequest,
   type SubscriptionPlan,
   type SubscriptionCheckout,
@@ -751,7 +754,10 @@ function PlansTab() {
   const [billingPeriod, setBillingPeriod] = useState<"monthly" | "yearly">("monthly");
   const [description, setDescription] = useState("");
   const [features, setFeatures] = useState<PlanFeature[]>([]);
+  const [moduleFlags, setModuleFlags] = useState<ModuleFlags>(ALL_MODULE_FLAGS_ON);
   const [isPublic, setIsPublic] = useState(true);
+  const [isFree, setIsFree] = useState(false);
+  const [isRecommended, setIsRecommended] = useState(false);
 
   const list = useQuery({
     queryKey: ["admin-plans"],
@@ -783,6 +789,16 @@ function PlansTab() {
     onError: (e: any) => toast.error(e?.response?.data?.message ?? "Failed to update"),
   });
 
+  const toggleRecommended = useMutation({
+    mutationFn: (p: SubscriptionPlan) =>
+      adminService.updatePlan(p.uuid, { is_recommended: p.is_recommended === 1 ? 0 : 1 }),
+    onSuccess: () => {
+      toast.success("Recommendation updated");
+      invalidate();
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.message ?? "Failed to update"),
+  });
+
   const remove = useMutation({
     mutationFn: (uuid: string) => adminService.deletePlan(uuid),
     onSuccess: () => {
@@ -801,7 +817,10 @@ function PlansTab() {
     setBillingPeriod("monthly");
     setDescription("");
     setFeatures([]);
+    setModuleFlags(ALL_MODULE_FLAGS_ON);
     setIsPublic(true);
+    setIsFree(false);
+    setIsRecommended(false);
     setOpenForm(true);
   };
 
@@ -819,12 +838,38 @@ function PlansTab() {
           : { text: f.text, highlight: !!f.highlight },
       ),
     );
+    // Pre-fill the module toggles from the plan's saved module_flags; any key
+    // missing (or legacy NULL) defaults to ON so nothing is silently locked out.
+    setModuleFlags(
+      Object.fromEntries(
+        MODULE_FEATURES.map(({ key }) => [key, p.module_flags?.[key] ?? true]),
+      ) as ModuleFlags,
+    );
     setIsPublic(p.is_public === 1);
+    setIsFree(p.is_free === 1);
+    setIsRecommended(p.is_recommended === 1);
     setOpenForm(true);
   };
 
   const submitSave = () => {
     if (!name.trim()) return toast.error("Plan name is required");
+    if (isFree) {
+      save.mutate({
+        name: name.trim(),
+        is_free: 1,
+        monthly_price: 0,
+        daily_request_quota: 0,
+        billing_period: billingPeriod,
+        description: description.trim() || null,
+        features: features
+          .map((f) => ({ text: f.text.trim(), highlight: !!f.highlight }))
+          .filter((f) => f.text),
+        module_flags: moduleFlags,
+        is_public: isPublic ? 1 : 0,
+        is_recommended: isRecommended ? 1 : 0,
+      });
+      return;
+    }
     const p = Number(price);
     const q = Number(quota);
     if (!Number.isFinite(p) || p < 0) return toast.error("Price must be a non-negative number");
@@ -838,7 +883,9 @@ function PlansTab() {
       features: features
         .map((f) => ({ text: f.text.trim(), highlight: !!f.highlight }))
         .filter((f) => f.text),
+      module_flags: moduleFlags,
       is_public: isPublic ? 1 : 0,
+      is_recommended: isRecommended ? 1 : 0,
     });
   };
 
@@ -882,7 +929,9 @@ function PlansTab() {
                   <TableHead>Quota / Day</TableHead>
                   <TableHead>Billing</TableHead>
                   <TableHead>Features</TableHead>
+                  <TableHead>Modules</TableHead>
                   <TableHead>Public</TableHead>
+                  <TableHead>Recommended</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -890,11 +939,43 @@ function PlansTab() {
                 {items.map((p, i) => (
                   <TableRow key={p.uuid}>
                     <TableCell className="w-10 text-muted-foreground">{i + 1}</TableCell>
-                    <TableCell className="font-medium capitalize">{p.name}</TableCell>
+                    <TableCell className="font-medium capitalize">
+                      <span className="flex items-center gap-2">
+                        {p.name}
+                        {p.is_free === 1 && (
+                          <Badge variant="outline" className="rounded-full border-primary/40 text-primary">
+                            Free
+                          </Badge>
+                        )}
+                      </span>
+                    </TableCell>
                     <TableCell>Rs. {p.monthly_price?.toLocaleString()}</TableCell>
                     <TableCell>{p.daily_request_quota}</TableCell>
                     <TableCell className="capitalize">{p.billing_period}</TableCell>
                     <TableCell className="text-muted-foreground">{(p.features ?? []).length}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1">
+                        {MODULE_FEATURES.map(({ key, label }) => {
+                          const on = p.module_flags?.[key] ?? true;
+                          return (
+                            <span
+                              key={key}
+                              title={`${label}: ${on ? "included" : "not included"}`}
+                              className={`inline-flex h-4 w-4 items-center justify-center rounded-sm ${
+                                on
+                                  ? "bg-primary/15 text-primary"
+                                  : "bg-muted text-muted-foreground"
+                              }`}
+                            >
+                              {on ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+                            </span>
+                          );
+                        })}
+                        <span className="ml-1.5 text-xs font-medium tabular-nums">
+                          {MODULE_FEATURES.filter(({ key }) => p.module_flags?.[key] ?? true).length}/{MODULE_FEATURES.length}
+                        </span>
+                      </div>
+                    </TableCell>
                     <TableCell>
                       {p.is_custom === 1 ? (
                         <Badge variant="outline" className="rounded-full text-muted-foreground">Custom</Badge>
@@ -906,6 +987,13 @@ function PlansTab() {
                         />
                       )}
                     </TableCell>
+                    <TableCell>
+                      <Switch
+                        checked={p.is_recommended === 1}
+                        onCheckedChange={() => toggleRecommended.mutate(p)}
+                        disabled={toggleRecommended.isPending || p.is_custom === 1}
+                      />
+                    </TableCell>
                     <TableCell className="text-right">
                       {p.is_custom !== 1 && (
                         <div className="flex justify-end gap-1.5">
@@ -916,6 +1004,7 @@ function PlansTab() {
                             size="sm"
                             variant="ghost"
                             className="text-destructive"
+                            disabled={p.is_free === 1}
                             onClick={() => setDeleteTarget(p)}
                           >
                             <Trash2 className="mr-1 h-3.5 w-3.5" /> Delete
@@ -945,11 +1034,11 @@ function PlansTab() {
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="space-y-2">
                 <Label>Price (Rs.)</Label>
-                <Input type="number" min="0" value={price} onChange={(e) => setPrice(e.target.value)} />
+                <Input type="number" min="0" value={isFree ? "0" : price} disabled={isFree} onChange={(e) => setPrice(e.target.value)} />
               </div>
               <div className="space-y-2">
                 <Label>Quota / day</Label>
-                <Input type="number" min="0" value={quota} onChange={(e) => setQuota(e.target.value)} />
+                <Input type="number" min="0" value={isFree ? "0" : quota} disabled={isFree} onChange={(e) => setQuota(e.target.value)} />
               </div>
               <div className="space-y-2">
                 <Label>Billing</Label>
@@ -964,6 +1053,24 @@ function PlansTab() {
                 </Select>
               </div>
             </div>
+<div className="flex items-center justify-between rounded-md border border-border bg-muted/40 p-3">
+                <div>
+                  <div className="text-sm font-medium text-foreground">Free plan</div>
+                  <div className="text-xs text-muted-foreground">
+                    Auto-assigned to every new organization at Rs. 0 (1 request/day)
+                  </div>
+                </div>
+                <Switch checked={isFree} onCheckedChange={setIsFree} />
+              </div>
+              <div className="flex items-center justify-between rounded-md border border-border bg-muted/40 p-3">
+                <div>
+                  <div className="text-sm font-medium text-foreground">Recommended</div>
+                  <div className="text-xs text-muted-foreground">
+                    Highlight this plan on the public /pricing page
+                  </div>
+                </div>
+                <Switch checked={isRecommended} onCheckedChange={setIsRecommended} />
+              </div>
             <div className="space-y-2">
               <Label>Description</Label>
               <Textarea
@@ -1023,6 +1130,32 @@ function PlansTab() {
               </Button>
               <p className="text-xs text-muted-foreground">
                 Star a feature to show it bold (highlighted) on the pricing page.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label>Modules included</Label>
+              <div className="space-y-1.5">
+                {MODULE_FEATURES.map(({ key, label }) => (
+                  <div
+                    key={key}
+                    className="flex items-center justify-between rounded-md border border-border bg-muted/40 px-3 py-2"
+                  >
+                    <div>
+                      <div className="text-sm font-medium text-foreground">{label}</div>
+                      <div className="text-xs text-muted-foreground">
+                        Org on this plan gets the {label.toLowerCase()} module
+                      </div>
+                    </div>
+                    <Switch
+                      checked={moduleFlags[key]}
+                      onCheckedChange={(v) => setModuleFlags({ ...moduleFlags, [key]: v })}
+                    />
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                These map to the plan's module_flags. A module switched off is blocked for
+                organizations subscribed to this plan.
               </p>
             </div>
             <div className="flex items-center justify-between rounded-md border border-border bg-muted/40 p-3">

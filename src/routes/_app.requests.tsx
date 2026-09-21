@@ -65,58 +65,9 @@ import {
   type UUID,
 } from "@/services";
 import { digitsOnly, formatCNIC, formatDate, parseFeatureAccess, resolveAssetUrl } from "@/lib/utils";
+import { EMPLOYEE_DOCUMENT_TYPES } from "@/lib/documentTypes";
 import { authStore, useAuth } from "@/lib/auth";
 import { DverifLoader } from "@/components/common/DvarifLoader";
-
-const EMPLOYEE_DOCUMENT_TYPES = [
-  "Employee Application Form",
-  "CV / Resume",
-  "Recent Photograph",
-  "CNIC / National ID Copy",
-  "Passport Copy — if applicable",
-  "Educational Certificates",
-  "Educational Transcripts / Mark Sheets",
-  "Experience Certificates",
-  "Previous Employment / Relieving Letter",
-  "Reference / Recommendation Letters",
-  "Employee Information Form",
-  "Employment / Appointment Letter",
-  "Job Description",
-  "Offer Letter",
-  "Employment Contract / Agreement",
-  "NDA — Non-Disclosure Agreement",
-  "Company Policies Acknowledgment",
-  "Code of Conduct Agreement",
-  "IT / Computer Usage Policy Acknowledgment",
-  "Data Privacy / Confidentiality Agreement",
-  "Bank Account / Salary Details",
-  "Tax Information / Tax Documents",
-  "Emergency Contact Form",
-  "Medical / Fitness Certificate — if required",
-  "Background Verification Report — if applicable",
-  "Police / Character Certificate — if required",
-  "Joining / Onboarding Checklist",
-  "Employee ID Card Record",
-  "Asset Handover Form",
-  "Laptop / Computer Handover Form",
-  "SIM / Mobile / Other Equipment Handover",
-  "Leave Records",
-  "Attendance Records",
-  "Performance Evaluation Records",
-  "Training / Certification Records",
-  "Warning / Disciplinary Records — if applicable",
-  "Promotion / Salary Revision Letters",
-  "Transfer / Department Change Records",
-  "Increment Letter",
-  "Resignation Letter",
-  "Exit Interview Form",
-  "Clearance Form",
-  "Final Settlement Record",
-  "Experience / Service Certificate",
-  "Relieving Letter",
-  "Company Asset Return Form",
-  "Employee File Closing Checklist",
-];
 
 export const Route = createFileRoute("/_app/requests")({
   beforeLoad: () => {
@@ -454,32 +405,7 @@ function QuotaSummary({
         <ProgressBar percent={percent} exhausted={exhausted} />
       </StatCard>
 
-      <StatCard
-        icon={ChartColumnIncreasing}
-        title={t("requests.quota.planLabel", "Current plan")}
-        value={planName || label}
-        hint={
-          exhausted
-            ? t("requests.quota.limitReached", "Quota exhausted")
-            : t("requests.quota.remainingLabel", "Remaining today")
-        }
-      >
-        {/* <div
-          className={`mt-1 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium ${
-            exhausted
-              ? "bg-destructive/10 text-destructive"
-              : "bg-success/10 text-success"
-          }`}
-        >
-          <span className={`h-1.5 w-1.5 rounded-full ${exhausted ? "bg-destructive" : "bg-success"}`} />
-          <span className="tabular-nums">{remaining}</span>
-          {!exhausted && (
-            <span className="text-muted-foreground">
-              {t("requests.quota.remaining", "remaining")}
-            </span>
-          )}
-        </div> */}
-      </StatCard>
+    
 
       <StatCard
         icon={Activity}
@@ -876,7 +802,7 @@ function EditRequestDialog({
       const form = new FormData();
       form.append("document_type", documentType);
       form.append("submission_remarks", remarks);
-      if (documentOwnerName.trim()) form.append("document_owner_name", documentOwnerName.trim());
+      form.append("document_owner_name", documentOwnerName.trim());
       if (isOther) {
         form.append("issuing_organization_uuid", "");
         form.append("other_organization_name", otherOrgName);

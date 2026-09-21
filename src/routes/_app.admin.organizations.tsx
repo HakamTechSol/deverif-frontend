@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Building2, Pencil, Plus, Trash2, UploadCloud, CreditCard } from "lucide-react";
+import { Building2, Loader2, Pencil, Plus, Trash2, UploadCloud, CreditCard } from "lucide-react";
 
 import { PageHeader } from "@/components/common/PageHeader";
 import { SearchInput } from "@/components/common/SearchInput";
@@ -38,7 +38,7 @@ import {
 } from "@/components/ui/table";
 import { TableSkeleton } from "./_app.requests";
 import { adminService, type Organization, type UUID } from "@/services";
-import { formatDate, resolveAssetUrl } from "@/lib/utils";
+import { formatDate, prettySlug, resolveAssetUrl } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/admin/organizations")({
   head: () => ({ meta: [{ title: "Organizations — Dverif Admin" }] }),
@@ -342,7 +342,7 @@ function OrgFormDialog({
                     ) : (
                       typeItems.map((t) => (
                         <SelectItem key={t.id} value={t.name}>
-                          {t.name.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase())}
+                          {prettySlug(t.name)}
                         </SelectItem>
                       ))
                     )}
@@ -439,7 +439,7 @@ function OrgFormDialog({
                   key={t.id}
                   className="flex items-center justify-between rounded-md border px-3 py-2"
                 >
-                  <span className="text-sm capitalize">{t.name.replace(/_/g, " ")}</span>
+                  <span className="text-sm">{prettySlug(t.name)}</span>
                   <Button
                     variant="ghost"
                     size="icon"
@@ -457,16 +457,32 @@ function OrgFormDialog({
               )}
             </div>
             <Label>Type name</Label>
-            <Input
-              value={newTypeName}
-              onChange={(e) => setNewTypeName(e.target.value)}
-              placeholder="e.g. Bank, University, Hospital"
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && newTypeName.trim()) {
-                  createType.mutate(newTypeName);
-                }
-              }}
-            />
+            <div className="flex items-end gap-2">
+              <Input
+                value={newTypeName}
+                onChange={(e) => setNewTypeName(e.target.value)}
+                placeholder="e.g. Bank, University, Hospital"
+                disabled={createType.isPending}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && newTypeName.trim() && !createType.isPending) {
+                    createType.mutate(newTypeName.trim());
+                  }
+                }}
+              />
+              <Button
+                type="button"
+                onClick={() => createType.mutate(newTypeName.trim())}
+                disabled={createType.isPending || !newTypeName.trim()}
+                className="shrink-0"
+              >
+                {createType.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Plus className="h-4 w-4" />
+                )}
+                Add
+              </Button>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowTypeDialog(false)}>

@@ -12,6 +12,7 @@ import { AccessDenied } from "@/components/common/RequireOrgFeature";
 import { useAuth } from "@/lib/auth";
 import { usePermissions } from "@/lib/permissions";
 import { useOrgSubscription } from "@/hooks/useOrgSubscription";
+import { ModuleFeatureLockedCard } from "@/components/common/SubscriptionLocked";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -87,7 +88,7 @@ function EmployeeDetailPage() {
   const qc = useQueryClient();
   const [editing, setEditing] = useState(search.edit === true);
   const perms = usePermissions();
-  const { isLocked } = useOrgSubscription();
+  const { isLocked, isModuleFlagOff } = useOrgSubscription();
 
   const empQ = useQuery({
     queryKey: ["org-employee", uuid],
@@ -192,6 +193,9 @@ function EmployeeDetailPage() {
 
   if (!perms.isOrgAdmin && !perms.manage_employees) return <AccessDenied feature="manage_employees" />;
 
+  const moduleLocked = isModuleFlagOff("employee_management");
+  if (moduleLocked) return <ModuleFeatureLockedCard feature="employee_management" />;
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -261,9 +265,16 @@ function EmployeeDetailPage() {
         />
       )}
 
-      {emp && <SalaryHistoryCard uuid={uuid} autoOpen={search.salary === true} onHistoryChange={() => qc.invalidateQueries({ queryKey: ["org-employee", uuid] })} />}
-
-      {emp && <SalaryComponentsCard uuid={uuid} />}
+      {emp && emp.record_type !== "learned_reference" && (
+        isModuleFlagOff("payroll_management") ? (
+          <ModuleFeatureLockedCard feature="payroll_management" />
+        ) : (
+          <>
+            <SalaryHistoryCard uuid={uuid} autoOpen={search.salary === true} onHistoryChange={() => qc.invalidateQueries({ queryKey: ["org-employee", uuid] })} />
+            <SalaryComponentsCard uuid={uuid} />
+          </>
+        )
+      )}
       </div>
   );
 }
@@ -372,6 +383,11 @@ function DisplayContent(props: { emp: EmployeeRecord; editing: boolean; form: an
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <StatusBadge status={emp.status} />
+              {emp.record_type === "learned_reference" && (
+                <Badge variant="outline" className="rounded-full border-blue-500/30 bg-blue-500/10 text-blue-600">
+                  Ex-Employee
+                </Badge>
+              )}
               <Badge variant="outline" className="rounded-full border-border text-muted-foreground">
                 {emp.is_platform_user === "yes" ? "Platform User" : "Local Contact"}
               </Badge>

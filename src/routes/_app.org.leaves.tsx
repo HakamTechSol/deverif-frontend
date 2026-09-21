@@ -20,6 +20,7 @@ import {
 import { authStore } from "@/lib/auth";
 import { useAuth } from "@/lib/auth";
 import { useOrgSubscription } from "@/hooks/useOrgSubscription";
+import { ModuleFeatureLockedCard } from "@/components/common/SubscriptionLocked";
 import { PageHeader } from "@/components/common/PageHeader";
 import { SearchInput } from "@/components/common/SearchInput";
 import { EmptyState } from "@/components/common/EmptyState";
@@ -98,7 +99,7 @@ function OrgLeavesContent() {
   const { t } = useTranslation();
   const { user } = useAuth();
   const qc = useQueryClient();
-  const { isLocked } = useOrgSubscription();
+  const { isLocked, isModuleFlagOff } = useOrgSubscription();
   const canDelete = user?.org_role === "org_admin";
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
@@ -146,6 +147,9 @@ function OrgLeavesContent() {
   });
 
   const items = list.data?.items ?? [];
+
+  const moduleLocked = isModuleFlagOff("leave_management");
+  if (moduleLocked) return <ModuleFeatureLockedCard feature="leave_management" />;
 
   return (
     <div>

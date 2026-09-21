@@ -52,6 +52,13 @@ export type UserRecord = {
   invitation_pending?: boolean;
 };
 
+export type MatchStatus =
+  | "not_attempted"
+  | "auto_matched"
+  | "manual_review"
+  | "no_reference_found"
+  | string;
+
 export type VerificationRequest = {
   uuid: UUID;
   document_type: string;
@@ -85,9 +92,21 @@ export type VerificationRequest = {
   requester_email?: string;
   requester_organization_uuid?: string | null;
   requester_organization?: string | null;
+  requester_org_logo?: string | null;
+  issuing_org_logo?: string | null;
   qr_token?: string | null;
   sla_reminder_sent_at?: string | null;
   sla_flagged_at?: string | null;
+  match_status?: MatchStatus | null;
+  match_confidence?: number | string | null;
+  match_mismatch_risk?: boolean | null;
+  linked_person_id?: number | null;
+  matched_employee_document_id?: number | null;
+  matched_document_uuid?: string | null;
+  matched_document_name?: string | null;
+  matched_document_path?: string | null;
+  matched_document_type?: string | null;
+  matched_employee_name?: string | null;
 };
 
 export type UnmatchedOrganization = {
@@ -138,6 +157,7 @@ export type EmployeeRecord = {
   designation: string | null;
   department: string | null;
   status: "active" | "inactive" | "resigned" | "terminated";
+  record_type?: "roster" | "learned_reference";
   is_platform_user: "yes" | "no";
   joining_date?: string | null;
   emergency_contact?: string | null;
@@ -169,6 +189,10 @@ export type EmployeeDocument = {
   file_size?: number | null;
   uploaded_at?: string | null;
   created_at: string;
+  document_hash?: string | null;
+  document_extracted_name?: string | null;
+  document_extracted_cnic_hash?: string | null;
+  match_status?: string | null;
 };
 
 export type ManagedOption = { uuid: UUID; name: string };
@@ -238,6 +262,7 @@ export type OrgSubscription = {
   daily_request_quota: number | null;
   description?: string | null;
   features?: PlanFeature[];
+  module_flags?: ModuleFlags | null;
   expiry: string | null;
   start: string | null;
 } | null;
@@ -295,6 +320,31 @@ export type SelfSubscriptionRequest = {
   organization_id?: number | null;
 };
 
+export type ModuleFlags = {
+  employee_management: boolean;
+  attendance_management: boolean;
+  user_management: boolean;
+  leave_management: boolean;
+  payroll_management: boolean;
+};
+
+/**
+ * The five org-scoped HR modules (+ human labels) that a plan's module_flags
+ * toggles. Order matters: it drives both the create/edit modal and the list
+ * indicator.
+ */
+export const MODULE_FEATURES: { key: keyof ModuleFlags; label: string }[] = [
+  { key: "employee_management", label: "Employee Management" },
+  { key: "attendance_management", label: "Attendance Management" },
+  { key: "user_management", label: "User Management" },
+  { key: "leave_management", label: "Leave Management" },
+  { key: "payroll_management", label: "Payroll Management" },
+];
+
+export const ALL_MODULE_FLAGS_ON: ModuleFlags = Object.fromEntries(
+  MODULE_FEATURES.map((m) => [m.key, true]),
+) as ModuleFlags;
+
 export type SubscriptionPlan = {
   uuid: UUID;
   id?: number;
@@ -306,6 +356,9 @@ export type SubscriptionPlan = {
   billing_period: "monthly" | "yearly";
   is_public?: number;
   is_custom?: number;
+  is_free?: number;
+  is_recommended?: number;
+  module_flags?: ModuleFlags | null;
   created_at?: string;
 };
 
@@ -645,6 +698,7 @@ export const adminService = {
   updateUser: (uuid: UUID, data: Record<string, unknown>) =>
     api.put<{ user: AdminUserRecord }>(`/admin/users/${uuid}`, data).then((r) => r.data.user),
   deleteUser: (uuid: UUID) => api.delete(`/admin/users/${uuid}`).then((r) => r.data),
+  cancelInvite: (uuid: UUID) => api.delete(`/admin/users/${uuid}/cancel-invite`).then((r) => r.data),
   resendInvite: (uuid: UUID) => api.post(`/admin/users/${uuid}/resend-invite`).then((r) => r.data),
 
   organizations: (params: { page?: number; limit?: number; search?: string; without_admin?: boolean } = {}) =>
@@ -819,17 +873,23 @@ export const adminService = {
 
 /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ ORG-ADMIN (org-scoped) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 export const orgService = {
-  employees: (params: { page?: number; limit?: number; search?: string } = {}) =>
+  employees: (params: { page?: number; limit?: number; search?: string; reference?: boolean } = {}) =>
     api.get<Paginated<EmployeeRecord>>("/org/employees", { params }).then((r) => r.data),
   getEmployee: (uuid: UUID) =>
     api.get<{ employee: EmployeeRecord }>(`/org/employees/${uuid}`).then((r) => r.data.employee),
   createEmployee: (data: Record<string, unknown>) =>
     api.post<{ employee: EmployeeRecord; _email_warning?: string }>("/org/employees", data).then((r) => r.data),
+  createReference: (data: { full_name: string; cnic: string }) =>
+    api.post<{ employee: EmployeeRecord }>("/org/employees/reference", data).then((r) => r.data.employee),
+  createReferenceEmployee: (data: { full_name: string; cnic: string }) =>
+    api.post<{ employee: EmployeeRecord }>("/org/employees/reference", data).then((r) => r.data.employee),
   updateEmployee: (uuid: UUID, data: Record<string, unknown>) =>
     api
       .put<{ employee: EmployeeRecord }>(`/org/employees/${uuid}`, data)
       .then((r) => r.data.employee),
   deleteEmployee: (uuid: UUID) => api.delete(`/org/employees/${uuid}`).then((r) => r.data),
+  archiveReference: (uuid: UUID) =>
+    api.post<{ employee: EmployeeRecord }>(`/org/employees/${uuid}/archive-reference`).then((r) => r.data.employee),
   resendInvite: (uuid: UUID) =>
     api.post<{ message?: string }>(`/org/employees/${uuid}/resend-invite`).then((r) => r.data),
 

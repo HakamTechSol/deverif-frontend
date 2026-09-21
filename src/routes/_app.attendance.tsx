@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useOrgSubscription } from "@/hooks/useOrgSubscription";
+import { ModuleFeatureLockedCard } from "@/components/common/SubscriptionLocked";
 import {
   Table,
   TableBody,
@@ -31,7 +32,7 @@ import { apiErrorMessage } from "@/lib/utils";
 function AttendancePage() {
   const { t } = useTranslation();
   const qc = useQueryClient();
-  const { isLocked } = useOrgSubscription();
+  const { isLocked, isModuleFlagOff } = useOrgSubscription();
   const [page, setPage] = useState(1);
 
   const today = useQuery({
@@ -68,6 +69,9 @@ function AttendancePage() {
       toast.error(apiErrorMessage(e, t("orgAttendance.checkOutFailed")));
     }
   };
+
+  const moduleLocked = isModuleFlagOff("attendance_management");
+  if (moduleLocked) return <ModuleFeatureLockedCard feature="attendance_management" />;
 
   return (
     <div className="space-y-6">

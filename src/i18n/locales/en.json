@@ -531,6 +531,19 @@
     "wantQuota": "We want",
     "forPrice": "for Rs."
   },
+  "match": {
+    "confidence": "{{confidence}}% match",
+    "status": {
+      "auto_matched": "Auto Matched",
+      "manual_review": "Manual Review",
+      "no_reference_found": "No Reference Found",
+      "not_attempted": "Not Checked"
+    },
+    "viewReferenceDocument": "View matched reference document",
+    "viewReferenceDocWith": "View matched reference document ({{name}})",
+    "referenceLabel": "Reference",
+    "referenceDocName": "Matched reference document"
+  },
   "team": {
     "description": "Manage your organization's employees. Promote an employee to create a platform user for your organization.",
     "noEmployees": "No employees",
@@ -549,7 +562,25 @@
     "active": "Active",
     "orgAdmin": "Org Admin",
     "member": "Member",
-    "orgSubAdmin": "Sub Admin"
+    "orgSubAdmin": "Sub Admin",
+    "match": "Match",
+    "roster": "Roster",
+    "exEmployees": "Ex-Employees",
+    "exEmployeeBadge": "Ex-Employee",
+    "archiveTitle": "Archive as Reference?",
+    "archiveDescription": "Move \"{{name}}\" to ex-employee records? They will no longer appear in the active roster, but their documents and history will be preserved for future reference lookups.",
+    "archiveConfirm": "Archive",
+    "archiveCancel": "Cancel",
+    "archiveSuccess": "Employee moved to ex-employee records",
+    "archiveFailed": "Archive failed",
+    "archivePageEmptyTitle": "No ex-employee records",
+    "archivePageEmptyDesc": "Archived employees will appear here, keeping their documents and history.",
+    "referenceRecordFormTitle": "Add Reference Record",
+    "referenceRecordFormLabel": "Reference record (ex-employee)",
+    "referenceFullName": "Full Name",
+    "referenceCnic": "CNIC",
+    "referenceSubmit": "Add Reference Record",
+    "referenceCorruptFile": "This file appears to be corrupt or unreadable. Please upload a valid document."
   },
   "orgLeaves": {
     "title": "Leave Requests",

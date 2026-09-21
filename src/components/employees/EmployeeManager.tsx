@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { Contact, Eye, FileUp, Lock, Mail, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Archive, Contact, Eye, FileUp, Lock, Mail, Plus, RefreshCw, Trash2, Users } from "lucide-react";
 
 import { useAuth } from "@/lib/auth";
 import { PageHeader } from "@/components/common/PageHeader";
@@ -38,12 +38,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { TableSkeleton } from "@/routes/_app.requests";
 import { adminService, orgService, type EmployeeDocument, type EmployeeRecord, type ManagedOption, type Organization, type UUID } from "@/services";
 import { digitsOnly, formatCNIC, formatDate, formatFileSize, resolveAssetUrl } from "@/lib/utils";
 
 type EmployeeApi = {
-  list: (params: { page?: number; limit?: number; search?: string }) => Promise<{
+  list: (params: { page?: number; limit?: number; search?: string; reference?: boolean }) => Promise<{
     items: EmployeeRecord[];
     total: number;
     totalPages: number;
@@ -51,6 +52,7 @@ type EmployeeApi = {
   create: (data: Record<string, unknown>) => Promise<{ employee: EmployeeRecord; _email_warning?: string }>;
   update: (uuid: UUID, data: Record<string, unknown>) => Promise<EmployeeRecord>;
   remove: (uuid: UUID) => Promise<unknown>;
+  archiveReference?: (uuid: UUID) => Promise<EmployeeRecord>;
 };
 
 function apiErrorMessage(e: unknown, fallback: string) {
@@ -116,6 +118,7 @@ export function EmployeeManager({
   emptyTitle,
   emptyDescription,
   locked,
+  userManagementLocked,
 }: {
   api: EmployeeApi;
   queryKey: string;
@@ -125,19 +128,24 @@ export function EmployeeManager({
   emptyTitle: string;
   emptyDescription: string;
   locked?: boolean;
+  userManagementLocked?: boolean;
 }) {
   const { user } = useAuth();
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const [listMode, setListMode] = useState<"roster" | "reference">("roster");
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [openForm, setOpenForm] = useState(false);
   const [editing, setEditing] = useState<EmployeeRecord | null>(null);
   const [toDelete, setToDelete] = useState<UUID | null>(null);
+  const [toArchive, setToArchive] = useState<EmployeeRecord | null>(null);
+
+  const isReferenceMode = listMode === "reference";
 
   const list = useQuery({
-    queryKey: [queryKey, page, search],
-    queryFn: () => api.list({ page, limit: 10, search }),
+    queryKey: [queryKey, page, search, isReferenceMode],
+    queryFn: () => api.list({ page, limit: 10, search, reference: isReferenceMode || undefined }),
   });
 
   const invalidate = () => qc.invalidateQueries({ queryKey: [queryKey] });
@@ -160,6 +168,19 @@ export function EmployeeManager({
     onError: (e) => toast.error(apiErrorMessage(e, "Resend failed")),
   });
 
+  const archiveMut = useMutation({
+    mutationFn: (uuid: UUID) => api.archiveReference?.(uuid) ?? Promise.reject(new Error("Not supported")),
+    onSuccess: () => {
+      toast.success("Employee moved to ex-employee records");
+      setToArchive(null);
+      invalidate();
+    },
+    onError: (e) => {
+      toast.error(apiErrorMessage(e, "Archive failed"));
+      setToArchive(null);
+    },
+  });
+
   const items = list.data?.items ?? [];
 
   return (
@@ -168,19 +189,43 @@ export function EmployeeManager({
         title={title}
         description={description}
         actions={
-          <Button
-            size="sm"
-            disabled={locked}
-            onClick={() => {
-              setEditing(null);
-              setOpenForm(true);
-            }}
-          >
-            {locked ? <Lock className="mr-1.5 h-3.5 w-3.5" /> : <Plus className="mr-1.5 h-3.5 w-3.5" />}
-            {locked ? "Subscription Required" : "Add Employee"}
-          </Button>
+          !isReferenceMode ? (
+            <Button
+              size="sm"
+              disabled={locked}
+              onClick={() => {
+                setEditing(null);
+                setOpenForm(true);
+              }}
+            >
+              {locked ? <Lock className="mr-1.5 h-3.5 w-3.5" /> : <Plus className="mr-1.5 h-3.5 w-3.5" />}
+              {locked ? "Subscription Required" : "Add Employee"}
+            </Button>
+          ) : undefined
         }
       />
+
+      <div className="mb-4">
+        <ToggleGroup
+          type="single"
+          value={listMode}
+          onValueChange={(v) => {
+            if (!v) return;
+            setListMode(v as "roster" | "reference");
+            setPage(1);
+          }}
+          variant="outline"
+        >
+          <ToggleGroupItem value="roster" className="text-sm">
+            <Users className="mr-1.5 h-4 w-4" />
+            Roster
+          </ToggleGroupItem>
+          <ToggleGroupItem value="reference" className="text-sm">
+            <Archive className="mr-1.5 h-4 w-4" />
+            Ex-Employees
+          </ToggleGroupItem>
+        </ToggleGroup>
+      </div>
 
       <Card className="border-border/70 shadow-none">
         <CardContent className="p-0">
@@ -191,7 +236,7 @@ export function EmployeeManager({
                 setSearch(v);
                 setPage(1);
               }}
-              placeholder="Search by name, email, CNIC, designation or department�"
+              placeholder={isReferenceMode ? "Search ex-employee records..." : "Search by name, email, CNIC, designation or department..."}
             />
           </div>
 
@@ -199,7 +244,11 @@ export function EmployeeManager({
             <TableSkeleton />
           ) : items.length === 0 ? (
             <div className="p-6">
-              <EmptyState icon={Contact} title={emptyTitle} description={emptyDescription} />
+              <EmptyState
+                icon={isReferenceMode ? Archive : Contact}
+                title={isReferenceMode ? "No ex-employee records" : emptyTitle}
+                description={isReferenceMode ? "Archived employees will appear here, keeping their documents and history." : emptyDescription}
+              />
             </div>
           ) : (
             <>
@@ -208,24 +257,44 @@ export function EmployeeManager({
                   <TableRow>
                     <TableHead className="w-10">S.No</TableHead>
                     <TableHead>Name</TableHead>
-                    <TableHead>Designation</TableHead>
-                    <TableHead>Department</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Platform User</TableHead>
-                    <TableHead>Org Role</TableHead>
-                    <TableHead>Added By</TableHead>
+                    {!isReferenceMode && (
+                      <>
+                        <TableHead>Designation</TableHead>
+                        <TableHead>Department</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Platform User</TableHead>
+                        <TableHead>Org Role</TableHead>
+                        <TableHead>Added By</TableHead>
+                      </>
+                    )}
+                    {isReferenceMode && (
+                      <>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Added By</TableHead>
+                      </>
+                    )}
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {items.map((emp, i) => (
+                  {items.map((emp, i) => {
+                    const isRef = emp.record_type === "learned_reference";
+                    const isActive = emp.status === "active";
+                    return (
                     <TableRow key={emp.uuid}>
                       <TableCell data-label="S.No" className="w-10 text-muted-foreground">
                         {(page - 1) * 10 + i + 1}
                       </TableCell>
                       <TableCell data-label="Name">
-                        <div className="font-medium text-foreground">{emp.full_name}</div>
-                        <div className="text-xs text-muted-foreground">{emp.email ?? "�"}</div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-foreground">{emp.full_name}</span>
+                          {isRef && (
+                            <Badge variant="outline" className="rounded-full border-blue-500/30 bg-blue-500/10 text-blue-600 text-[10px] font-medium whitespace-nowrap">
+                              Ex-Employee
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="text-xs text-muted-foreground">{emp.email ?? "—"}</div>
                         {(() => {
                           const st = inviteStatus(emp);
                           if (st.kind === "none" || st.kind === "used") return null;
@@ -246,55 +315,66 @@ export function EmployeeManager({
                           );
                         })()}
                       </TableCell>
-                      <TableCell data-label="Designation" className="text-muted-foreground">
-                        {emp.designation ?? "�"}
-                      </TableCell>
-                      <TableCell data-label="Department" className="text-muted-foreground">
-                        {emp.department ?? "�"}
-                      </TableCell>
-                      <TableCell data-label="Status">
-                        <Badge variant="outline" className={statusBadgeClass(emp.status)}>
-                          {statusLabel(emp.status)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell data-label="Platform User">
-                        <Badge
-                          variant="outline"
-                          className={
-                            emp.is_platform_user === "yes"
-                              ? "rounded-full border-primary/30 bg-primary/10 text-primary"
-                              : "rounded-full border-border text-muted-foreground"
-                          }
-                        >
-                          {emp.is_platform_user === "yes" ? "Yes" : "No"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell data-label="Org Role">
-                        {emp.is_platform_user === "yes" && emp.linked_user_role ? (
-                          <Badge
-                            variant="outline"
-                            className={
-                              emp.linked_user_role === "org_admin" || emp.linked_user_role === "sub_admin"
-                                ? "rounded-full border-primary/30 bg-primary/10 text-primary"
-                                : "rounded-full border-border text-muted-foreground"
-                            }
-                          >
-                            {emp.linked_user_role === "org_admin"
-                              ? "Org Admin"
-                              : emp.linked_user_role === "sub_admin"
-                                ? "Sub Admin"
-                                : "Member"}
+                      {!isReferenceMode && (
+                        <>
+                          <TableCell data-label="Designation" className="text-muted-foreground">
+                            {emp.designation ?? "—"}
+                          </TableCell>
+                          <TableCell data-label="Department" className="text-muted-foreground">
+                            {emp.department ?? "—"}
+                          </TableCell>
+                          <TableCell data-label="Status">
+                            <Badge variant="outline" className={statusBadgeClass(emp.status)}>
+                              {statusLabel(emp.status)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell data-label="Platform User">
+                            <Badge
+                              variant="outline"
+                              className={
+                                emp.is_platform_user === "yes"
+                                  ? "rounded-full border-primary/30 bg-primary/10 text-primary"
+                                  : "rounded-full border-border text-muted-foreground"
+                              }
+                            >
+                              {emp.is_platform_user === "yes" ? "Yes" : "No"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell data-label="Org Role">
+                            {emp.is_platform_user === "yes" && emp.linked_user_role ? (
+                              <Badge
+                                variant="outline"
+                                className={
+                                  emp.linked_user_role === "org_admin" || emp.linked_user_role === "sub_admin"
+                                    ? "rounded-full border-primary/30 bg-primary/10 text-primary"
+                                    : "rounded-full border-border text-muted-foreground"
+                                }
+                              >
+                                {emp.linked_user_role === "org_admin"
+                                  ? "Org Admin"
+                                  : emp.linked_user_role === "sub_admin"
+                                    ? "Sub Admin"
+                                    : "Member"}
+                              </Badge>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                        </>
+                      )}
+                      {isReferenceMode && (
+                        <TableCell data-label="Status">
+                          <Badge variant="outline" className={statusBadgeClass(emp.status)}>
+                            {statusLabel(emp.status)}
                           </Badge>
-                        ) : (
-                          <span className="text-muted-foreground">�</span>
-                        )}
-                      </TableCell>
+                        </TableCell>
+                      )}
                       <TableCell data-label="Added By" className="text-muted-foreground">
-                        {emp.added_by_name ?? "�"}
+                        {emp.added_by_name ?? "—"}
                       </TableCell>
                       <TableCell data-label="Actions" className="text-right">
                         <div className="flex items-center justify-end gap-1">
-                          {(() => {
+                          {!isRef && (() => {
                             const st = inviteStatus(emp);
                             if (st.kind === "active" || st.kind === "expired") {
                               return (
@@ -303,16 +383,28 @@ export function EmployeeManager({
                                   size="sm"
                                   className="h-7 whitespace-nowrap px-2 text-xs"
                                   onClick={() => resendInviteMut.mutate(emp.uuid)}
-                                  disabled={locked || resendInviteMut.isPending}
+                                  disabled={locked || userManagementLocked || resendInviteMut.isPending}
                                 >
-                                  {locked ? <Lock className="mr-1 h-3 w-3" /> : <RefreshCw className="mr-1 h-3 w-3" />}
+                                  {locked || userManagementLocked ? <Lock className="mr-1 h-3 w-3" /> : <RefreshCw className="mr-1 h-3 w-3" />}
                                   Resend
                                 </Button>
                               );
                             }
                             return null;
                           })()}
-                                                    <Button
+                          {!isRef && isActive && api.archiveReference && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 whitespace-nowrap px-2 text-xs text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                              onClick={() => setToArchive(emp)}
+                              disabled={locked}
+                            >
+                              <Archive className="mr-1 h-3 w-3" />
+                              Archive
+                            </Button>
+                          )}
+                          <Button
                             type="button"
                             size="icon"
                             variant="ghost"
@@ -328,7 +420,8 @@ export function EmployeeManager({
                         </div>
                       </TableCell>
                     </TableRow>
-                  ))}
+                    );
+                  })}
                 </TableBody>
               </Table>
               <Pagination
@@ -363,6 +456,16 @@ export function EmployeeManager({
         onConfirm={() => {
           if (toDelete) del.mutate(toDelete);
           setToDelete(null);
+        }}
+      />
+
+      <ConfirmDialog
+        open={!!toArchive}
+        onOpenChange={(o) => !o && setToArchive(null)}
+        title="Archive as Reference?"
+        description={`Move "${toArchive?.full_name ?? ""}" to ex-employee records? They will no longer appear in the active roster, but their documents and history will be preserved for future reference lookups.`}
+        onConfirm={() => {
+          if (toArchive) archiveMut.mutate(toArchive.uuid);
         }}
       />
     </div>
@@ -564,11 +667,20 @@ function EmployeeFormDialog({
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
                 placeholder="email@example.com"
+                disabled={userManagementLocked}
               />
               {!isEdit && (
                 <p className="text-xs text-muted-foreground">
-                  Providing an email will automatically send a "Set your password" invite. This
-                  employee will become a platform user with <strong>Member</strong> access.
+                  {userManagementLocked ? (
+                    <span className="flex items-center gap-1 text-xs">
+                      <Lock className="h-3 w-3" /> Platform users are not included in your plan.
+                    </span>
+                  ) : (
+                    <>
+                      Providing an email will automatically send a "Set your password" invite. This
+                      employee will become a platform user with <strong>Member</strong> access.
+                    </>
+                  )}
                 </p>
               )}
             </div>

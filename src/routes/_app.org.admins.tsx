@@ -41,6 +41,7 @@ import {
 import { TableSkeleton } from "./_app.requests";
 import { authStore } from "@/lib/auth";
 import { useOrgSubscription } from "@/hooks/useOrgSubscription";
+import { ModuleFeatureLockedCard } from "@/components/common/SubscriptionLocked";
 import { orgService, type OrgAdminUserRecord, type UUID } from "@/services";
 import { digitsOnly, formatCNIC, parseFeatureAccess } from "@/lib/utils";
 
@@ -92,7 +93,7 @@ function apiErrorMessage(e: unknown, fallback: string) {
 function OrgAdminsPage() {
   const { t } = useTranslation();
   const qc = useQueryClient();
-  const { isLocked } = useOrgSubscription();
+  const { isLocked, isModuleFlagOff } = useOrgSubscription();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [openForm, setOpenForm] = useState(false);
@@ -138,6 +139,9 @@ function OrgAdminsPage() {
   });
 
   const items = list.data?.items ?? [];
+
+  const moduleLocked = isModuleFlagOff("user_management");
+  if (moduleLocked) return <ModuleFeatureLockedCard feature="user_management" />;
 
   return (
     <div className="space-y-6">

@@ -49,7 +49,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { authStore, useAuth } from "@/lib/auth";
 import { useTheme } from "@/lib/theme";
-import { authService, requestsService, notificationService } from "@/services";
+import { authService, requestsService, notificationService, type ModuleFlags } from "@/services";
 import type { FileRouteTypes } from "@/routeTree.gen";
 import { cn, resolveAssetUrl, formatDateTime } from "@/lib/utils";
 import { setLanguage, getLanguage, type Language } from "@/i18n";
@@ -102,18 +102,24 @@ const adminNav: NavItem[] = [
 export function AppShell({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
-  const { isLocked } = useOrgSubscription();
-  const moduleLockedPaths = new Set([
-    "/org/team",
-    "/org/admins",
-    "/org/leaves",
-    "/org/attendance",
-    "/org/salary-components",
-    "/org/payroll",
-    "/leaves",
-    "/attendance",
-    "/payroll",
-  ]);
+  const { isLocked, isModuleFlagOff } = useOrgSubscription();
+  const pathModule: Record<string, keyof ModuleFlags> = {
+    "/org/team": "employee_management",
+    "/org/admins": "user_management",
+    "/org/leaves": "leave_management",
+    "/org/attendance": "attendance_management",
+    "/org/salary-components": "payroll_management",
+    "/org/payroll": "payroll_management",
+    "/leaves": "leave_management",
+    "/attendance": "attendance_management",
+    "/payroll": "payroll_management",
+  };
+  const modulePaths = Object.keys(pathModule);
+  const moduleLockedPaths = new Set(
+    !isAdmin && isLocked
+      ? modulePaths
+      : modulePaths.filter((path) => isModuleFlagOff(pathModule[path])),
+  );
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const router = useRouter();
@@ -299,7 +305,7 @@ function SidebarInner({
                 className={cn("h-4 w-4", active ? "text-sidebar-primary" : "text-muted-foreground")}
               />
               {t(it.labelKey)}
-              {locked && lockedPaths.has(it.to) ? (
+              {lockedPaths.has(it.to) ? (
                 <Lock className="ml-auto h-3.5 w-3.5 text-muted-foreground/60" />
               ) : null}
               {it.badge && it.badge > 0 ? (

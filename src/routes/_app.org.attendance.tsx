@@ -9,6 +9,7 @@ import { useTranslation } from "react-i18next";
 import { authStore } from "@/lib/auth";
 import { useAuth } from "@/lib/auth";
 import { useOrgSubscription } from "@/hooks/useOrgSubscription";
+import { ModuleFeatureLockedCard } from "@/components/common/SubscriptionLocked";
 import { PageHeader } from "@/components/common/PageHeader";
 import { SearchInput } from "@/components/common/SearchInput";
 import { EmptyState } from "@/components/common/EmptyState";
@@ -72,7 +73,7 @@ function OrgAttendanceContent() {
   const { t } = useTranslation();
   const { user } = useAuth();
   const qc = useQueryClient();
-  const { isLocked } = useOrgSubscription();
+  const { isLocked, isModuleFlagOff } = useOrgSubscription();
   const canDelete = user?.org_role === "org_admin";
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
@@ -120,6 +121,9 @@ function OrgAttendanceContent() {
 
   const items = records.data?.items ?? [];
   const rules = ips.data?.rules ?? [];
+
+  const moduleLocked = isModuleFlagOff("attendance_management");
+  if (moduleLocked) return <ModuleFeatureLockedCard feature="attendance_management" />;
 
   return (
     <div>

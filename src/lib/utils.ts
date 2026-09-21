@@ -72,6 +72,12 @@ export function apiErrorMessage(e: unknown, fallback: string) {
   return err?.response?.data?.message ?? fallback;
 }
 
+/** Turn a stored slug like "software_house" into a display label "Software House". */
+export function prettySlug(value: string | null | undefined): string {
+  if (!value) return "";
+  return value.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export function formatFileSize(bytes?: number | null): string {
   if (!bytes || bytes <= 0) return "";
   if (bytes < 1024) return `${bytes} B`;

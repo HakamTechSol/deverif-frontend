@@ -41,6 +41,8 @@ const ACTION_LABELS: Record<string, string> = {
   "user.update": "User updated",
   "user.delete": "User deleted",
   "user.invite_resend": "Invite resent",
+  "user.invite_cancelled": "Invitation cancelled",
+  "user.removed_permanently": "User removed permanently",
   "user.org_role_update": "Organization role changed",
   "organization.create": "Organization created",
   "organization.update": "Organization updated",
@@ -217,6 +219,10 @@ function describeEntry(entry: AuditLogRecord, d: Record<string, unknown> | null)
       return `${a} created user ${str(d?.email) || "—"}${d?.organization ? ` for organization "${str(d.organization)}"` : ""}`;
     case "user.invite_resend":
       return `${a} resent the invite email to ${str(d?.email) || "a user"}`;
+    case "user.invite_cancelled":
+      return `${a} cancelled the invitation for ${str(d?.email) || "a user"}`;
+    case "user.removed_permanently":
+      return `${a} permanently removed ${str(d?.email) || "a user"}`;
     case "user.org_role_update":
       return d?.org_role === "org_admin"
         ? `${a} granted the Org Admin role to a member`

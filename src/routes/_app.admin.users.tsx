@@ -2,7 +2,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { Pencil, Plus, Users as UsersIcon, Mail, UploadCloud, ShieldCheck, ShieldOff, Building2, Trash2 } from "lucide-react";
+import { Loader2, Pencil, Plus, Users as UsersIcon, Mail, UploadCloud, ShieldCheck, ShieldOff, Building2, Trash2, Ban } from "lucide-react";
 
 import { PageHeader } from "@/components/common/PageHeader";
 import { SearchableSelect } from "@/components/common/SearchableSelect";
@@ -40,7 +40,7 @@ import {
 } from "@/components/ui/table";
 import { TableSkeleton } from "./_app.requests";
 import { adminService, type AdminUserRecord, type UUID } from "@/services";
-import { digitsOnly, formatCNIC, resolveAssetUrl } from "@/lib/utils";
+import { digitsOnly, formatCNIC, prettySlug, resolveAssetUrl } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/admin/users")({
   head: () => ({ meta: [{ title: "Users — Dverif Admin" }] }),
@@ -54,6 +54,8 @@ function AdminUsersPage() {
   const [openForm, setOpenForm] = useState(false);
   const [editing, setEditing] = useState<AdminUserRecord | null>(null);
   const [toToggle, setToToggle] = useState<AdminUserRecord | null>(null);
+  const [toCancel, setToCancel] = useState<AdminUserRecord | null>(null);
+  const [toRemove, setToRemove] = useState<AdminUserRecord | null>(null);
 
   const list = useQuery({
     queryKey: ["admin-users", page, search],
@@ -77,6 +79,24 @@ function AdminUsersPage() {
       toast.success("User Status Updated");
     },
     onError: (e: any) => toast.error(e?.response?.data?.message ?? "Failed to update status"),
+  });
+
+  const cancelInvite = useMutation({
+    mutationFn: (uuid: UUID) => adminService.cancelInvite(uuid),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-users"] });
+      toast.success("Invitation cancelled. User marked inactive.");
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.message ?? "Failed to cancel invitation"),
+  });
+
+  const removeUser = useMutation({
+    mutationFn: (uuid: UUID) => adminService.deleteUser(uuid),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-users"] });
+      toast.success("User permanently removed");
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.message ?? "Failed to remove user"),
   });
 
   const items = list.data?.items ?? [];
@@ -185,36 +205,59 @@ function AdminUsersPage() {
                         </Badge>
                       </TableCell>
                       <TableCell data-label="Actions" className="text-right pr-8">
-                        {u.invitation_pending ? (
+                        {u.is_verified === "no" ? (
+                          <>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                              title="Resend invite link"
+                              onClick={() => resendInvite.mutate(u.uuid)}
+                              disabled={resendInvite.isPending}
+                              loading={resendInvite.isPending && resendInvite.variables === u.uuid}
+                            >
+                              <Mail className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8 text-muted-foreground hover:text-amber-600"
+                              title="Cancel invitation"
+                              onClick={() => setToCancel(u)}
+                              disabled={cancelInvite.isPending}
+                            >
+                              <Ban className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                              title="Remove permanently"
+                              onClick={() => setToRemove(u)}
+                              disabled={removeUser.isPending}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </>
+                        ) : (
                           <Button
                             size="icon"
                             variant="ghost"
-                            className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                            title="Resend invite link"
-                            onClick={() => resendInvite.mutate(u.uuid)}
-                            disabled={resendInvite.isPending}
-                            loading={resendInvite.isPending && resendInvite.variables === u.uuid}
+                            title={u.status === "active" ? "Disable user" : "Enable user"}
+                            className={
+                              u.status === "active"
+                                ? "h-8 w-8 text-muted-foreground hover:text-destructive"
+                                : "h-8 w-8 text-muted-foreground hover:text-success"
+                            }
+                            onClick={() => setToToggle(u)}
                           >
-                            <Mail className="h-4 w-4" />
+                            {u.status === "active" ? (
+                              <ShieldOff className="h-4 w-4" />
+                            ) : (
+                              <ShieldCheck className="h-4 w-4" />
+                            )}
                           </Button>
-                        ) : null}
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          title={u.status === "active" ? "Disable user" : "Enable user"}
-                          className={
-                            u.status === "active"
-                              ? "h-8 w-8 text-muted-foreground hover:text-destructive"
-                              : "h-8 w-8 text-muted-foreground hover:text-success"
-                          }
-                          onClick={() => setToToggle(u)}
-                        >
-                          {u.status === "active" ? (
-                            <ShieldOff className="h-4 w-4" />
-                          ) : (
-                            <ShieldCheck className="h-4 w-4" />
-                          )}
-                        </Button>
+                        )}
                         <Button
                           size="icon"
                           variant="ghost"
@@ -274,6 +317,30 @@ function AdminUsersPage() {
           }
         }}
       />
+
+      <ConfirmDialog
+        open={!!toCancel}
+        onOpenChange={(o) => !o && setToCancel(null)}
+        title="Cancel this invitation?"
+        description="The invite link will be invalidated and this user will be marked inactive. The user record is kept."
+        confirmLabel="Cancel Invitation"
+        onConfirm={() => {
+          if (toCancel) cancelInvite.mutate(toCancel.uuid);
+          setToCancel(null);
+        }}
+      />
+
+      <ConfirmDialog
+        open={!!toRemove}
+        onOpenChange={(o) => !o && setToRemove(null)}
+        title="Permanently remove this user?"
+        description="This permanently deletes the user record and any pending invite. This cannot be undone."
+        confirmLabel="Remove Permanently"
+        onConfirm={() => {
+          if (toRemove) removeUser.mutate(toRemove.uuid);
+          setToRemove(null);
+        }}
+      />
     </div>
   );
 }
@@ -308,7 +375,6 @@ function UserFormDialog({
       toast.success("Organization type added");
       qc.invalidateQueries({ queryKey: ["admin-org-types"] });
       setNewOrgType(t.name);
-      setShowTypeDialog(false);
       setNewTypeName("");
     },
     onError: (e: any) => toast.error(e?.response?.data?.message ?? "Failed to add type"),
@@ -493,7 +559,7 @@ function UserFormDialog({
                               ) : (
                                 (typesQuery.data ?? []).map((t) => (
                                   <SelectItem key={t.id} value={t.name}>
-                                    {t.name.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase())}
+                                    {prettySlug(t.name)}
                                   </SelectItem>
                                 ))
                               )}
@@ -571,7 +637,7 @@ function UserFormDialog({
                   key={t.id}
                   className="flex items-center justify-between rounded-md border px-3 py-2"
                 >
-                  <span className="text-sm capitalize">{t.name.replace(/_/g, " ")}</span>
+                  <span className="text-sm">{prettySlug(t.name)}</span>
                   <Button
                     variant="ghost"
                     size="icon"
@@ -589,16 +655,32 @@ function UserFormDialog({
               )}
             </div>
             <Label>Type name</Label>
-            <Input
-              value={newTypeName}
-              onChange={(e) => setNewTypeName(e.target.value)}
-              placeholder="e.g. Bank, University, Hospital"
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && newTypeName.trim()) {
-                  createType.mutate(newTypeName.trim());
-                }
-              }}
-            />
+            <div className="flex items-end gap-2">
+              <Input
+                value={newTypeName}
+                onChange={(e) => setNewTypeName(e.target.value)}
+                placeholder="e.g. Bank, University, Hospital"
+                disabled={createType.isPending}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && newTypeName.trim() && !createType.isPending) {
+                    createType.mutate(newTypeName.trim());
+                  }
+                }}
+              />
+              <Button
+                type="button"
+                onClick={() => createType.mutate(newTypeName.trim())}
+                disabled={createType.isPending || !newTypeName.trim()}
+                className="shrink-0"
+              >
+                {createType.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Plus className="h-4 w-4" />
+                )}
+                Add
+              </Button>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowTypeDialog(false)}>

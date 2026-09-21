@@ -532,6 +532,19 @@
     "wantQuota": "ہمیں چاہیے",
     "forPrice": "قیمت"
   },
+  "match": {
+    "confidence": "{{confidence}}% میچ",
+    "status": {
+      "auto_matched": "خودکار میچ",
+      "manual_review": "دستی جائزہ",
+      "no_reference_found": "کوئی حوالہ نہیں ملا",
+      "not_attempted": "جانچ نہیں ہوئی"
+    },
+    "viewReferenceDocument": "میچ شدہ حوالہ دستاویز دیکھیں",
+    "viewReferenceDocWith": "میچ شدہ حوالہ دستاویز دیکھیں ({{name}})",
+    "referenceLabel": "حوالہ",
+    "referenceDocName": "میچ شدہ حوالہ دستاویز"
+  },
   "team": {
     "description": "اپنی تنظیم کے ملازمین کا انتظام کریں۔ پلیٹ فارم صارف بنانے کے لیے ملازم کو اپ گریڈ کریں۔",
     "noEmployees": "کوئی ملازمین نہیں",
@@ -550,7 +563,25 @@
     "active": "فعال",
     "orgAdmin": " تنظیمی ایڈمن",
     "member": "ممبر",
-    "orgSubAdmin": "سب ایڈمن"
+    "orgSubAdmin": "سب ایڈمن",
+    "match": "میچ",
+    "roster": "روستر",
+    "exEmployees": "سابق ملازمین",
+    "exEmployeeBadge": "سابق ملازم",
+    "archiveTitle": "حوالہ کے طور پر محفوظ کریں؟",
+    "archiveDescription": "\"{{name}}\" کو سابق ملازمین کے ریکارڈ میں منتقل کریں؟ وہ فعال روسٹر میں نظر نہیں آئیں گے، لیکن ان کی دستاویزات اور تاریخ مستقبل کے حوالہ کی تلاش کے لیے محفوظ رہے گی۔",
+    "archiveConfirm": "محفوظ کریں",
+    "archiveCancel": "منسوخ",
+    "archiveSuccess": "ملازم سابق ملازمین کے ریکارڈ میں منتقل کر دیا گیا",
+    "archiveFailed": "محفوظ کرنے میں ناکامی",
+    "archivePageEmptyTitle": "کوئی سابق ملازم ریکارڈ نہیں",
+    "archivePageEmptyDesc": "محفوظ کیے گئے ملازمین یہاں نظر آئیں گے، ان کی دستاویزات اور تاریخ برقرار رہے گی۔",
+    "referenceRecordFormTitle": "حوالہ ریکارڈ شامل کریں",
+    "referenceRecordFormLabel": "حوالہ ریکارڈ (سابق ملازم)",
+    "referenceFullName": "مکمل نام",
+    "referenceCnic": "شناختی کارڈ",
+    "referenceSubmit": "حوالہ ریکارڈ شامل کریں",
+    "referenceCorruptFile": "یہ فائل خراب یا ناقابل پڑھنے لگتی ہے۔ براہ کرم ایک درست دستاویز اپ لوڈ کریں۔"
   },
   "orgLeaves": {
     "title": "چھٹی کی درخواستیں",

@@ -4,6 +4,8 @@ import { FileUp, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SearchableSelect } from "@/components/common/SearchableSelect";
+import { EMPLOYEE_DOCUMENT_TYPE_OPTIONS } from "@/lib/documentTypes";
 import { formatFileSize } from "@/lib/utils";
 
 export type StagedDoc = { name: string; file: File };
@@ -41,7 +43,7 @@ export function EmployeeDocPicker({
   note?: string;
   className?: string;
 }) {
-  const [docName, setDocName] = useState("");
+  const [docType, setDocType] = useState("");
   const [docFile, setDocFile] = useState<File | null>(null);
   const [error, setError] = useState("");
 
@@ -50,13 +52,17 @@ export function EmployeeDocPicker({
       setError("Please choose a file first.");
       return;
     }
+    if (!docType) {
+      setError("Please select a document type.");
+      return;
+    }
     const problem = validateDocFile(docFile);
     if (problem) {
       setError(problem);
       return;
     }
-    onChange([...docs, { name: docName.trim(), file: docFile }]);
-    setDocName("");
+    onChange([...docs, { name: docType, file: docFile }]);
+    setDocType("");
     setDocFile(null);
     setError("");
   };
@@ -66,13 +72,13 @@ export function EmployeeDocPicker({
       <div className="grid gap-2">
         <div className="grid grid-cols-[1fr_1fr] gap-2">
           <div className="space-y-1">
-            <Label className="text-xs font-medium">Document Name</Label>
-            <Input
-              type="text"
-              value={docName}
-              onChange={(e) => setDocName(e.target.value)}
-              placeholder="e.g. CNIC, Contract"
-              className="text-sm"
+            <Label className="text-xs font-medium">Document Type</Label>
+            <SearchableSelect
+              items={EMPLOYEE_DOCUMENT_TYPE_OPTIONS}
+              value={docType}
+              onChange={setDocType}
+              placeholder="Select document type"
+              searchPlaceholder="Search document type…"
             />
           </div>
           <div className="space-y-1">

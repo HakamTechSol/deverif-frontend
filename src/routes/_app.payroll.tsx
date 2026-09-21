@@ -29,6 +29,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { TableSkeleton } from "@/routes/_app.requests";
+import { useOrgSubscription } from "@/hooks/useOrgSubscription";
+import { ModuleFeatureLockedCard } from "@/components/common/SubscriptionLocked";
 
 const getMonthName = (month: number) => {
   const d = new Date(2026, month - 1, 1);
@@ -85,12 +87,17 @@ function PayrollPage() {
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<SalaryRecord | null>(null);
 
+  const { isModuleFlagOff } = useOrgSubscription();
+
   const records = useQuery({
     queryKey: ["my-salary-records", page],
     queryFn: () => salaryService.mine({ page, limit: 10 }),
   });
 
   const items = useMemo(() => records.data?.items ?? [], [records.data]);
+
+  const moduleLocked = isModuleFlagOff("payroll_management");
+  if (moduleLocked) return <ModuleFeatureLockedCard feature="payroll_management" />;
 
   return (
     <div className="space-y-6">

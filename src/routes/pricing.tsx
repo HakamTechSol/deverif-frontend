@@ -76,9 +76,16 @@ function PricingPage() {
             plans.data.map((plan) => (
               <Card
                 key={plan.uuid}
-                className="flex flex-col border-border/70 shadow-none transition-shadow hover:shadow-md"
+                className={`flex flex-col border-border/70 shadow-none transition-shadow hover:shadow-md ${
+                  plan.is_recommended === 1 ? "border-primary/60 ring-1 ring-primary/40" : ""
+                }`}
               >
                 <CardHeader>
+                  {plan.is_recommended === 1 && (
+                    <Badge className="mb-2 w-fit gap-1 rounded-full bg-primary text-primary-foreground">
+                      <Sparkles className="h-3 w-3" /> Recommended
+                    </Badge>
+                  )}
                   <CardTitle className="text-lg capitalize">{plan.name}</CardTitle>
                   {plan.description && (
                     <CardDescription>{plan.description}</CardDescription>

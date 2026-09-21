@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
-import { paymentService, type OrgSubscription } from "@/services";
+import { paymentService, type OrgSubscription, type ModuleFlags } from "@/services";
 import { useAuth } from "@/lib/auth";
 
 export function useOrgSubscription() {
@@ -22,6 +22,27 @@ export function useOrgSubscription() {
   const isExpired = orgSub?.status === "expired";
   const isNone = orgSub?.status === "none" || orgSub === null;
   const isLocked = q.isFetched && !isActive;
+  const moduleFlags: ModuleFlags | null = orgSub?.module_flags ?? null;
 
-  return { orgSub, isActive, isExpired, isNone, isLocked, isLoading: q.isLoading };
+  // True only when the subscription is ACTIVE but that module flag is
+  // specifically off. A "none"/expired subscription is the subscription lock,
+  // not a per-module one, and legacy plans with no flags are unrestricted —
+  // both mirroring the backend.
+  const isModuleFlagOff = (key: keyof ModuleFlags) =>
+    isActive && moduleFlags != null && moduleFlags[key] !== true;
+
+  const isModuleLocked = (key: keyof ModuleFlags) =>
+    user?.role !== "admin" && (isLocked || isModuleFlagOff(key));
+
+  return {
+    orgSub,
+    isActive,
+    isExpired,
+    isNone,
+    isLocked,
+    isModuleFlagOff,
+    isModuleLocked,
+    moduleFlags,
+    isLoading: q.isLoading,
+  };
 }

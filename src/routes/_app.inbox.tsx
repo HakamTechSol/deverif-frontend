@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
-import { CheckCircle2, ExternalLink, Eye, Inbox as InboxIcon, XCircle, BadgeCheck } from "lucide-react";
+import { CheckCircle2, ExternalLink, Eye, Inbox as InboxIcon, XCircle, BadgeCheck, FileSearch } from "lucide-react";
 
 import { PageHeader } from "@/components/common/PageHeader";
 import { SearchInput } from "@/components/common/SearchInput";
@@ -11,6 +11,7 @@ import { Pagination } from "@/components/common/Pagination";
 import { EmptyState } from "@/components/common/EmptyState";
 import { RequestDetailModal } from "@/components/common/RequestDetailModal";
 import { StatusBadge } from "@/components/common/StatusBadge";
+import { MatchStatusBadge } from "@/components/common/MatchStatusBadge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -192,7 +193,16 @@ function InboxPage() {
                         {tDocType(r.document_type)}
                       </TableCell>
                       <TableCell data-label={t("inbox.status")}>
-                        <StatusBadge status={r.status} />
+                        <div className="flex flex-col items-start gap-1">
+                          <StatusBadge status={r.status} />
+                          {r.match_status && (
+                            <MatchStatusBadge
+                              status={r.match_status}
+                              confidence={r.match_confidence}
+                              hideNoReference
+                            />
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell
                         data-label={t("inbox.submitted")}
@@ -227,6 +237,29 @@ function InboxPage() {
                       </TableCell>
                       <TableCell data-label={t("inbox.actions")} className="text-right">
                         <div className="flex flex-wrap items-center justify-start gap-1 sm:justify-end">
+                          {r.matched_document_path && (
+                            <Button
+                              asChild
+                              size="icon"
+                              variant="outline"
+                              className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                              title={
+                                r.matched_document_name
+                                  ? t("match.viewReferenceDocWith", {
+                                      name: r.matched_document_name,
+                                    })
+                                  : t("match.viewReferenceDocument")
+                              }
+                            >
+                              <a
+                                href={resolveAssetUrl(r.matched_document_path) ?? r.matched_document_path}
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                <FileSearch className="h-4 w-4" />
+                              </a>
+                            </Button>
+                          )}
                           <Button
                             size="icon"
                             variant="ghost"

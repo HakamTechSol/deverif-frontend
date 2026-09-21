@@ -42,6 +42,7 @@ import { leavesService } from "@/services";
 import { countDays, formatDate, formatDateTime } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 import { useOrgSubscription } from "@/hooks/useOrgSubscription";
+import { ModuleFeatureLockedCard } from "@/components/common/SubscriptionLocked";
 
 export const Route = createFileRoute("/_app/leaves")({
   head: () => ({ meta: [{ title: "Leaves — Dverif" }] }),
@@ -67,7 +68,7 @@ function LeavesPage() {
 function LeavesContent() {
   const qc = useQueryClient();
   const { t } = useTranslation();
-  const { isLocked } = useOrgSubscription();
+  const { isLocked, isModuleFlagOff } = useOrgSubscription();
   const [page, setPage] = useState(1);
   const [applyOpen, setApplyOpen] = useState(false);
 
@@ -83,6 +84,9 @@ function LeavesContent() {
 
   const items = history.data?.items ?? [];
   const balances = balance.data ?? [];
+
+  const moduleLocked = isModuleFlagOff("leave_management");
+  if (moduleLocked) return <ModuleFeatureLockedCard feature="leave_management" />;
 
   return (
     <div>

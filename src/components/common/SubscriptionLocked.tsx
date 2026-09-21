@@ -33,10 +33,13 @@ import { useRoles } from "@/lib/permissions";
 import {
   marketingService,
   orgSubscriptionService,
+  MODULE_FEATURES,
   type SubscriptionPlan,
   type CustomPlanRequest,
+  type ModuleFlags,
   type UUID,
 } from "@/services";
+import { useOrgSubscription } from "@/hooks/useOrgSubscription";
 
 export function SubscriptionBanner() {
   const { t } = useTranslation();
@@ -367,5 +370,17 @@ export function FeatureLockedCard({ title, description }: { title: string; descr
         </Button>
       </CardContent>
     </Card>
+  );
+}
+
+export function ModuleFeatureLockedCard({ feature }: { feature: keyof ModuleFlags }) {
+  const { isModuleFlagOff } = useOrgSubscription();
+  const label = MODULE_FEATURES.find((m) => m.key === feature)?.label ?? feature;
+  if (!isModuleFlagOff(feature)) return null;
+  return (
+    <FeatureLockedCard
+      title={`${label} unavailable`}
+      description={`${label} is not included in your organization's current plan. Contact your admin to upgrade.`}
+    />
   );
 }
