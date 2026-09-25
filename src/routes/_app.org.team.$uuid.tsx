@@ -2,7 +2,7 @@ import { createFileRoute, Link, useParams, useSearch } from "@tanstack/react-rou
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect, type ReactNode } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, Calculator, FileUp, Lock, Mail, Phone, Pencil, Plus, Save, Trash2, Upload, UserRound, X, BriefcaseBusiness, Building2, CalendarDays, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Calculator, Download, Eye, FileUp, Lock, Mail, Phone, Pencil, Plus, Save, Trash2, Upload, UserRound, X, BriefcaseBusiness, Building2, CalendarDays, ShieldCheck } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { EmployeeDocPicker, type StagedDoc } from "@/components/employees/EmployeeDocPicker";
 
@@ -557,49 +557,50 @@ function DisplayContent(props: { emp: EmployeeRecord; editing: boolean; form: an
                 }
               />
               <DetailRow label="Created" value={formatDate(emp.created_at)} />
-            </div>
-          </section>
-
-          <Separator />
-
-          {/* Platform access */}
-          <section className="p-6">
-            <div className="flex items-center gap-2.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                <ShieldCheck className="h-4 w-4" />
-              </div>
-              <CardTitle className="text-sm font-semibold">Platform Access</CardTitle>
-            </div>
-            <Separator className="my-3" />
-            <div className="divide-y divide-border/70">
-              <DetailRow
-                label="Platform User"
-                value={emp.is_platform_user === "yes" ? "Yes" : "No"}
-              />
-              <DetailRow
-                label="Account Status"
-                value={
-                  emp.linked_user_status
-                    ? emp.linked_user_status === "inactive"
-                      ? "Invite pending"
-                      : "Active"
-                    : "—"
-                }
-              />
-              <DetailRow
-                label="Role"
-                value={
-                  emp.linked_user_role === "org_admin"
-                    ? "Org Admin"
-                    : emp.is_platform_user === "yes"
-                      ? "Member"
-                      : "—"
-                }
-              />
-              <DetailRow label="Linked Email" value={emp.linked_user_email ?? "—"} />
               <DetailRow label="Added By" value={emp.added_by_name ?? "—"} />
             </div>
           </section>
+
+          {/* Platform access — only meaningful once this employee actually has a
+              platform account. Before that every row would read "No" / "—",
+              which is just noise on the detail page. "Added By" lives in the
+              Personal Information section above so that audit detail is never
+              lost for non-platform employees. */}
+          {emp.is_platform_user === "yes" ? (
+            <>
+              <Separator />
+
+              <section className="p-6">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                    <ShieldCheck className="h-4 w-4" />
+                  </div>
+                  <CardTitle className="text-sm font-semibold">Platform Access</CardTitle>
+                </div>
+                <Separator className="my-3" />
+                <div className="divide-y divide-border/70">
+                  <DetailRow label="Platform User" value="Yes" />
+                  <DetailRow
+                    label="Account Status"
+                    value={
+                      emp.linked_user_status
+                        ? emp.linked_user_status === "inactive"
+                          ? "Invite pending"
+                          : "Active"
+                        : "—"
+                    }
+                  />
+                  <DetailRow
+                    label="Role"
+                    value={
+                      emp.linked_user_role === "org_admin" ? "Org Admin" : "Member"
+                    }
+                  />
+                  <DetailRow label="Linked Email" value={emp.linked_user_email ?? "—"} />
+                </div>
+              </section>
+            </>
+          ) : null}
         </CardContent>
       </Card>
     </div>
@@ -658,11 +659,8 @@ function DocumentsCard({
         <div className="space-y-1.5">
           {docsQ.isLoading && <p className="text-xs text-muted-foreground">Loading documents…</p>}
           {docs.map((doc) => (
-            <div key={doc.uuid} className="flex items-center justify-between rounded-md border border-border px-2 py-1.5 text-sm">
-              <ProtectedDocumentLink
-                storedPath={doc.file_path}
-                className="flex min-w-0 flex-1 items-center gap-2 text-primary hover:underline"
-              >
+            <div key={doc.uuid} className="flex items-center justify-between gap-2 rounded-md border border-border px-2 py-1.5 text-sm">
+              <div className="flex min-w-0 flex-1 items-center gap-2">
                 <FileUp className="h-4 w-4 shrink-0 text-muted-foreground" />
                 <span className="min-w-0 flex-1 truncate">
                   {doc.document_type && (
@@ -676,13 +674,23 @@ function DocumentsCard({
                 {doc.file_size ? (
                   <span className="shrink-0 text-xs text-muted-foreground">({formatFileSize(doc.file_size)})</span>
                 ) : null}
-              </ProtectedDocumentLink>
+              </div>
               <div className="flex shrink-0 items-center gap-2">
                 {doc.file_size || doc.uploaded_at ? (
                   <span className="text-xs text-muted-foreground">
                     {doc.uploaded_at ? formatDateTime(doc.uploaded_at) : formatDate(doc.created_at)}
                   </span>
                 ) : null}
+                <Button asChild size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-foreground" title="View document">
+                  <ProtectedDocumentLink storedPath={doc.file_path} fileName={doc.file_name} mode="view">
+                    <Eye className="h-4 w-4" />
+                  </ProtectedDocumentLink>
+                </Button>
+                <Button asChild size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-foreground" title="Download document">
+                  <ProtectedDocumentLink storedPath={doc.file_path} fileName={doc.file_name} mode="download">
+                    <Download className="h-4 w-4" />
+                  </ProtectedDocumentLink>
+                </Button>
                 {editing && canDelete && (
                   <Button
                     type="button"

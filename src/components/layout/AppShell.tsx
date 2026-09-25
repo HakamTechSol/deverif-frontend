@@ -33,6 +33,7 @@ import {
   Languages,
   ShieldCheck,
   Lock,
+  BadgeCheck,
 } from "lucide-react";
 import { Logo } from "@/components/common/Logo";
 import { Button } from "@/components/ui/button";
@@ -65,6 +66,7 @@ const userNavItems: NavItem[] = [
   { to: "/requests", labelKey: "nav.myRequests", icon: Send },
   { to: "/leaves", labelKey: "nav.leaves", icon: CalendarDays },
   { to: "/inbox", labelKey: "nav.inbox", icon: Inbox },
+  { to: "/auto-verified", labelKey: "nav.autoVerified", icon: BadgeCheck },
 ];
 
 const memberNavItems: NavItem[] = [
@@ -173,6 +175,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     if (it.to === "/requests") return isOrgAdmin ? canGenerate : perms.generate_request;
     if (it.to === "/leaves") return isOrgAdmin || isSubAdmin ? false : perms.leave;
     if (it.to === "/inbox") return canApprove;
+    if (it.to === "/auto-verified") return canApprove;
     return true;
   });
 

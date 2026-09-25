@@ -1101,72 +1101,52 @@ function EmployeeDashboard({ firstName }: { firstName: string }) {
         {/* This month's payslip */}
         <Card className={`border-border/70 shadow-none ${isLocked ? "opacity-60" : ""}`}>
           <CardContent className="p-5">
-            <div className="flex items-start justify-between">
-              <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
                 <Wallet className="h-4 w-4" />
               </div>
-              <Button asChild variant="ghost" size="sm" className="h-8">
-                <Link to="/payroll">
-                  {t("dashboard.viewPayslip")} <ArrowUpRight className="h-3.5 w-3.5" />
-                </Link>
-              </Button>
+              <p className="text-sm font-medium text-foreground">{t("dashboard.netSalary")}</p>
             </div>
             {payslipQ.isLoading ? (
-              <div className="flex h-[104px] items-center justify-center">
+              <div className="flex h-12 items-center">
                 <DverifLoader size="sm" />
               </div>
-            ) : payslip ? (
-              <>
-                <div className="mt-5 text-2xl font-semibold tracking-tight text-foreground">
-                  {money(payslip.net_salary)}
-                </div>
-                <div className="mt-0.5 text-sm text-muted-foreground">
-                  {t("dashboard.netSalary")}
-                </div>
-              </>
-            ) : payslipQ.isError ? (
-              <div className="mt-5 text-xl font-medium text-destructive">—</div>
             ) : (
-              <div className="mt-5 text-sm text-muted-foreground">
-                {t("dashboard.noPayslipYet")}
+              <div className="mt-3 flex items-end justify-between gap-3">
+                <span className="text-2xl font-semibold tracking-tight text-foreground">
+                  {payslip ? money(payslip.net_salary) : "—"}
+                </span>
+                <span className="shrink-0 whitespace-nowrap rounded-md bg-muted/60 px-2.5 py-1 text-xs text-muted-foreground">
+                  {t("dashboard.payslipPeriod", { period: `${curMonth}/${curYear}` })}
+                </span>
               </div>
             )}
-            <p className="mt-3 rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-              {t("dashboard.payslipPeriod", { period: `${curMonth}/${curYear}` })}
-            </p>
           </CardContent>
         </Card>
 
         {/* My attendance this month */}
         <Card className={`border-border/70 shadow-none ${isLocked ? "opacity-60" : ""}`}>
           <CardContent className="p-5">
-            <div className="flex items-start justify-between">
-              <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
                 <CalendarCheck className="h-4 w-4" />
               </div>
-              <Button asChild variant="ghost" size="sm" className="h-8">
-                <Link to="/attendance">
-                  {t("dashboard.viewAll")} <ArrowUpRight className="h-3.5 w-3.5" />
-                </Link>
-              </Button>
+              <p className="text-sm font-medium text-foreground">{t("dashboard.daysPresent")}</p>
             </div>
             {attendanceQ.isLoading ? (
-              <div className="flex h-[104px] items-center justify-center">
+              <div className="flex h-12 items-center">
                 <DverifLoader size="sm" />
               </div>
             ) : (
-              <>
-                <div className="mt-5 text-2xl font-semibold tracking-tight text-foreground">
+              <div className="mt-3 flex items-end justify-between gap-3">
+                <span className="text-2xl font-semibold tracking-tight text-foreground">
                   {presentDays}
-                </div>
-                <div className="mt-0.5 text-sm text-muted-foreground">
-                  {t("dashboard.daysPresent")}
-                </div>
-              </>
+                </span>
+                <span className="shrink-0 whitespace-nowrap rounded-md bg-muted/60 px-2.5 py-1 text-xs text-muted-foreground">
+                  {t("dashboard.attendancePeriod", { period: `${curMonth}/${curYear}` })}
+                </span>
+              </div>
             )}
-            <p className="mt-3 rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-              {t("dashboard.attendancePeriod", { period: `${curMonth}/${curYear}` })}
-            </p>
           </CardContent>
         </Card>
 

@@ -56,7 +56,7 @@ export const Route = createFileRoute("/_app/admin/payments")({
   validateSearch: (search: Record<string, unknown>): { tab?: string } => ({
     tab: typeof search.tab === "string" ? search.tab : undefined,
   }),
-  head: () => ({ meta: [{ title: "Payments â€” Dverif Admin" }] }),
+  head: () => ({ meta: [{ title: "Payments — Dverif Admin" }] }),
   component: AdminPaymentsPage,
 });
 
@@ -109,7 +109,7 @@ function AdminPaymentsPage() {
   );
 }
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Payment History Tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─────────── Payment History Tab ─────────── */
 function PaymentHistoryTab() {
   const qc = useQueryClient();
   const [page, setPage] = useState(1);
@@ -144,7 +144,7 @@ function PaymentHistoryTab() {
               setSearch(v);
               setPage(1);
             }}
-            placeholder="Search reference or userâ€¦"
+            placeholder="Search reference or user…"
           />
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
             <Input
@@ -202,7 +202,7 @@ function PaymentHistoryTab() {
                     <TableCell className="w-10 text-muted-foreground">{(page - 1) * 10 + i + 1}</TableCell>
                     <TableCell data-label="Reference" className="font-mono text-xs">{p.transaction_reference}</TableCell>
                     <TableCell data-label="User" className="text-muted-foreground">
-                      {p.full_name ?? "â€”"}
+                      {p.full_name ?? "—"}
                       <div className="text-xs">{p.email}</div>
                     </TableCell>
                     <TableCell data-label="Method">
@@ -241,7 +241,7 @@ function PaymentHistoryTab() {
   );
 }
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Add Manual Payment Dialog â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─────────── Add Manual Payment Dialog ─────────── */
 function PaymentFormDialog({
   open,
   onOpenChange,
@@ -363,7 +363,7 @@ function PaymentFormDialog({
   );
 }
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Self-subscriptions Tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─────────── Self-subscriptions Tab ─────────── */
 function SelfSubscriptionTab() {
   const [status, setStatus] = useState<"pending" | "completed" | "failed" | "expired" | "cancelled" | "all">("all");
   const [page, setPage] = useState(1);
@@ -478,13 +478,13 @@ function SelfSubscriptionTab() {
                   {list.data.items.map((c: SubscriptionCheckout, i: number) => (
                     <TableRow key={c.uuid}>
                       <TableCell className="w-10 text-muted-foreground">{(page - 1) * 10 + i + 1}</TableCell>
-                      <TableCell className="font-medium">{c.organization_name ?? "â€”"}</TableCell>
-                      <TableCell className="capitalize">{c.plan_name ?? "â€”"}</TableCell>
-                      <TableCell className="capitalize text-muted-foreground">{c.gateway ?? "â€”"}</TableCell>
+                      <TableCell className="font-medium">{c.organization_name ?? "—"}</TableCell>
+                      <TableCell className="capitalize">{c.plan_name ?? "—"}</TableCell>
+                      <TableCell className="capitalize text-muted-foreground">{c.gateway ?? "—"}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">
                         {c.amount != null
                           ? `Rs. ${Number(c.amount).toLocaleString()}${c.currency ? ` ${c.currency}` : ""}`
-                          : "â€”"}
+                          : "—"}
                       </TableCell>
                       <TableCell>{checkoutBadge(c.status)}</TableCell>
                       <TableCell>{orgStatusBadge(c)}</TableCell>
@@ -509,10 +509,10 @@ function SelfSubscriptionTab() {
   );
 }
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Custom Plan Requests Tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─────────── Custom Plan Requests Tab ─────────── */
 function CustomPlanRequestsTab() {
   const qc = useQueryClient();
-  const [status, setStatus] = useState<"pending" | "approved" | "denied" | "all">("pending");
+  const [status, setStatus] = useState<"all" | "pending" | "approved" | "denied">("all");
   const [approveTarget, setApproveTarget] = useState<CustomPlanRequest | null>(null);
   const [dailyQuota, setDailyQuota] = useState<string>("");
   const [price, setPrice] = useState<string>("");
@@ -576,8 +576,8 @@ function CustomPlanRequestsTab() {
           <h3 className="text-sm font-semibold text-foreground">Custom Plan Requests</h3>
         </div>
 
-        <div className="mb-4 flex items-center gap-2">
-          {(["pending", "approved", "denied", "all"] as const).map((s) => (
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          {(["all", "pending", "approved", "denied"] as const).map((s) => (
             <Badge
               key={s}
               variant={status === s ? "default" : "outline"}
@@ -602,40 +602,59 @@ function CustomPlanRequestsTab() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-10">S.No</TableHead>
+                  <TableHead className="w-12">S.No</TableHead>
                   <TableHead>Organization</TableHead>
                   <TableHead>Requested by</TableHead>
-                  <TableHead>Message</TableHead>
-                  <TableHead>Requested quota / budget</TableHead>
+                  <TableHead className="min-w-[200px]">Message</TableHead>
+                  <TableHead className="whitespace-nowrap">Requested quota / budget</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Approved quota / price</TableHead>
+                  <TableHead className="whitespace-nowrap">Approved quota / price</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {list.data.items.map((r: CustomPlanRequest, i: number) => (
                   <TableRow key={r.uuid}>
-                    <TableCell className="w-10 text-muted-foreground">{i + 1}</TableCell>
-                    <TableCell className="font-medium">{r.organization_name ?? "â€”"}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {r.requested_by_name ?? "â€”"}
+                    <TableCell className="w-12 text-muted-foreground">{i + 1}</TableCell>
+                    <TableCell
+                      data-label="Organization"
+                      className="font-medium text-foreground"
+                    >
+                      {r.organization_name ?? "—"}
                     </TableCell>
-                    <TableCell className="max-w-xs truncate text-muted-foreground">{r.message}</TableCell>
-                    <TableCell className="text-xs">
+                    <TableCell
+                      data-label="Requested by"
+                      className="text-xs text-muted-foreground"
+                    >
+                      {r.requested_by_name ?? "—"}
+                    </TableCell>
+                    <TableCell
+                      data-label="Message"
+                      className="max-w-xs text-muted-foreground"
+                    >
+                      <span className="line-clamp-2" title={r.message ?? undefined}>
+                        {r.message ?? "—"}
+                      </span>
+                    </TableCell>
+                    <TableCell
+                      data-label="Requested quota / budget"
+                      className="whitespace-nowrap text-xs"
+                    >
                       {r.requested_quota != null ? (
                         <span className="font-medium text-foreground">
                           {r.requested_quota}/day
                           {r.requested_price != null && (
                             <span className="font-normal text-muted-foreground">
-                              {" "}Â· Rs. {Number(r.requested_price).toLocaleString()}
+                              {" · Rs. "}
+                              {Number(r.requested_price).toLocaleString()}
                             </span>
                           )}
                         </span>
                       ) : (
-                        "â€”"
+                        "—"
                       )}
                     </TableCell>
-                    <TableCell>
+                    <TableCell data-label="Status">
                       <Badge
                         variant="outline"
                         className={`rounded-full capitalize ${
@@ -649,12 +668,25 @@ function CustomPlanRequestsTab() {
                         {r.status}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-xs">
-                      {r.approved_daily_quota
-                        ? `${r.approved_daily_quota}/day Â· Rs. ${Number(r.approved_price ?? 0).toLocaleString()}`
-                        : "â€”"}
+                    <TableCell
+                      data-label="Approved quota / price"
+                      className="whitespace-nowrap text-xs"
+                    >
+                      {r.approved_daily_quota != null ? (
+                        <>
+                          <span className="font-medium text-foreground">
+                            {r.approved_daily_quota}/day
+                          </span>
+                          <span className="font-normal text-muted-foreground">
+                            {" · Rs. "}
+                            {Number(r.approved_price ?? 0).toLocaleString()}
+                          </span>
+                        </>
+                      ) : (
+                        "—"
+                      )}
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell data-label="Actions" className="text-right">
                       {r.status === "pending" ? (
                         <div className="flex justify-end gap-1.5">
                           <Button size="sm" variant="outline" onClick={() => openApprove(r)}>
@@ -671,7 +703,7 @@ function CustomPlanRequestsTab() {
                           </Button>
                         </div>
                       ) : (
-                        <span className="text-xs text-muted-foreground">â€”</span>
+                        <span className="text-xs text-muted-foreground">—</span>
                       )}
                     </TableCell>
                   </TableRow>
@@ -698,7 +730,7 @@ function CustomPlanRequestsTab() {
                   )}
                   {approveTarget?.requested_price != null && (
                     <span className="text-foreground">
-                      {approveTarget?.requested_quota != null ? " Â· " : ""}
+                      {approveTarget?.requested_quota != null ? " · " : ""}
                       Rs. {Number(approveTarget.requested_price).toLocaleString()}
                     </span>
                   )}
@@ -732,7 +764,7 @@ function CustomPlanRequestsTab() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setApproveTarget(null)}>Cancel</Button>
             <Button onClick={confirmApprove} disabled={approve.isPending}>
-              {approve.isPending ? "Approvingâ€¦" : "Approve plan"}
+              {approve.isPending ? "Approving…" : "Approve plan"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -741,7 +773,7 @@ function CustomPlanRequestsTab() {
   );
 }
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Plans Tab (admin-managed public plans) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─────────── Plans Tab (admin-managed public plans) ─────────── */
 function PlansTab() {
   const qc = useQueryClient();
   const [openForm, setOpenForm] = useState(false);
@@ -1169,7 +1201,7 @@ function PlansTab() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpenForm(false)}>Cancel</Button>
             <Button onClick={submitSave} disabled={save.isPending}>
-              {save.isPending ? "Savingâ€¦" : editing ? "Save changes" : "Create plan"}
+              {save.isPending ? "Saving…" : editing ? "Save changes" : "Create plan"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1193,7 +1225,7 @@ function PlansTab() {
               disabled={remove.isPending}
               onClick={() => deleteTarget && remove.mutate(deleteTarget.uuid)}
             >
-              {remove.isPending ? "Deletingâ€¦" : "Delete plan"}
+              {remove.isPending ? "Deleting…" : "Delete plan"}
             </Button>
           </DialogFooter>
         </DialogContent>

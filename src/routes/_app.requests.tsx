@@ -65,6 +65,7 @@ import {
   type UUID,
 } from "@/services";
 import { cn, digitsOnly, formatCNIC, formatDate, parseFeatureAccess } from "@/lib/utils";
+import { UPLOADABLE_DOC_ACCEPT } from "@/lib/documentTypes";
 import { EMPLOYEE_DOCUMENT_TYPES } from "@/lib/documentTypes";
 import { authStore, useAuth } from "@/lib/auth";
 import { DverifLoader } from "@/components/common/DvarifLoader";
@@ -556,8 +557,9 @@ function CreateRequestDialog({
       }
       const created = await requestsService.create(form);
       if (created?.auto_verified) {
+        // The Auto Verified modal is the only feedback here — no toast, so the
+        // animated check mark is the single confirmation the user sees.
         setAutoVerified(created);
-        toast.success("Request verified automatically — 100% matched.");
       } else {
         toast.success(t("requests.requestSubmitted"));
       }
@@ -688,7 +690,7 @@ function CreateRequestDialog({
               <input
                 id="doc-file"
                 type="file"
-                accept="application/pdf,image/jpeg"
+                accept={UPLOADABLE_DOC_ACCEPT}
                 className="hidden"
                 onChange={(e) => setFile(e.target.files?.[0] ?? null)}
               />
@@ -1025,7 +1027,7 @@ function EditRequestDialog({
               <input
                 id="edit-doc-file"
                 type="file"
-                accept="application/pdf,image/jpeg"
+                accept={UPLOADABLE_DOC_ACCEPT}
                 className="hidden"
                 onChange={(e) => setFile(e.target.files?.[0] ?? null)}
               />

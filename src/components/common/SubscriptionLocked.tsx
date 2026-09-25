@@ -416,6 +416,7 @@ export function SubscriptionBanner() {
 }
 
 export function FeatureLockedCard({ title, description }: { title: string; description?: string }) {
+  const { isOrgAdmin } = useRoles();
   return (
     <Card className="relative overflow-hidden border-dashed border-destructive/30">
       <CardContent className="p-6">
@@ -428,9 +429,17 @@ export function FeatureLockedCard({ title, description }: { title: string; descr
             {description && <p className="text-xs text-muted-foreground">{description}</p>}
           </div>
         </div>
-        <Button asChild size="sm" variant="outline" className="mt-4">
-          <Link to="/payments">Renew Subscription</Link>
-        </Button>
+        {/* Only an org admin can actually buy a plan, so employees are pointed
+            at their admin instead of being shown a checkout they cannot use. */}
+        {isOrgAdmin ? (
+          <Button asChild size="sm" variant="outline" className="mt-4">
+            <Link to="/payments">Renew Subscription</Link>
+          </Button>
+        ) : (
+          <p className="mt-4 text-xs text-muted-foreground">
+            Ask your organization admin to upgrade the plan to unlock this.
+          </p>
+        )}
       </CardContent>
     </Card>
   );

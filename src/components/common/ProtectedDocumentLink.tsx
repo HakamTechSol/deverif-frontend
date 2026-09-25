@@ -1,5 +1,5 @@
 import { useCallback, useState, type MouseEvent } from "react";
-import { openStoredDocument } from "@/lib/documents";
+import { openStoredDocument, downloadStoredDocument } from "@/lib/documents";
 
 type AnchorProps = React.AnchorHTMLAttributes<HTMLAnchorElement>;
 
@@ -7,40 +7,52 @@ type AnchorProps = React.AnchorHTMLAttributes<HTMLAnchorElement>;
  * Anchor that opens an uploaded document through the authenticated download
  * API instead of the (now removed) public /uploads static mount. Preserves the
  * markup/classes of a plain <a> so it works as a Button asChild child too.
+ *
+ * Both modes go through axios: the API is Bearer-token authenticated, so a plain
+ * <a href> navigation would be unauthenticated.
+ *   mode="view"     renders the document in a new tab (PDF/image)
+ *   mode="download" saves it under fileName — the name the user uploaded it as
  */
 export function ProtectedDocumentLink({
   storedPath,
+  fileName,
+  mode = "view",
   onError,
   children,
   ...rest
-}: Omit<AnchorProps, "href" | "onClick" | "target" | "rel"> & {
+}: Omit<AnchorProps, "href" | "onClick" | "target" | "rel" | "download"> & {
   storedPath?: string | null;
+  fileName?: string | null;
+  mode?: "view" | "download";
   onError?: () => void;
 }) {
-  const [opening, setOpening] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   const handleClick = useCallback(
     async (e: MouseEvent<HTMLAnchorElement>) => {
       e.preventDefault();
-      if (!storedPath || opening) return;
-      setOpening(true);
+      if (!storedPath || busy) return;
+      setBusy(true);
       try {
-        const opened = await openStoredDocument(storedPath);
-        if (!opened) onError?.();
+        const ok =
+          mode === "download"
+            ? await downloadStoredDocument(storedPath, fileName)
+            : await openStoredDocument(storedPath);
+        if (!ok) onError?.();
       } finally {
-        setOpening(false);
+        setBusy(false);
       }
     },
-    [storedPath, opening, onError],
+    [storedPath, fileName, mode, busy, onError],
   );
 
   return (
     <a
       {...rest}
       href={storedPath ?? "#"}
-      target="_blank"
-      rel="noreferrer"
-      aria-disabled={opening}
+      target={mode === "view" ? "_blank" : undefined}
+      rel={mode === "view" ? "noreferrer" : undefined}
+      aria-disabled={busy}
       onClick={handleClick}
     >
       {children}

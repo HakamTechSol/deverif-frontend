@@ -5,17 +5,22 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SearchableSelect } from "@/components/common/SearchableSelect";
-import { EMPLOYEE_DOCUMENT_TYPE_OPTIONS } from "@/lib/documentTypes";
+import {
+  EMPLOYEE_DOCUMENT_TYPE_OPTIONS,
+  UPLOADABLE_DOC_ACCEPT,
+  UPLOADABLE_DOC_EXTENSIONS,
+} from "@/lib/documentTypes";
 import { formatFileSize } from "@/lib/utils";
 
 export type StagedDoc = { name: string; file: File };
 
 export const MAX_DOC_SIZE = 10 * 1024 * 1024;
 
-export const ALLOWED_DOC_EXT = [
-  ".pdf", ".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp",
-  ".doc", ".docx", ".xls", ".xlsx", ".txt", ".csv", ".zip",
-];
+/**
+ * Re-exported for callers that validated uploads before this list was shared.
+ * Kept as a plain array so `.includes(ext)` stays type-safe.
+ */
+export const ALLOWED_DOC_EXT: readonly string[] = UPLOADABLE_DOC_EXTENSIONS;
 
 export function validateDocFile(file: File): string | null {
   const ext = "." + (file.name.split(".").pop() ?? "").toLowerCase();
@@ -46,6 +51,29 @@ export function EmployeeDocPicker({
   const [docType, setDocType] = useState("");
   const [docFile, setDocFile] = useState<File | null>(null);
   const [error, setError] = useState("");
+
+  // Stage immediately on file selection. Previously the file was only held in
+  // local state and had to be committed with a separate "Add Doc" click, so a
+  // user who picked a file and went straight to Save silently lost the
+  // document — the staged list stayed empty and nothing was uploaded.
+  const stagePickedFile = (picked: File | null) => {
+    setDocFile(picked);
+    setError("");
+    if (!picked) return;
+
+    if (!docType) {
+      setError("Please select a document type — your file has not been added yet.");
+      return;
+    }
+    const problem = validateDocFile(picked);
+    if (problem) {
+      setError(problem);
+      return;
+    }
+    onChange([...docs, { name: docType, file: picked }]);
+    setDocType("");
+    setDocFile(null);
+  };
 
   const addDoc = () => {
     if (!docFile) {
@@ -85,20 +113,19 @@ export function EmployeeDocPicker({
             <Label className="text-xs font-medium">File (up to 10MB)</Label>
             <Input
               type="file"
-              accept=".pdf,image/jpeg,image/png,image/webp,.doc,.docx,.xls,.xlsx,.txt,.csv,.zip"
+              accept={UPLOADABLE_DOC_ACCEPT}
               onChange={(e) => {
                 const picked = e.target.files?.[0] ?? null;
-                setDocFile(picked);
-                setError("");
+                stagePickedFile(picked);
                 e.target.value = "";
               }}
               className="text-sm"
             />
-            {docFile && (
+            {docFile ? (
               <div className="mt-1 text-xs text-muted-foreground">
-                Selected: {docFile.name}
+                Selected: {docFile.name} — click <span className="font-medium text-foreground">Add Doc</span> to attach it
               </div>
-            )}
+            ) : null}
           </div>
         </div>
         <Button type="button" size="sm" variant="outline" onClick={addDoc}>

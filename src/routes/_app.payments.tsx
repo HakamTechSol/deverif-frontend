@@ -32,13 +32,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { DverifLoader } from "@/components/common/DvarifLoader";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Dialog,
   DialogContent,
   DialogFooter,
@@ -825,35 +818,108 @@ function PlanPage({
 
       {/* Change plan — always via Safepay checkout */}
       <Dialog open={changeOpen} onOpenChange={(o) => !o && setChangeOpen(false)}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>{t("payments.changePlan")}</DialogTitle>
             <DialogDescription>{t("payments.changePlanCheckoutDesc")}</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label>{t("payments.selectPlan")}</Label>
-              <Select value={selectedPlan} onValueChange={(v) => setSelectedPlan(v)}>
-                <SelectTrigger>
-                  <SelectValue placeholder={t("payments.selectPlanPlaceholder")} />
-                </SelectTrigger>
-                <SelectContent>
-                  {(availablePlans.data ?? [])
-                    .filter((p) => p.is_free !== 1)
-                    .map((p: SubscriptionPlan) => (
-                    <SelectItem key={p.uuid} value={p.uuid}>
-                      {p.name} — Rs. {p.monthly_price?.toLocaleString()} · {p.daily_request_quota}/day
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {(availablePlans.data ?? []).length === 0 && (
-                <p className="text-xs text-muted-foreground">{t("payments.noAvailablePlans")}</p>
-              )}
+
+          {changePlanCheckout.isPending ? (
+            <div className="flex flex-col items-center justify-center gap-3 py-16">
+              <DverifLoader />
+              <p className="text-sm text-muted-foreground">{t("autoVerified.loading")}</p>
             </div>
-            <p className="text-xs text-muted-foreground">{t("payments.changePlanRestart")}</p>
-            <p className="text-xs text-muted-foreground">{t("payments.changePlanCheckoutNote")}</p>
+          ) : (availablePlans.data ?? []).filter((p) => p.is_free !== 1).length === 0 ? (
+            <p className="py-10 text-center text-sm text-muted-foreground">
+              {t("payments.noAvailablePlans")}
+            </p>
+          ) : (
+            <div className="grid max-h-[52vh] gap-3 overflow-y-auto py-1 sm:grid-cols-2 lg:grid-cols-3">
+              {(availablePlans.data ?? [])
+                .filter((p) => p.is_free !== 1)
+                .map((p: SubscriptionPlan) => {
+                  const selected = selectedPlan === p.uuid;
+                  const isCurrent = !!orgSub?.plan_name && orgSub.plan_name === p.name;
+                  return (
+                    <button
+                      key={p.uuid}
+                      type="button"
+                      onClick={() => !isCurrent && setSelectedPlan(p.uuid)}
+                      disabled={isCurrent}
+                      aria-pressed={selected}
+                      className={`flex flex-col rounded-lg border p-4 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                        isCurrent
+                          ? "cursor-default border-success/50 bg-success/5"
+                          : selected
+                            ? "cursor-pointer border-primary bg-primary/5 ring-2 ring-primary"
+                            : "cursor-pointer border-border bg-card hover:border-primary/50 hover:bg-accent/40"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="font-semibold capitalize text-foreground">{p.name}</p>
+                        {isCurrent ? (
+                          <Badge className="shrink-0 rounded-full bg-success/15 text-success hover:bg-success/15">
+                            {t("payments.currentPlan")}
+                          </Badge>
+                        ) : selected ? (
+                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                            <Check className="h-3 w-3" />
+                          </span>
+                        ) : null}
+                      </div>
+
+                      <div className="mt-3 flex items-baseline gap-1">
+                        <span className="text-2xl font-bold text-foreground">
+                          Rs. {p.monthly_price?.toLocaleString()}
+                        </span>
+                        <span className="text-xs text-muted-foreground">/{p.billing_period}</span>
+                      </div>
+
+                      <p className="mt-1.5 flex items-center gap-1.5 text-sm text-muted-foreground">
+                        <Gauge className="h-3.5 w-3.5 shrink-0 text-primary" />
+                        <span>
+                          <span className="font-semibold text-foreground">
+                            {p.daily_request_quota}
+                          </span>{" "}
+                          {t("payments.requestsPerDay")}
+                        </span>
+                      </p>
+
+                      {p.description ? (
+                        <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">
+                          {p.description}
+                        </p>
+                      ) : null}
+
+                      <ul className="mt-3 space-y-1.5">
+                        <li className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                          <Check className="mt-0.5 h-3 w-3 shrink-0 text-success" />
+                          {t("payments.freeRequestAlways")}
+                        </li>
+                        {(p.features ?? []).slice(0, 3).map((f, i) => (
+                          <li key={i} className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                            <Check className="mt-0.5 h-3 w-3 shrink-0 text-success" />
+                            <span className="line-clamp-1">{f.text}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </button>
+                  );
+                })}
+            </div>
+          )}
+
+          <div className="space-y-1.5 border-t border-border pt-3">
+            <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+              <RefreshCw className="mt-0.5 h-3 w-3 shrink-0" />
+              {t("payments.changePlanRestart")}
+            </p>
+            <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+              <Clock className="mt-0.5 h-3 w-3 shrink-0" />
+              {t("payments.changePlanCheckoutNote")}
+            </p>
           </div>
+
           <DialogFooter>
             <Button variant="ghost" onClick={() => setChangeOpen(false)} disabled={changePlanCheckout.isPending}>
               {t("common.cancel")}

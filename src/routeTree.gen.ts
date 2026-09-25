@@ -17,6 +17,7 @@ import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as SetPasswordRouteImport } from './routes/set-password'
 import { Route as AppAttendanceRouteImport } from './routes/_app.attendance'
+import { Route as AppAutoVerifiedRouteImport } from './routes/_app.auto-verified'
 import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
 import { Route as AppInboxRouteImport } from './routes/_app.inbox'
 import { Route as AppLeavesRouteImport } from './routes/_app.leaves'
@@ -38,6 +39,7 @@ import { Route as AppAdminRequestsRouteImport } from './routes/_app.admin.reques
 import { Route as AppAdminSupportRouteImport } from './routes/_app.admin.support'
 import { Route as AppAdminUnresponsiveRouteImport } from './routes/_app.admin.unresponsive'
 import { Route as AppAdminUsersRouteImport } from './routes/_app.admin.users'
+import { Route as AppAutoVerifiedUuidRouteImport } from './routes/_app.auto-verified_.$uuid'
 import { Route as AppOrgAdminsRouteImport } from './routes/_app.org.admins'
 import { Route as AppOrgAttendanceRouteImport } from './routes/_app.org.attendance'
 import { Route as AppOrgLeavesRouteImport } from './routes/_app.org.leaves'
@@ -90,6 +92,11 @@ const SetPasswordRoute = SetPasswordRouteImport.update({
 const AppAttendanceRoute = AppAttendanceRouteImport.update({
   id: '/attendance',
   path: '/attendance',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAutoVerifiedRoute = AppAutoVerifiedRouteImport.update({
+  id: '/auto-verified',
+  path: '/auto-verified',
   getParentRoute: () => AppRoute,
 } as any)
 const AppDashboardRoute = AppDashboardRouteImport.update({
@@ -199,6 +206,11 @@ const AppAdminUsersRoute = AppAdminUsersRouteImport.update({
   path: '/admin/users',
   getParentRoute: () => AppRoute,
 } as any)
+const AppAutoVerifiedUuidRoute = AppAutoVerifiedUuidRouteImport.update({
+  id: '/auto-verified_/$uuid',
+  path: '/auto-verified/$uuid',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppOrgAdminsRoute = AppOrgAdminsRouteImport.update({
   id: '/org/admins',
   path: '/org/admins',
@@ -278,6 +290,7 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof ResetPasswordRoute
   '/set-password': typeof SetPasswordRoute
   '/attendance': typeof AppAttendanceRoute
+  '/auto-verified': typeof AppAutoVerifiedRoute
   '/dashboard': typeof AppDashboardRoute
   '/inbox': typeof AppInboxRoute
   '/leaves': typeof AppLeavesRoute
@@ -299,6 +312,7 @@ export interface FileRoutesByFullPath {
   '/admin/support': typeof AppAdminSupportRouteWithChildren
   '/admin/unresponsive': typeof AppAdminUnresponsiveRoute
   '/admin/users': typeof AppAdminUsersRoute
+  '/auto-verified/$uuid': typeof AppAutoVerifiedUuidRoute
   '/org/admins': typeof AppOrgAdminsRoute
   '/org/attendance': typeof AppOrgAttendanceRoute
   '/org/leaves': typeof AppOrgLeavesRoute
@@ -322,6 +336,7 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/set-password': typeof SetPasswordRoute
   '/attendance': typeof AppAttendanceRoute
+  '/auto-verified': typeof AppAutoVerifiedRoute
   '/dashboard': typeof AppDashboardRoute
   '/inbox': typeof AppInboxRoute
   '/leaves': typeof AppLeavesRoute
@@ -342,6 +357,7 @@ export interface FileRoutesByTo {
   '/admin/requests': typeof AppAdminRequestsRoute
   '/admin/unresponsive': typeof AppAdminUnresponsiveRoute
   '/admin/users': typeof AppAdminUsersRoute
+  '/auto-verified/$uuid': typeof AppAutoVerifiedUuidRoute
   '/org/admins': typeof AppOrgAdminsRoute
   '/org/attendance': typeof AppOrgAttendanceRoute
   '/org/leaves': typeof AppOrgLeavesRoute
@@ -365,6 +381,7 @@ export interface FileRoutesById {
   '/reset-password': typeof ResetPasswordRoute
   '/set-password': typeof SetPasswordRoute
   '/_app/attendance': typeof AppAttendanceRoute
+  '/_app/auto-verified': typeof AppAutoVerifiedRoute
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/inbox': typeof AppInboxRoute
   '/_app/leaves': typeof AppLeavesRoute
@@ -386,6 +403,7 @@ export interface FileRoutesById {
   '/_app/admin/support': typeof AppAdminSupportRouteWithChildren
   '/_app/admin/unresponsive': typeof AppAdminUnresponsiveRoute
   '/_app/admin/users': typeof AppAdminUsersRoute
+  '/_app/auto-verified_/$uuid': typeof AppAutoVerifiedUuidRoute
   '/_app/org/admins': typeof AppOrgAdminsRoute
   '/_app/org/attendance': typeof AppOrgAttendanceRoute
   '/_app/org/leaves': typeof AppOrgLeavesRoute
@@ -411,6 +429,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/set-password'
     | '/attendance'
+    | '/auto-verified'
     | '/dashboard'
     | '/inbox'
     | '/leaves'
@@ -432,6 +451,7 @@ export interface FileRouteTypes {
     | '/admin/support'
     | '/admin/unresponsive'
     | '/admin/users'
+    | '/auto-verified/$uuid'
     | '/org/admins'
     | '/org/attendance'
     | '/org/leaves'
@@ -455,6 +475,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/set-password'
     | '/attendance'
+    | '/auto-verified'
     | '/dashboard'
     | '/inbox'
     | '/leaves'
@@ -475,6 +496,7 @@ export interface FileRouteTypes {
     | '/admin/requests'
     | '/admin/unresponsive'
     | '/admin/users'
+    | '/auto-verified/$uuid'
     | '/org/admins'
     | '/org/attendance'
     | '/org/leaves'
@@ -497,6 +519,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/set-password'
     | '/_app/attendance'
+    | '/_app/auto-verified'
     | '/_app/dashboard'
     | '/_app/inbox'
     | '/_app/leaves'
@@ -518,6 +541,7 @@ export interface FileRouteTypes {
     | '/_app/admin/support'
     | '/_app/admin/unresponsive'
     | '/_app/admin/users'
+    | '/_app/auto-verified_/$uuid'
     | '/_app/org/admins'
     | '/_app/org/attendance'
     | '/_app/org/leaves'
@@ -604,6 +628,13 @@ declare module '@tanstack/react-router' {
       path: '/attendance'
       fullPath: '/attendance'
       preLoaderRoute: typeof AppAttendanceRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/auto-verified': {
+      id: '/_app/auto-verified'
+      path: '/auto-verified'
+      fullPath: '/auto-verified'
+      preLoaderRoute: typeof AppAutoVerifiedRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/dashboard': {
@@ -753,6 +784,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAdminUsersRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/auto-verified_/$uuid': {
+      id: '/_app/auto-verified_/$uuid'
+      path: '/auto-verified/$uuid'
+      fullPath: '/auto-verified/$uuid'
+      preLoaderRoute: typeof AppAutoVerifiedUuidRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/org/admins': {
       id: '/_app/org/admins'
       path: '/org/admins'
@@ -898,6 +936,7 @@ const AppOrgTeamRouteWithChildren = AppOrgTeamRoute._addFileChildren(
 
 interface AppRouteChildren {
   AppAttendanceRoute: typeof AppAttendanceRoute
+  AppAutoVerifiedRoute: typeof AppAutoVerifiedRoute
   AppDashboardRoute: typeof AppDashboardRoute
   AppInboxRoute: typeof AppInboxRoute
   AppLeavesRoute: typeof AppLeavesRoute
@@ -915,6 +954,7 @@ interface AppRouteChildren {
   AppAdminSupportRoute: typeof AppAdminSupportRouteWithChildren
   AppAdminUnresponsiveRoute: typeof AppAdminUnresponsiveRoute
   AppAdminUsersRoute: typeof AppAdminUsersRoute
+  AppAutoVerifiedUuidRoute: typeof AppAutoVerifiedUuidRoute
   AppOrgAdminsRoute: typeof AppOrgAdminsRoute
   AppOrgAttendanceRoute: typeof AppOrgAttendanceRoute
   AppOrgLeavesRoute: typeof AppOrgLeavesRoute
@@ -927,6 +967,7 @@ interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppAttendanceRoute: AppAttendanceRoute,
+  AppAutoVerifiedRoute: AppAutoVerifiedRoute,
   AppDashboardRoute: AppDashboardRoute,
   AppInboxRoute: AppInboxRoute,
   AppLeavesRoute: AppLeavesRoute,
@@ -944,6 +985,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppAdminSupportRoute: AppAdminSupportRouteWithChildren,
   AppAdminUnresponsiveRoute: AppAdminUnresponsiveRoute,
   AppAdminUsersRoute: AppAdminUsersRoute,
+  AppAutoVerifiedUuidRoute: AppAutoVerifiedUuidRoute,
   AppOrgAdminsRoute: AppOrgAdminsRoute,
   AppOrgAttendanceRoute: AppOrgAttendanceRoute,
   AppOrgLeavesRoute: AppOrgLeavesRoute,

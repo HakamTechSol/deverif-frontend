@@ -108,6 +108,32 @@ export type VerificationRequest = {
   matched_document_type?: string | null;
   matched_employee_name?: string | null;
   auto_verified?: boolean;
+  doc_verification_count?: number | string | null;
+};
+
+/** One ledger entry: a single organization's verification of a person's document. */
+export type DocumentVerificationRecord = {
+  id: number;
+  uuid: UUID;
+  document_type?: string | null;
+  document_hash?: string | null;
+  verified_at?: string | null;
+  status: "verified" | "unverified";
+  cross_check_status?: "not_checked" | "matched" | "mismatched" | null;
+  verified_by_organization_uuid?: string | null;
+  verified_by_organization?: string | null;
+  verified_by_organization_logo?: string | null;
+  verification_request_uuid?: string | null;
+  verification_method?: string | null;
+};
+
+/** Full cross-organization verification history for one document. */
+export type AutoVerifiedHistory = {
+  person_uuid?: string | null;
+  document_type?: string | null;
+  document_owner_name?: string | null;
+  total_verifications: number;
+  history: DocumentVerificationRecord[];
 };
 
 export type UnmatchedOrganization = {
@@ -590,6 +616,22 @@ export const requestsService = {
       .then((r) => r.data),
   myInboxCount: () =>
     api.get<{ count: number }>("/verification-requests/my/inbox/count").then((r) => r.data.count),
+  myAutoVerified: (
+    params: {
+      page?: number;
+      limit?: number;
+      search?: string;
+      dateFrom?: string;
+      dateTo?: string;
+    } = {},
+  ) =>
+    api
+      .get<Paginated<VerificationRequest>>("/verification-requests/my/auto-verified", { params })
+      .then((r) => r.data),
+  autoVerifiedHistory: (uuid: UUID) =>
+    api
+      .get<AutoVerifiedHistory>(`/verification-requests/my/auto-verified/${uuid}/history`)
+      .then((r) => r.data),
   requestDetail: (uuid: UUID) =>
     api
       .get<{ request: VerificationRequest }>(`/verification-requests/my/inbox/${uuid}`)
@@ -889,7 +931,9 @@ export const orgService = {
   getEmployee: (uuid: UUID) =>
     api.get<{ employee: EmployeeRecord }>(`/org/employees/${uuid}`).then((r) => r.data.employee),
   createEmployee: (data: Record<string, unknown>) =>
-    api.post<{ employee: EmployeeRecord }>("/org/employees", data).then((r) => r.data),
+    api
+      .post<{ employee: EmployeeRecord; _email_warning?: string }>("/org/employees", data)
+      .then((r) => r.data),
   createReference: (data: { full_name: string; cnic: string }) =>
     api.post<{ employee: EmployeeRecord }>("/org/employees/reference", data).then((r) => r.data.employee),
   createReferenceEmployee: (data: { full_name: string; cnic: string }) =>
@@ -903,22 +947,6 @@ export const orgService = {
     api.post<{ employee: EmployeeRecord }>(`/org/employees/${uuid}/archive-reference`).then((r) => r.data.employee),
   resendInvite: (uuid: UUID) =>
     api.post<{ message?: string }>(`/org/employees/${uuid}/resend-invite`).then((r) => r.data),
-  promoteToPlatformUsers: (employeeUuids: UUID[]) =>
-    api
-      .post<{
-        results: Array<{
-          uuid?: UUID | null;
-          full_name?: string | null;
-          email?: string | null;
-          status: "promoted" | "skipped" | "failed";
-          message?: string;
-        }>;
-        promoted_count: number;
-        skipped_count: number;
-        failed_count: number;
-      }>("/org/employees/promote", { employee_uuids: employeeUuids })
-      .then((r) => r.data),
-
   departments: {
     list: () => api.get<{ items: ManagedOption[] }>("/org/departments").then((r) => r.data.items),
     create: (name: string) =>
