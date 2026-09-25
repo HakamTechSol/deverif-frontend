@@ -7,7 +7,7 @@ export const Route = createFileRoute("/_app")({
   beforeLoad: ({ location }) => {
     if (typeof window === "undefined") return;
 
-    const token = window.localStorage.getItem("Dverif_token");
+    const token = authStore.get().token;
     if (!token) throw redirect({ to: "/login" });
 
     const user = authStore.get().user;

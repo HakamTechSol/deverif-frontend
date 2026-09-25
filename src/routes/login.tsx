@@ -49,10 +49,10 @@ function LoginPage() {
       const res = await authService.login({ email, password, rememberMe });
 
       if (res?.requiresOtp) {
-        setOtpIdentityType(res.identity_type);
-        setOtpIdentityId(res.identity_id);
-        setOtpEmail(res.email);
-        setOtpFullName(res.full_name);
+        setOtpIdentityType(res.identity_type ?? "user");
+        setOtpIdentityId(res.identity_id ?? "");
+        setOtpEmail(res.email ?? "");
+        setOtpFullName(res.full_name ?? "");
         setOtpProfileImage(res.profile_image ?? null);
         setOtpRememberMe(res.rememberMe ?? false);
         setOtpPending(true);

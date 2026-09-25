@@ -44,6 +44,7 @@ import { useOrgSubscription } from "@/hooks/useOrgSubscription";
 export function SubscriptionBanner() {
   const { t } = useTranslation();
   const { isOrgAdmin, isStaff } = useRoles();
+  const { orgSub, isActive } = useOrgSubscription();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<UUID | undefined>(undefined);
@@ -133,7 +134,7 @@ export function SubscriptionBanner() {
       )}
 
       <Dialog open={open} onOpenChange={(o) => !o && setOpen(false)}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-3xl lg:max-w-4xl">
           <DialogHeader>
             <DialogTitle>{t("subscriptionLocked.viewPlans")}</DialogTitle>
             <DialogDescription>
@@ -151,66 +152,128 @@ export function SubscriptionBanner() {
               </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="plans" className="space-y-3">
-              <div className="max-h-[38vh] space-y-2 overflow-y-auto pr-1">
+            <TabsContent value="plans" className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
                 {plans.isLoading && (
-                  <div className="flex items-center justify-center py-8">
+                  <div className="col-span-full flex items-center justify-center py-8">
                     <DverifLoader />
                   </div>
                 )}
                 {plans.isError && (
-                  <p className="text-sm text-destructive">{t("subscriptionLocked.loadError")}</p>
+                  <p className="col-span-full text-sm text-destructive">{t("subscriptionLocked.loadError")}</p>
                 )}
                 {plans.data && plans.data.length === 0 && (
-                  <p className="text-sm text-muted-foreground">{t("subscriptionLocked.empty")}</p>
+                  <p className="col-span-full text-sm text-muted-foreground">{t("subscriptionLocked.empty")}</p>
                 )}
-                {(plans.data ?? []).map((plan: SubscriptionPlan) => {
-                  const active = plan.uuid === selected;
-                  return (
-                    <button
-                      key={plan.uuid}
-                      type="button"
-                      onClick={() => isOrgAdmin && setSelected(plan.uuid)}
-                      className={`w-full rounded-lg border p-3 text-left transition ${
-                        active
-                          ? "border-primary bg-primary/5"
-                          : "border-border bg-card hover:border-primary/40"
-                      } ${isOrgAdmin ? "cursor-pointer" : "cursor-default"}`}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-semibold text-foreground">{plan.name}</span>
-                          {active && <Check className="h-4 w-4 text-primary" />}
-                        </div>
-                        <span className="text-sm font-medium text-foreground">
-                          Rs. {plan.monthly_price?.toLocaleString()} / {t("payments.perMonth")}
-                        </span>
-                      </div>
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        {plan.daily_request_quota} {t("payments.requestsPerDay")}
-                      </div>
-                      {plan.features && plan.features.length > 0 && (
-                        <ul className="mt-2 space-y-1">
-                          {plan.features.slice(0, 4).map((f, i) => (
-                            <li
-                              key={i}
-                              className={`flex items-start gap-2 text-xs ${
-                                f.highlight
-                                  ? "font-medium text-foreground"
-                                  : "text-muted-foreground"
-                              }`}
+                {(plans.data ?? [])
+                  .filter((p) => p.is_free !== 1)
+                  .map((plan: SubscriptionPlan) => {
+                    const active = plan.uuid === selected;
+                    const isCurrent =
+                      isActive &&
+                      orgSub?.plan_name != null &&
+                      orgSub.plan_name.toLowerCase() === plan.name.toLowerCase();
+                    return (
+                      <Card
+                        key={plan.uuid}
+                        role="button"
+                        tabIndex={isOrgAdmin && !isCurrent ? 0 : -1}
+                        onClick={() => {
+                          if (!isOrgAdmin || isCurrent || isBusy) return;
+                          setSelected(plan.uuid);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key !== "Enter" && e.key !== " ") return;
+                          e.preventDefault();
+                          if (!isOrgAdmin || isCurrent || isBusy) return;
+                          setSelected(plan.uuid);
+                        }}
+                        className={`flex flex-col rounded-xl bg-card text-left shadow-none transition hover:shadow-md ${
+                          isCurrent
+                            ? "border-primary/60 ring-1 ring-primary/40"
+                            : active
+                              ? "border-primary bg-primary/5"
+                              : "border-border/70 hover:border-primary/40"
+                        } ${isOrgAdmin && !isCurrent ? "cursor-pointer" : "cursor-default"}`}
+                      >
+                        <CardContent className="flex flex-1 flex-col gap-4 p-5">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                              <Layers className="h-5 w-5 text-primary" />
+                            </div>
+                            {isCurrent && (
+                              <Badge variant="secondary" className="rounded-full text-[11px]">
+                                {t("subscriptionLocked.activePlan")}
+                              </Badge>
+                            )}
+                            {active && !isCurrent && (
+                              <Check className="mt-1 h-4 w-4 shrink-0 text-primary" />
+                            )}
+                          </div>
+
+                          <div>
+                            <div className="text-base font-semibold capitalize text-foreground">
+                              {plan.name}
+                            </div>
+                            <p className="mt-0.5 text-xs text-muted-foreground">
+                              {plan.description ||
+                                `${plan.daily_request_quota} ${t("payments.requestsPerDay")}`}
+                            </p>
+                          </div>
+
+                          <div className="flex items-baseline gap-1">
+                            <span className="text-2xl font-bold text-foreground">
+                              Rs. {plan.monthly_price?.toLocaleString()}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              / {t("payments.perMonth")}
+                            </span>
+                          </div>
+
+                          {isCurrent ? (
+                            <Button variant="outline" className="w-full" disabled>
+                              <Check className="mr-1.5 h-4 w-4" /> {t("subscriptionLocked.currentPlan")}
+                            </Button>
+                          ) : (
+                            <Button
+                              className="w-full"
+                              onClick={() => {
+                                if (!isOrgAdmin || isBusy) return;
+                                setSelected(plan.uuid);
+                              }}
+                              disabled={!isOrgAdmin || isBusy}
                             >
-                              <Check
-                                className={`mt-0.5 h-3 w-3 shrink-0 ${f.highlight ? "text-primary" : "text-success"}`}
-                              />
-                              <span>{f.text}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </button>
-                  );
-                })}
+                              {t("subscriptionLocked.selectPlan")}
+                            </Button>
+                          )}
+
+                          <div className="border-t border-border pt-3">
+                            {plan.features && plan.features.length > 0 ? (
+                              <ul className="space-y-1.5">
+                                {plan.features.slice(0, 4).map((f, i) => (
+                                  <li
+                                    key={i}
+                                    className={`flex items-start gap-2 text-xs ${
+                                      f.highlight
+                                        ? "font-medium text-foreground"
+                                        : "text-muted-foreground"
+                                    }`}
+                                  >
+                                    <Check
+                                      className={`mt-0.5 h-3 w-3 shrink-0 ${f.highlight ? "text-primary" : "text-success"}`}
+                                    />
+                                    <span>{f.text}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <p className="text-xs text-muted-foreground">{t("payments.noFeaturesDesc")}</p>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
               </div>
 
               <DialogFooter>

@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import axios from "axios";
 
 export type Role = "admin" | "user";
 import type { FeatureAccess } from "@/services";
@@ -19,25 +20,40 @@ export type AuthUser = {
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((l) => l());
 
-let cachedToken: string | null = null;
-let cachedRaw: string | null = null;
-let cachedSnapshot: { token: string | null; user: AuthUser | null } = { token: null, user: null };
+// ---------------------------------------------------------------------------
+// Storage decision:
+//   * The JWT access token lives ONLY in memory (module scope below) and is
+//     NEVER written to localStorage. It cannot be exfiltrated via XSS and no
+//     stale token survives a logout. After every full page load it is restored
+//     once from the httpOnly refresh cookie via `ensureAuthenticated` (see the
+//     router's `hydrate` option).
+//   * The refresh token is untouched: httpOnly cookie, as before.
+//   * The non-sensitive user PROFILE (Dverif_user below) stays in localStorage
+//     so i18n can read `preferred_language` synchronously before React mounts
+//     and guards/AppShell can show the right screen after a hard refresh.
+// ---------------------------------------------------------------------------
+let inMemoryToken: string | null = null;
 
-function read(): { token: string | null; user: AuthUser | null } {
-  if (typeof window === "undefined") return { token: null, user: null };
-  const token = window.localStorage.getItem("Dverif_token");
+let cachedRawUser: string | null = null;
+let cachedParsedUser: AuthUser | null = null;
+
+function userFromStorage(): AuthUser | null {
+  if (typeof window === "undefined") return null;
   const raw = window.localStorage.getItem("Dverif_user");
-  if (token === cachedToken && raw === cachedRaw) return cachedSnapshot;
+  if (raw === cachedRawUser) return cachedParsedUser;
+  cachedRawUser = raw;
   let user: AuthUser | null = null;
   try {
     user = raw ? (JSON.parse(raw) as AuthUser) : null;
   } catch {
     user = null;
   }
-  cachedToken = token;
-  cachedRaw = raw;
-  cachedSnapshot = { token, user };
-  return cachedSnapshot;
+  cachedParsedUser = user;
+  return user;
+}
+
+function read(): { token: string | null; user: AuthUser | null } {
+  return { token: inMemoryToken, user: userFromStorage() };
 }
 
 export const authStore = {
@@ -49,8 +65,12 @@ export const authStore = {
     };
   },
   setSession(token: string, user: AuthUser) {
-    window.localStorage.setItem("Dverif_token", token);
+    inMemoryToken = token;
     window.localStorage.setItem("Dverif_user", JSON.stringify(user));
+    emit();
+  },
+  setToken(token: string) {
+    inMemoryToken = token;
     emit();
   },
   updateUser(user: AuthUser) {
@@ -58,13 +78,84 @@ export const authStore = {
     emit();
   },
   clear() {
-    window.localStorage.removeItem("Dverif_token");
+    inMemoryToken = null;
     window.localStorage.removeItem("Dverif_user");
     emit();
   },
 };
 
 const serverSnap = { token: null as string | null, user: null as AuthUser | null };
+
+// useSyncExternalStore requires getSnapshot to return a STABLE reference while
+// the underlying state is unchanged. Returning a fresh `{ token, user }` literal
+// on every call makes React see the snapshot as changed each render, which
+// triggers "Maximum update depth exceeded". Track the last emitted snapshot and
+// only rebuild it when the raw profile string or in-memory token actually move.
+type AuthSnapshot = { token: string | null; user: AuthUser | null };
+
+let cachedSnapshot: AuthSnapshot | null = null;
+let snapshotRaw: string | null = null;
+let snapshotToken: string | null = null;
+
+function getSnapshot(): AuthSnapshot {
+  const raw =
+    typeof window === "undefined" ? null : window.localStorage.getItem("Dverif_user");
+  if (cachedSnapshot && raw === snapshotRaw && snapshotToken === inMemoryToken) {
+    return cachedSnapshot;
+  }
+  snapshotRaw = raw;
+  snapshotToken = inMemoryToken;
+  cachedSnapshot = { token: inMemoryToken, user: userFromStorage() };
+  return cachedSnapshot;
+}
+
 export function useAuth() {
-  return useSyncExternalStore(authStore.subscribe, authStore.get, () => serverSnap);
+  return useSyncExternalStore(authStore.subscribe, getSnapshot, () => serverSnap);
+}
+
+// ---------------------------------------------------------------------------
+// Bootstrap: repopulate the in-memory access token after a full page load.
+// Hooked into the router's `hydrate` option (see src/router.tsx), which is
+// awaited client-side during hydration BEFORE anything renders or fires an API
+// call. Runs once per page load and is a no-op for SPA navigation afterwards.
+// ---------------------------------------------------------------------------
+
+const API_BASE =
+  (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_API_BASE_URL) ||
+  "/api/v1";
+
+let bootstrapPromise: Promise<void> | null = null;
+
+export function ensureAuthenticated(): Promise<void> {
+  if (typeof window === "undefined") return Promise.resolve();
+  if (bootstrapPromise) return bootstrapPromise;
+
+  bootstrapPromise = (async () => {
+    // Fast paths: token already in memory (later navigations), or no persisted
+    // session profile at all (anonymous visitor — do not hit the network).
+    if (authStore.get().token) return;
+    if (!window.localStorage.getItem("Dverif_user")) return;
+
+    try {
+      const { data } = await axios.post(`${API_BASE}/auth/refresh`, null, {
+        withCredentials: true,
+      });
+      const token = data?.data?.accessToken ?? data?.accessToken;
+      // Only re-seed when the profile is STILL present: a logout that happened
+      // mid-flight must not resurrect the token.
+      if (token && window.localStorage.getItem("Dverif_user")) {
+        authStore.setToken(token);
+      }
+    } catch (error) {
+      // The cookie was explicitly rejected (HTTP response) -> the session is
+      // gone; drop the stale profile. A pure network failure keeps the profile
+      // (token stays null) so the next reload can retry without a forced
+      // re-login.
+      if ((error as { response?: unknown })?.response) {
+        authStore.clear();
+      }
+    }
+  })();
+
+  return bootstrapPromise;
 }

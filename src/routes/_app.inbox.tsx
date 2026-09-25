@@ -11,7 +11,6 @@ import { Pagination } from "@/components/common/Pagination";
 import { EmptyState } from "@/components/common/EmptyState";
 import { RequestDetailModal } from "@/components/common/RequestDetailModal";
 import { StatusBadge } from "@/components/common/StatusBadge";
-import { MatchStatusBadge } from "@/components/common/MatchStatusBadge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -35,12 +34,13 @@ import {
 } from "@/components/ui/table";
 import { TableSkeleton } from "./_app.requests";
 import { requestsService, notificationService, type VerificationRequest } from "@/services";
-import { formatDate, formatDateTime, resolveAssetUrl } from "@/lib/utils";
+import { formatDate, formatDateTime } from "@/lib/utils";
 import { tDocType } from "@/i18n";
 import { useOrgSubscription } from "@/hooks/useOrgSubscription";
 import { usePermissions } from "@/lib/permissions";
 import { authStore } from "@/lib/auth";
 import { Lock } from "lucide-react";
+import { ProtectedDocumentLink } from "@/components/common/ProtectedDocumentLink";
 
 export const Route = createFileRoute("/_app/inbox")({
   beforeLoad: () => {
@@ -167,7 +167,6 @@ function InboxPage() {
                     <TableHead>{t("inbox.submitted")}</TableHead>
                     <TableHead>{t("inbox.verifiedDate")}</TableHead>
                     <TableHead>{t("inbox.verifiedBy")}</TableHead>
-                    <TableHead>{t("inbox.format")}</TableHead>
                     <TableHead className="text-right">{t("inbox.actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -193,16 +192,7 @@ function InboxPage() {
                         {tDocType(r.document_type)}
                       </TableCell>
                       <TableCell data-label={t("inbox.status")}>
-                        <div className="flex flex-col items-start gap-1">
-                          <StatusBadge status={r.status} />
-                          {r.match_status && (
-                            <MatchStatusBadge
-                              status={r.match_status}
-                              confidence={r.match_confidence}
-                              hideNoReference
-                            />
-                          )}
-                        </div>
+                        <StatusBadge status={r.status} />
                       </TableCell>
                       <TableCell
                         data-label={t("inbox.submitted")}
@@ -229,12 +219,6 @@ function InboxPage() {
                           </>
                         )}
                       </TableCell>
-                      <TableCell
-                        data-label={t("inbox.format")}
-                        className="text-xs uppercase text-muted-foreground"
-                      >
-                        {r.document_format ?? "PDF"}
-                      </TableCell>
                       <TableCell data-label={t("inbox.actions")} className="text-right">
                         <div className="flex flex-wrap items-center justify-start gap-1 sm:justify-end">
                           {r.matched_document_path && (
@@ -251,13 +235,12 @@ function InboxPage() {
                                   : t("match.viewReferenceDocument")
                               }
                             >
-                              <a
-                                href={resolveAssetUrl(r.matched_document_path) ?? r.matched_document_path}
-                                target="_blank"
-                                rel="noreferrer"
+                              <ProtectedDocumentLink
+                                storedPath={r.matched_document_path}
+                                className="inline-flex h-8 w-8 items-center justify-center"
                               >
                                 <FileSearch className="h-4 w-4" />
-                              </a>
+                              </ProtectedDocumentLink>
                             </Button>
                           )}
                           <Button
@@ -323,6 +306,7 @@ function VerifyDialog({
   onDone: () => void;
 }) {
   const [remarks, setRemarks] = useState("");
+  const [pendingAction, setPendingAction] = useState<"verified" | "unverified" | null>(null);
   const isFinalized = request && request.status !== "under_review";
   const { t } = useTranslation();
 
@@ -332,11 +316,14 @@ function VerifyDialog({
         status,
         verification_remarks: remarks,
       }),
-    onSuccess: () => {
-      toast.success(t("inbox.decisionRecorded"));
+    onSuccess: (_data, status) => {
+      toast.success(
+        status === "verified" ? t("inbox.verifiedSuccess") : t("inbox.unverifiedSuccess")
+      );
       onDone();
     },
     onError: (e: any) => toast.error(e?.response?.data?.message ?? t("common.failed")),
+    onSettled: () => setPendingAction(null),
   });
 
   return (
@@ -390,14 +377,12 @@ function VerifyDialog({
                     </div>
                   </div>
                   {request.document_path ? (
-                    <a
-                      href={resolveAssetUrl(request.document_path) ?? request.document_path}
-                      target="_blank"
-                      rel="noreferrer"
+                    <ProtectedDocumentLink
+                      storedPath={request.document_path}
                       className="inline-flex min-h-9 items-center justify-center gap-1 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground hover:bg-accent sm:min-h-0"
                     >
                       {t("common.open")} <ExternalLink className="h-3 w-3" />
-                    </a>
+                    </ProtectedDocumentLink>
                   ) : null}
                 </div>
                 <dl className="grid gap-3 text-xs sm:grid-cols-2">
@@ -481,16 +466,24 @@ function VerifyDialog({
               <Button
                 variant="outline"
                 className="w-full border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive sm:w-auto"
-                onClick={() => verify.mutate("unverified")}
+                onClick={() => {
+                  setPendingAction("unverified");
+                  verify.mutate("unverified");
+                }}
                 disabled={verify.isPending}
+                loading={verify.isPending && pendingAction === "unverified"}
               >
                 <XCircle className="mr-2 h-4 w-4" />
                 {t("common.reject")}
               </Button>
               <Button
                 className="w-full sm:w-auto"
-                onClick={() => verify.mutate("verified")}
+                onClick={() => {
+                  setPendingAction("verified");
+                  verify.mutate("verified");
+                }}
                 disabled={verify.isPending}
+                loading={verify.isPending && pendingAction === "verified"}
               >
                 <CheckCircle2 className="mr-2 h-4 w-4" />
                 {t("common.approve")}

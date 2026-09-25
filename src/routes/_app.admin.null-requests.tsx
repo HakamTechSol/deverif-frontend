@@ -9,6 +9,7 @@ import { SearchInput } from "@/components/common/SearchInput";
 import { EmptyState } from "@/components/common/EmptyState";
 import { Pagination } from "@/components/common/Pagination";
 import { StatusBadge } from "@/components/common/StatusBadge";
+import { ProtectedDocumentLink } from "@/components/common/ProtectedDocumentLink";
 import { SearchableSelect } from "@/components/common/SearchableSelect";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -35,7 +36,7 @@ import {
 } from "@/components/ui/table";
 import { TableSkeleton } from "./_app.requests";
 import { adminService, type UnmatchedOrganization, type UnmatchedOrgDetail } from "@/services";
-import { formatDate, formatDateTime, resolveAssetUrl } from "@/lib/utils";
+import { formatDate, formatDateTime } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/admin/null-requests")({
   head: () => ({ meta: [{ title: "Unmatched Organizations — Dverif Admin" }] }),
@@ -367,9 +368,6 @@ function UnmatchedOrgDetailDialog({
                     </TableHeader>
                     <TableBody>
                       {requests.map((r, i) => {
-                        const docUrl = r.document_path
-                          ? resolveAssetUrl(r.document_path) ?? r.document_path
-                          : null;
                         const isLocked = !!r.locked_by;
                         return (
                           <TableRow key={r.uuid}>
@@ -392,11 +390,11 @@ function UnmatchedOrgDetailDialog({
                           
                             <TableCell data-label="Actions" className="text-right whitespace-nowrap">
                               <div className="flex items-center justify-end gap-1">
-                                {docUrl && (
+                                {r.document_path && (
                                   <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground" asChild>
-                                    <a href={docUrl} target="_blank" rel="noreferrer">
+                                    <ProtectedDocumentLink storedPath={r.document_path}>
                                       <ExternalLink className="h-4 w-4" />
-                                    </a>
+                                    </ProtectedDocumentLink>
                                   </Button>
                                 )}
                                 {r.status === "under_review" && (

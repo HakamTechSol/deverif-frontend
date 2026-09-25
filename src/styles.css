@@ -212,6 +212,46 @@
   animation: Dverif-loader-halo 1.8s ease-out infinite;
 }
 
+/* --- Auto-verified success check --- */
+@keyframes success-pop {
+  0% {
+    transform: scale(0.55);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes success-ring {
+  0% {
+    transform: scale(0.7);
+    opacity: 0.7;
+  }
+  70%,
+  100% {
+    transform: scale(1.35);
+    opacity: 0;
+  }
+}
+
+.animate-success-pop {
+  animation: success-pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.animate-success-ring {
+  animation: success-ring 0.75s ease-out both;
+}
+
+.animate-success-ring-delayed {
+  animation: success-ring 0.75s ease-out 0.12s both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .Dverif-loader__mark {
     animation: none;
@@ -222,6 +262,14 @@
     animation: none;
     transform: scale(1.2);
     opacity: 0.15;
+  }
+
+  .animate-success-pop,
+  .animate-success-ring,
+  .animate-success-ring-delayed {
+    animation: none;
+    opacity: 1;
+    transform: none;
   }
 }
 

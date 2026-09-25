@@ -221,10 +221,10 @@ function AdminUsersPage() {
                             <Button
                               size="icon"
                               variant="ghost"
-                              className="h-8 w-8 text-muted-foreground hover:text-amber-600"
-                              title="Cancel invitation"
+                              className="h-8 w-8 text-muted-foreground hover:text-amber-600 disabled:opacity-40"
+                              title={u.invitation_pending ? "Cancel invitation" : "No pending invitation"}
                               onClick={() => setToCancel(u)}
-                              disabled={cancelInvite.isPending}
+                              disabled={cancelInvite.isPending || !u.invitation_pending}
                             >
                               <Ban className="h-4 w-4" />
                             </Button>

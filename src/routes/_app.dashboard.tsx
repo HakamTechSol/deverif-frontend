@@ -134,7 +134,7 @@ function SystemAdminDashboard() {
       value: data?.total_admin_requests ?? 0,
       icon: AlertTriangle,
       href: "/admin/null-requests",
-      progress: data?.unmatched_progress ?? 100,
+      progress: data?.unmatched_progress ?? 0,
       hint: t("dashboard.pendingAdminReview"),
     },
   ];

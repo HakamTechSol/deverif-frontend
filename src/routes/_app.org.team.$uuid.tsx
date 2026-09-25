@@ -10,6 +10,7 @@ import { PageHeader } from "@/components/common/PageHeader";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { AccessDenied } from "@/components/common/RequireOrgFeature";
 import { useAuth } from "@/lib/auth";
+import { ProtectedDocumentLink } from "@/components/common/ProtectedDocumentLink";
 import { usePermissions } from "@/lib/permissions";
 import { useOrgSubscription } from "@/hooks/useOrgSubscription";
 import { ModuleFeatureLockedCard } from "@/components/common/SubscriptionLocked";
@@ -658,10 +659,8 @@ function DocumentsCard({
           {docsQ.isLoading && <p className="text-xs text-muted-foreground">Loading documents…</p>}
           {docs.map((doc) => (
             <div key={doc.uuid} className="flex items-center justify-between rounded-md border border-border px-2 py-1.5 text-sm">
-              <a
-                href={resolveAssetUrl(doc.file_path)}
-                target="_blank"
-                rel="noreferrer"
+              <ProtectedDocumentLink
+                storedPath={doc.file_path}
                 className="flex min-w-0 flex-1 items-center gap-2 text-primary hover:underline"
               >
                 <FileUp className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -677,7 +676,7 @@ function DocumentsCard({
                 {doc.file_size ? (
                   <span className="shrink-0 text-xs text-muted-foreground">({formatFileSize(doc.file_size)})</span>
                 ) : null}
-              </a>
+              </ProtectedDocumentLink>
               <div className="flex shrink-0 items-center gap-2">
                 {doc.file_size || doc.uploaded_at ? (
                   <span className="text-xs text-muted-foreground">

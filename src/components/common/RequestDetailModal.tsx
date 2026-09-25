@@ -1,4 +1,5 @@
 import { ArrowRight, Building2, CheckCircle2, ExternalLink, FileSearch, FileText, Lock, XCircle } from "lucide-react";
+import { ProtectedDocumentLink } from "@/components/common/ProtectedDocumentLink";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { MatchStatusBadge } from "@/components/common/MatchStatusBadge";
 import { VerificationCertificate } from "@/components/requests/VerificationCertificate";
@@ -35,16 +36,9 @@ export function RequestDetailModal({
 }) {
   if (!request) return null;
 
-  const docUrl = request.document_path
-    ? (resolveAssetUrl(request.document_path) ?? request.document_path)
-    : null;
-
-  const matchedDocUrl = request.matched_document_path
-    ? (resolveAssetUrl(request.matched_document_path) ?? request.matched_document_path)
-    : null;
-
   const isFinalized = request.status !== "under_review";
   const org = request.issuing_org_name ?? request.unmatched_org_name;
+  const isAutoVerified = request.match_status === "auto_matched" || request.verification_method === "automatic_match";
 
   const requesterLabel = request.requester_name ?? "—";
   const requesterOrg = request.requester_organization;
@@ -81,43 +75,45 @@ export function RequestDetailModal({
           )}
 
           {/* Flow: Requester → Organization */}
-          <div className="rounded-lg border border-border bg-muted/30 p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Request flow
-            </p>
-            <div className="mt-3 flex flex-col gap-2.5 sm:flex-row sm:items-stretch sm:gap-2.5">
-              {/* Requester side */}
-              <div className="min-w-0 flex-1 rounded-lg border border-border bg-background p-3">
-                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Requested by
-                </p>
-                <p className="mt-1.5 flex items-center gap-2 font-semibold text-foreground">
-                  <OrgLogo logo={request.requester_org_logo} name={requesterOrg} />
-                  <span className="min-w-0 break-words">{requesterOrg ?? "Unassigned organization"}</span>
-                </p>
-                <p className="mt-1 break-words text-xs text-muted-foreground">{requesterLabel}</p>
-              </div>
+          {!isAutoVerified && (
+            <div className="rounded-lg border border-border bg-muted/30 p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Request flow
+              </p>
+              <div className="mt-3 flex flex-col gap-2.5 sm:flex-row sm:items-stretch sm:gap-2.5">
+                {/* Requester side */}
+                <div className="min-w-0 flex-1 rounded-lg border border-border bg-background p-3">
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    Requested by
+                  </p>
+                  <p className="mt-1.5 flex items-center gap-2 font-semibold text-foreground">
+                    <OrgLogo logo={request.requester_org_logo} name={requesterOrg} />
+                    <span className="min-w-0 break-words">{requesterOrg ?? "Unassigned organization"}</span>
+                  </p>
+                  <p className="mt-1 break-words text-xs text-muted-foreground">{requesterLabel}</p>
+                </div>
 
-              {/* Arrow */}
-              <div className="flex items-center justify-center text-primary">
-                <ArrowRight className="h-5 w-5 shrink-0 rotate-90 sm:rotate-0" strokeWidth={2.5} />
-              </div>
+                {/* Arrow */}
+                <div className="flex items-center justify-center text-primary">
+                  <ArrowRight className="h-5 w-5 shrink-0 rotate-90 sm:rotate-0" strokeWidth={2.5} />
+                </div>
 
-              {/* Target org */}
-              <div className="min-w-0 flex-1 rounded-lg border border-border bg-background p-3">
-                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Sent to
-                </p>
-                <p className="mt-1.5 flex items-center gap-2 font-semibold text-foreground">
-                  <OrgLogo logo={request.issuing_org_logo} name={org} />
-                  <span className="min-w-0 break-words">{org ?? "Unmatched organization"}</span>
-                </p>
-                {request.issuing_organization_uuid && (
-                  <p className="mt-1 break-words text-xs text-muted-foreground">{request.document_type}</p>
-                )}
+                {/* Target org */}
+                <div className="min-w-0 flex-1 rounded-lg border border-border bg-background p-3">
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    Sent to
+                  </p>
+                  <p className="mt-1.5 flex items-center gap-2 font-semibold text-foreground">
+                    <OrgLogo logo={request.issuing_org_logo} name={org} />
+                    <span className="min-w-0 break-words">{org ?? "Unmatched organization"}</span>
+                  </p>
+                  {request.issuing_organization_uuid && (
+                    <p className="mt-1 break-words text-xs text-muted-foreground">{request.document_type}</p>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Document + Org card */}
           <div className="rounded-lg border border-border bg-muted/30 p-4">
@@ -132,19 +128,19 @@ export function RequestDetailModal({
               </div>
               <div className="flex flex-row flex-wrap items-center gap-1.5 sm:flex-col sm:items-end">
                 <StatusBadge status={request.status} />
-                <MatchStatusBadge status={request.match_status} confidence={request.match_confidence} />
+                {!isAutoVerified && (
+                  <MatchStatusBadge status={request.match_status} confidence={request.match_confidence} />
+                )}
               </div>
             </div>
 
-            {(request.match_status === "auto_matched" || matchedDocUrl) && (
+            {!isAutoVerified && (request.match_status === "auto_matched" || request.matched_document_path) && (
               <div className="mt-3 flex items-center gap-2 rounded-lg border border-border bg-background px-3.5 py-2.5 text-sm">
                 <FileSearch className="h-4 w-4 shrink-0 text-primary" />
                 <span className="text-muted-foreground">Reference</span>
-                {matchedDocUrl ? (
-                  <a
-                    href={matchedDocUrl}
-                    target="_blank"
-                    rel="noreferrer"
+                {request.matched_document_path ? (
+                  <ProtectedDocumentLink
+                    storedPath={request.matched_document_path}
                     className="inline-flex min-w-0 items-center gap-1 font-medium text-primary hover:underline"
                   >
                     <span className="truncate">
@@ -152,7 +148,7 @@ export function RequestDetailModal({
                       {request.matched_employee_name ? ` · ${request.matched_employee_name}` : ""}
                     </span>
                     <ExternalLink className="h-3 w-3 shrink-0" />
-                  </a>
+                  </ProtectedDocumentLink>
                 ) : (
                   <span className="text-muted-foreground">Matched reference document</span>
                 )}
@@ -257,12 +253,12 @@ export function RequestDetailModal({
           <Button variant="outline" onClick={onClose} className="w-full sm:w-auto">
             Close
           </Button>
-          {docUrl && (
+          {request.document_path && (
             <Button asChild className="w-full sm:w-auto">
-              <a href={docUrl} target="_blank" rel="noreferrer">
+              <ProtectedDocumentLink storedPath={request.document_path}>
                 <FileText className="mr-1.5 h-3.5 w-3.5" />
                 View document <ExternalLink className="ml-1 h-3.5 w-3.5" />
-              </a>
+              </ProtectedDocumentLink>
             </Button>
           )}
         </DialogFooter>

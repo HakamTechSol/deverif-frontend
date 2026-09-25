@@ -107,6 +107,7 @@ export type VerificationRequest = {
   matched_document_path?: string | null;
   matched_document_type?: string | null;
   matched_employee_name?: string | null;
+  auto_verified?: boolean;
 };
 
 export type UnmatchedOrganization = {
@@ -436,6 +437,9 @@ export const authService = {
         requiresOtp?: boolean;
         identity_type?: string;
         identity_id?: string;
+        email?: string;
+        full_name?: string;
+        profile_image?: string | null;
         rememberMe?: boolean;
       }>("/auth/login", data)
       .then((r) => r.data),
@@ -471,6 +475,7 @@ export const authService = {
         email?: string;
         full_name?: string;
         profile_image?: string | null;
+        rememberMe?: boolean;
         token?: string;
         admin?: { uuid: string; email: string; full_name: string; profile_image?: string | null; preferred_language?: "en" | "ur" };
       }>("/admin/auth/login", data)
@@ -497,6 +502,12 @@ export const authService = {
     api.post("/auth/user/reset-password", { token, newPassword }).then((r) => r.data),
   setPassword: (token: string, newPassword: string) =>
     api.post("/auth/user/set-password", { token, newPassword }).then((r) => r.data),
+  validateInvite: (token: string) =>
+    api
+      .get<{ valid: boolean; reason?: "not_found" | "used" | "expired" }>("/auth/user/invite-status", {
+        params: { token },
+      })
+      .then((r) => r.data),
   me: () => api.get<{ user: UserRecord }>("/users/me").then((r) => r.data.user),
   adminMe: () =>
     api
@@ -878,7 +889,7 @@ export const orgService = {
   getEmployee: (uuid: UUID) =>
     api.get<{ employee: EmployeeRecord }>(`/org/employees/${uuid}`).then((r) => r.data.employee),
   createEmployee: (data: Record<string, unknown>) =>
-    api.post<{ employee: EmployeeRecord; _email_warning?: string }>("/org/employees", data).then((r) => r.data),
+    api.post<{ employee: EmployeeRecord }>("/org/employees", data).then((r) => r.data),
   createReference: (data: { full_name: string; cnic: string }) =>
     api.post<{ employee: EmployeeRecord }>("/org/employees/reference", data).then((r) => r.data.employee),
   createReferenceEmployee: (data: { full_name: string; cnic: string }) =>
@@ -892,6 +903,21 @@ export const orgService = {
     api.post<{ employee: EmployeeRecord }>(`/org/employees/${uuid}/archive-reference`).then((r) => r.data.employee),
   resendInvite: (uuid: UUID) =>
     api.post<{ message?: string }>(`/org/employees/${uuid}/resend-invite`).then((r) => r.data),
+  promoteToPlatformUsers: (employeeUuids: UUID[]) =>
+    api
+      .post<{
+        results: Array<{
+          uuid?: UUID | null;
+          full_name?: string | null;
+          email?: string | null;
+          status: "promoted" | "skipped" | "failed";
+          message?: string;
+        }>;
+        promoted_count: number;
+        skipped_count: number;
+        failed_count: number;
+      }>("/org/employees/promote", { employee_uuids: employeeUuids })
+      .then((r) => r.data),
 
   departments: {
     list: () => api.get<{ items: ManagedOption[] }>("/org/departments").then((r) => r.data.items),

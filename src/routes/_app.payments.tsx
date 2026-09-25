@@ -838,7 +838,9 @@ function PlanPage({
                   <SelectValue placeholder={t("payments.selectPlanPlaceholder")} />
                 </SelectTrigger>
                 <SelectContent>
-                  {(availablePlans.data ?? []).map((p: SubscriptionPlan) => (
+                  {(availablePlans.data ?? [])
+                    .filter((p) => p.is_free !== 1)
+                    .map((p: SubscriptionPlan) => (
                     <SelectItem key={p.uuid} value={p.uuid}>
                       {p.name} — Rs. {p.monthly_price?.toLocaleString()} · {p.daily_request_quota}/day
                     </SelectItem>

@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { Archive, Contact, Eye, FileUp, Lock, Mail, Plus, RefreshCw, Trash2, Users } from "lucide-react";
+import { Archive, Contact, Eye, FileUp, Lock, Mail, Plus, RefreshCw, Send, Trash2, Users } from "lucide-react";
 
 import { useAuth } from "@/lib/auth";
 import { PageHeader } from "@/components/common/PageHeader";
@@ -10,10 +10,12 @@ import { SearchInput } from "@/components/common/SearchInput";
 import { Pagination } from "@/components/common/Pagination";
 import { EmptyState } from "@/components/common/EmptyState";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
+import { ProtectedDocumentLink } from "@/components/common/ProtectedDocumentLink";
 import { EmployeeDocPicker, type StagedDoc } from "@/components/employees/EmployeeDocPicker";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -41,7 +43,7 @@ import {
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { TableSkeleton } from "@/routes/_app.requests";
 import { adminService, orgService, type EmployeeDocument, type EmployeeRecord, type ManagedOption, type Organization, type UUID } from "@/services";
-import { digitsOnly, formatCNIC, formatDate, formatFileSize, resolveAssetUrl } from "@/lib/utils";
+import { digitsOnly, formatCNIC, formatDate, formatFileSize } from "@/lib/utils";
 
 type EmployeeApi = {
   list: (params: { page?: number; limit?: number; search?: string; reference?: boolean }) => Promise<{
@@ -49,7 +51,7 @@ type EmployeeApi = {
     total: number;
     totalPages: number;
   }>;
-  create: (data: Record<string, unknown>) => Promise<{ employee: EmployeeRecord; _email_warning?: string }>;
+  create: (data: Record<string, unknown>) => Promise<{ employee: EmployeeRecord }>;
   update: (uuid: UUID, data: Record<string, unknown>) => Promise<EmployeeRecord>;
   remove: (uuid: UUID) => Promise<unknown>;
   archiveReference?: (uuid: UUID) => Promise<EmployeeRecord>;
@@ -140,6 +142,7 @@ export function EmployeeManager({
   const [editing, setEditing] = useState<EmployeeRecord | null>(null);
   const [toDelete, setToDelete] = useState<UUID | null>(null);
   const [toArchive, setToArchive] = useState<EmployeeRecord | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const isReferenceMode = listMode === "reference";
 
@@ -181,6 +184,21 @@ export function EmployeeManager({
     },
   });
 
+  const promoteMut = useMutation({
+    mutationFn: (uuids: string[]) => orgService.promoteToPlatformUsers(uuids),
+    onSuccess: (data) => {
+      const promoted = data?.promoted_count ?? 0;
+      const skipped = data?.skipped_count ?? 0;
+      const failed = data?.results?.filter((r) => r.status === "failed") ?? [];
+      if (promoted > 0) toast.success(`${promoted} employee(s) added as platform users. Set-password invites sent.`);
+      if (skipped > 0) toast.info(`${skipped} employee(s) skipped — they are already platform users.`);
+      if (failed.length > 0) toast.error(`${failed.length} failed: ${failed.map((f) => f.full_name ?? f.email ?? "unknown").join(", ")}`);
+      setSelected(new Set());
+      invalidate();
+    },
+    onError: (e) => toast.error(apiErrorMessage(e, "Adding platform users failed")),
+  });
+
   const items = list.data?.items ?? [];
 
   return (
@@ -213,6 +231,7 @@ export function EmployeeManager({
             if (!v) return;
             setListMode(v as "roster" | "reference");
             setPage(1);
+            setSelected(new Set());
           }}
           variant="outline"
         >
@@ -226,6 +245,37 @@ export function EmployeeManager({
           </ToggleGroupItem>
         </ToggleGroup>
       </div>
+
+      {!isReferenceMode && selected.size > 0 && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3">
+          <span className="text-sm font-medium text-foreground">
+            {selected.size} employee{selected.size > 1 ? "s" : ""} selected
+          </span>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setSelected(new Set())}
+              disabled={promoteMut.isPending}
+            >
+              Clear
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => promoteMut.mutate([...selected])}
+              disabled={locked || userManagementLocked || promoteMut.isPending || selected.size === 0}
+              loading={promoteMut.isPending}
+            >
+              {locked || userManagementLocked ? (
+                <Lock className="mr-1.5 h-3.5 w-3.5" />
+              ) : (
+                <Send className="mr-1.5 h-3.5 w-3.5" />
+              )}
+              Add as Platform User
+            </Button>
+          </div>
+        </div>
+      )}
 
       <Card className="border-border/70 shadow-none">
         <CardContent className="p-0">
@@ -255,6 +305,28 @@ export function EmployeeManager({
               <Table>
                 <TableHeader>
                   <TableRow>
+                    {!isReferenceMode && (
+                      <TableHead className="w-10">
+                        {(() => {
+                          const promotable = items.filter(
+                            (emp) => emp.is_platform_user !== "yes" && !!emp.email && !emp.linked_user_uuid
+                          );
+                          const allChecked = promotable.length > 0 && promotable.every((emp) => selected.has(emp.uuid));
+                          const selectionLocked = locked || userManagementLocked;
+                          return (
+                            <Checkbox
+                              checked={allChecked}
+                              disabled={promotable.length === 0 || selectionLocked}
+                              onCheckedChange={(v) => {
+                                if (v) setSelected(new Set(promotable.map((emp) => emp.uuid)));
+                                else setSelected(new Set());
+                              }}
+                              aria-label="Select all promotable employees"
+                            />
+                          );
+                        })()}
+                      </TableHead>
+                    )}
                     <TableHead className="w-10">S.No</TableHead>
                     <TableHead>Name</TableHead>
                     {!isReferenceMode && (
@@ -282,6 +354,36 @@ export function EmployeeManager({
                     const isActive = emp.status === "active";
                     return (
                     <TableRow key={emp.uuid}>
+                      {!isReferenceMode && (
+                        <TableCell data-label="Select" className="w-10">
+                          {(() => {
+                            const canPromote = emp.is_platform_user !== "yes" && !!emp.email && !emp.linked_user_uuid;
+                            const selectionLocked = locked || userManagementLocked;
+                            return (
+                              <Checkbox
+                                checked={selected.has(emp.uuid)}
+                                disabled={!canPromote || selectionLocked}
+                                onCheckedChange={(v) => {
+                                  setSelected((prev) => {
+                                    const next = new Set(prev);
+                                    if (v && canPromote) next.add(emp.uuid);
+                                    else next.delete(emp.uuid);
+                                    return next;
+                                  });
+                                }}
+                                aria-label={`Select ${emp.full_name}`}
+                                title={
+                                  canPromote
+                                    ? "Select to add as a platform user"
+                                    : emp.is_platform_user === "yes"
+                                      ? "Already a platform user"
+                                      : "Add an email to this employee to invite them"
+                                }
+                              />
+                            );
+                          })()}
+                        </TableCell>
+                      )}
                       <TableCell data-label="S.No" className="w-10 text-muted-foreground">
                         {(page - 1) * 10 + i + 1}
                       </TableCell>
@@ -442,6 +544,7 @@ export function EmployeeManager({
         editing={editing}
         api={api}
         canSelectOrg={canSelectOrg}
+        userManagementLocked={userManagementLocked}
         onDone={() => {
           setOpenForm(false);
           invalidate();
@@ -464,6 +567,8 @@ export function EmployeeManager({
         onOpenChange={(o) => !o && setToArchive(null)}
         title="Archive as Reference?"
         description={`Move "${toArchive?.full_name ?? ""}" to ex-employee records? They will no longer appear in the active roster, but their documents and history will be preserved for future reference lookups.`}
+        confirmLabel="Archive"
+        destructive={false}
         onConfirm={() => {
           if (toArchive) archiveMut.mutate(toArchive.uuid);
         }}
@@ -478,6 +583,7 @@ function EmployeeFormDialog({
   editing,
   api,
   canSelectOrg,
+  userManagementLocked,
   onDone,
 }: {
   open: boolean;
@@ -485,6 +591,7 @@ function EmployeeFormDialog({
   editing: EmployeeRecord | null;
   api: EmployeeApi;
   canSelectOrg: boolean;
+  userManagementLocked?: boolean;
   onDone: () => void;
 }) {
   const isEdit = !!editing;
@@ -609,9 +716,7 @@ function EmployeeFormDialog({
       } else {
         const createdRes = await api.create(data);
         const newUuid = createdRes?.employee?.uuid;
-        if (createdRes?._email_warning) toast.warning(createdRes._email_warning);
-        else if (form.email.trim()) toast.success("Employee created. Set-password email sent to " + form.email.trim() + ".");
-        else toast.success("Employee created");
+        toast.success("Employee created. Use \"Add as Platform User\" from the roster to invite them.");
         if (stagedDocs.length && newUuid) {
           await uploadStagedDocs(newUuid);
         }
@@ -667,18 +772,16 @@ function EmployeeFormDialog({
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
                 placeholder="email@example.com"
-                disabled={userManagementLocked}
               />
               {!isEdit && (
                 <p className="text-xs text-muted-foreground">
                   {userManagementLocked ? (
                     <span className="flex items-center gap-1 text-xs">
-                      <Lock className="h-3 w-3" /> Platform users are not included in your plan.
+                      <Lock className="h-3 w-3" /> Email is saved. Adding this employee as a platform user requires a plan upgrade.
                     </span>
                   ) : (
                     <>
-                      Providing an email will automatically send a "Set your password" invite. This
-                      employee will become a platform user with <strong>Member</strong> access.
+                      Providing an email lets you later invite this employee as a platform user from the roster (select them and use <strong>"Add as Platform User"</strong>). No invite is sent automatically.
                     </>
                   )}
                 </p>
@@ -836,10 +939,8 @@ function EmployeeFormDialog({
                 {docsQ.isLoading && <p className="text-xs text-muted-foreground">Loading documents…</p>}
                 {(docsQ.data ?? []).map((doc: EmployeeDocument) => (
                   <div key={doc.uuid} className="flex items-center justify-between rounded-md border border-border px-2 py-1.5 text-sm">
-                    <a
-                      href={resolveAssetUrl(doc.file_path)}
-                      target="_blank"
-                      rel="noreferrer"
+                    <ProtectedDocumentLink
+                      storedPath={doc.file_path}
                       className="flex min-w-0 flex-1 items-center gap-2 text-primary hover:underline"
                     >
                       <FileUp className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -855,7 +956,7 @@ function EmployeeFormDialog({
                       {doc.file_size ? (
                         <span className="shrink-0 text-xs text-muted-foreground">({formatFileSize(doc.file_size)})</span>
                       ) : null}
-                    </a>
+                    </ProtectedDocumentLink>
                     {canDelete ? (
                       <Button
                         type="button"

@@ -21,11 +21,11 @@ export const Route = createFileRoute("/system-admin/login")({
   beforeLoad: () => {
     if (typeof window === "undefined") return;
     // Only bounce an already-authenticated admin to the dashboard. A regular
-    // org/user token (or a stale token left behind by a logout race) must NOT
-    // send the system admin away from their login page.
-    const token = window.localStorage.getItem("Dverif_token");
-    const user = window.localStorage.getItem("Dverif_user");
-    if (token && user && user.includes('"role":"admin"')) {
+    // org/user session (or a stale token left behind by a logout race) must
+    // NOT send the system admin away from their login page.
+    const token = authStore.get().token;
+    const user = authStore.get().user;
+    if (token && user?.role === "admin") {
       throw redirect({ to: "/dashboard" });
     }
   },
@@ -58,7 +58,7 @@ function SystemAdminLoginPage() {
       const res = await authService.adminLogin({ email, password, rememberMe });
 
       if (res?.requiresOtp && res.identity_id) {
-        setOtpIdentityId(res.identity_id);
+        setOtpIdentityId(res.identity_id ?? "");
         setOtpEmail(res.email || email);
         setOtpRememberMe(res.rememberMe ?? rememberMe);
         setOtpPending(true);

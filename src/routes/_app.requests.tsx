@@ -1,6 +1,6 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import {
@@ -64,10 +64,11 @@ import {
   type VerificationRequest,
   type UUID,
 } from "@/services";
-import { digitsOnly, formatCNIC, formatDate, parseFeatureAccess, resolveAssetUrl } from "@/lib/utils";
+import { cn, digitsOnly, formatCNIC, formatDate, parseFeatureAccess } from "@/lib/utils";
 import { EMPLOYEE_DOCUMENT_TYPES } from "@/lib/documentTypes";
 import { authStore, useAuth } from "@/lib/auth";
 import { DverifLoader } from "@/components/common/DvarifLoader";
+import { ProtectedDocumentLink } from "@/components/common/ProtectedDocumentLink";
 
 export const Route = createFileRoute("/_app/requests")({
   beforeLoad: () => {
@@ -520,6 +521,7 @@ function CreateRequestDialog({
   const [documentOwnerName, setDocumentOwnerName] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [autoVerified, setAutoVerified] = useState<VerificationRequest | null>(null);
 
   const isOther = orgUuid === "__other__";
 
@@ -552,8 +554,13 @@ function CreateRequestDialog({
       } else {
         form.append("issuing_organization_uuid", orgUuid);
       }
-      await requestsService.create(form);
-      toast.success(t("requests.requestSubmitted"));
+      const created = await requestsService.create(form);
+      if (created?.auto_verified) {
+        setAutoVerified(created);
+        toast.success("Request verified automatically — 100% matched.");
+      } else {
+        toast.success(t("requests.requestSubmitted"));
+      }
       setDocumentType("");
       setOrgUuid("");
       setOtherOrgName("");
@@ -573,14 +580,15 @@ function CreateRequestDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>{t("requests.create.title")}</DialogTitle>
-          <DialogDescription>
-            {t("requests.create.description")}
-          </DialogDescription>
-        </DialogHeader>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{t("requests.create.title")}</DialogTitle>
+            <DialogDescription>
+              {t("requests.create.description")}
+            </DialogDescription>
+          </DialogHeader>
 
         <div className="space-y-5">
           {/* Document type */}
@@ -726,9 +734,98 @@ function CreateRequestDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
             {t("requests.create.cancel")}
           </Button>
-          <Button onClick={submit} disabled={submitting}>
-            <FileCheck2 className="mr-2 h-4 w-4" />
+          <Button onClick={submit} loading={submitting}>
+            {!submitting && <FileCheck2 className="mr-2 h-4 w-4" />}
             {t("requests.create.submit")}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <AutoVerifiedDialog
+      request={autoVerified}
+      onClose={() => {
+        setAutoVerified(null);
+        onOpenChange(false);
+      }}
+    />
+    </>
+  );
+}
+
+function AutoVerifiedDialog({
+  request,
+  onClose,
+}: {
+  request: VerificationRequest | null;
+  onClose: () => void;
+}) {
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    if (!request) {
+      setShown(false);
+      return;
+    }
+    // Reset then flip on the next frame so the entry animation replays on
+    // every open (the SVG dash offset is inline, not a CSS class).
+    setShown(false);
+    const raf = requestAnimationFrame(() => setShown(true));
+    return () => cancelAnimationFrame(raf);
+  }, [request]);
+
+  return (
+    <Dialog open={!!request} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <div className="flex justify-center pt-2 pb-1">
+            <div className="relative flex h-24 w-24 items-center justify-center">
+              <span
+                className={cn(
+                  "absolute inset-0 rounded-full bg-success/15",
+                  shown && "animate-success-ring",
+                )}
+              />
+              <span
+                className={cn(
+                  "absolute inset-0 rounded-full bg-success/20",
+                  shown && "animate-success-ring-delayed",
+                )}
+              />
+              <span
+                className={cn(
+                  "relative flex h-20 w-20 items-center justify-center rounded-full bg-success text-success-foreground shadow-lg",
+                  shown && "animate-success-pop",
+                )}
+              >
+                <svg
+                  viewBox="0 0 52 52"
+                  className="h-11 w-11"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={4}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path
+                    d="M14 27l8 8 16-17"
+                    style={{
+                      strokeDasharray: 44,
+                      strokeDashoffset: shown ? 0 : 44,
+                      transition: "stroke-dashoffset 380ms cubic-bezier(0.65, 0, 0.35, 1)",
+                    }}
+                  />
+                </svg>
+              </span>
+            </div>
+          </div>
+          <DialogTitle className="text-center text-xl">Auto Verified</DialogTitle>
+          <DialogDescription className="text-center">
+            Your "{request?.document_type ?? ""}" request was verified automatically.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button onClick={onClose} className="w-full">
+            Done
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -905,10 +1002,8 @@ function EditRequestDialog({
           <div className="space-y-2">
             <Label>{file ? "" : t("requests.edit.documentOptional")}</Label>
             {request?.document_path && !file && (
-              <a
-                href={resolveAssetUrl(request.document_path) ?? request.document_path}
-                target="_blank"
-                rel="noreferrer"
+              <ProtectedDocumentLink
+                storedPath={request.document_path}
                 className="flex items-center gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-foreground hover:bg-muted/60"
               >
                 <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -916,7 +1011,7 @@ function EditRequestDialog({
                   {t("requests.edit.currentDocument", { format: request.document_format ?? "file" })}
                 </span>
                 <ExternalLink className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-              </a>
+              </ProtectedDocumentLink>
             )}
             <label
               htmlFor="edit-doc-file"
@@ -962,8 +1057,8 @@ function EditRequestDialog({
           <Button variant="outline" onClick={onOpenChange} disabled={submitting}>
             {t("requests.edit.cancel")}
           </Button>
-          <Button onClick={submit} disabled={submitting}>
-            <Pencil className="mr-2 h-4 w-4" />
+          <Button onClick={submit} loading={submitting}>
+            {!submitting && <Pencil className="mr-2 h-4 w-4" />}
             {t("requests.edit.saveChanges")}
           </Button>
         </DialogFooter>

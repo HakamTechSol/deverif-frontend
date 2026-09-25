@@ -24,16 +24,25 @@ function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [locked, setLocked] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (locked) return;
     setLoading(true);
+    setErrorMsg(null);
     try {
       await authService.forgotPassword(email);
       setSent(true);
-      toast.success("If the email exists, a reset link has been sent");
     } catch (err: any) {
-      toast.error(err?.response?.data?.message ?? "Could not send reset email");
+      const msg = err?.response?.data?.message ?? "Could not send reset email";
+      if (err?.response?.status === 404) {
+        setErrorMsg(msg);
+        setLocked(true);
+      } else {
+        toast.error(msg);
+      }
     } finally {
       setLoading(false);
     }
@@ -80,11 +89,20 @@ function ForgotPasswordPage() {
                     type="email"
                     required
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      if (locked) {
+                        setLocked(false);
+                        setErrorMsg(null);
+                      }
+                    }}
                     placeholder="you@company.com"
                   />
+                  {errorMsg ? (
+                    <p className="text-sm text-destructive">{errorMsg}</p>
+                  ) : null}
                 </div>
-                <Button type="submit" className="w-full" disabled={loading}>
+                <Button type="submit" className="w-full" disabled={loading || locked}>
                   {loading ? (
                     <>
                       <DverifLoader size="xs" className="mr-2" /> Sending…

@@ -13,7 +13,7 @@ export const api = axios.create({
 
 api.interceptors.request.use((config) => {
   if (!isServer) {
-    const token = window.localStorage.getItem("Dverif_token");
+    const token = authStore.get().token;
     if (token) {
       config.headers = config.headers ?? {};
       (config.headers as Record<string, string>).Authorization = `Bearer ${token}`;
@@ -66,9 +66,7 @@ api.interceptors.response.use(
 
     // Force-logout deactivated accounts on any API call.
     if (status === 403 && /inactive|deactivated/i.test(msg) && !isAuthEndpoint) {
-      const wasAdmin = window.localStorage
-        .getItem("Dverif_user")
-        ?.includes('"role":"admin"');
+      const wasAdmin = authStore.get().user?.role === "admin";
       authStore.clear();
       window.location.href = wasAdmin ? "/system-admin/login" : "/login";
       return Promise.reject(error);
@@ -98,12 +96,12 @@ api.interceptors.response.use(
         });
         const newToken = data?.data?.accessToken ?? data?.accessToken;
         if (newToken) {
-          // Only re-seed the refreshed token if a live session is still present.
-          // After a logout the user object is removed, so we must NOT write the
-          // refreshed token back, otherwise the login page's beforeLoad would
-          // see it and bounce the user away from the login screen.
-          if (window.localStorage.getItem("Dverif_user")) {
-            window.localStorage.setItem("Dverif_token", newToken);
+          // Only re-seed the refreshed token (in memory) if a live session is
+          // still present. After a logout the user object is removed, so we
+          // must NOT write the refreshed token back, otherwise the login
+          // page's beforeLoad would see it and bounce the user away.
+          if (authStore.get().user) {
+            authStore.setToken(newToken);
           }
           processQueue(null, newToken);
           originalRequest.headers.Authorization = `Bearer ${newToken}`;
@@ -112,9 +110,7 @@ api.interceptors.response.use(
         throw new Error("No token in refresh response");
       } catch (refreshError) {
         processQueue(refreshError, null);
-        const wasAdmin = window.localStorage
-          .getItem("Dverif_user")
-          ?.includes('"role":"admin"');
+        const wasAdmin = authStore.get().user?.role === "admin";
         authStore.clear();
         if (
           !window.location.pathname.startsWith("/login") &&

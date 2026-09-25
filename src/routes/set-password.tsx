@@ -1,6 +1,7 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { XCircle } from "lucide-react";
 import { DverifLoader } from "@/components/common/DvarifLoader";
 
 import logoFull from "@/assets/logo-full.png";
@@ -25,6 +26,36 @@ function SetPasswordPage() {
   const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
+  const [checking, setChecking] = useState(true);
+  const [invalidReason, setInvalidReason] = useState<string | null>(null);
+
+  const token =
+    typeof window !== "undefined"
+      ? new URL(window.location.href).searchParams.get("token") ?? ""
+      : "";
+
+  useEffect(() => {
+    if (!token) {
+      setInvalidReason("missing");
+      setChecking(false);
+      return;
+    }
+    let cancelled = false;
+    authService
+      .validateInvite(token)
+      .then((res) => {
+        if (!cancelled && !res?.valid) setInvalidReason(res?.reason ?? "not_found");
+      })
+      .catch(() => {
+        if (!cancelled) setInvalidReason("not_found");
+      })
+      .finally(() => {
+        if (!cancelled) setChecking(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,8 +65,6 @@ function SetPasswordPage() {
     if (!/[0-9]/.test(pw)) return toast.error("Password must contain at least one number");
     if (!/[^A-Za-z0-9]/.test(pw)) return toast.error("Password must contain at least one special character");
     if (pw !== confirm) return toast.error("Passwords do not match");
-    const url = new URL(window.location.href);
-    const token = url.searchParams.get("token") ?? "";
     if (!token) return toast.error("Missing or invalid invite link");
     setLoading(true);
     try {
@@ -47,6 +76,52 @@ function SetPasswordPage() {
       setLoading(false);
     }
   };
+
+  if (checking) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+        <div className="flex flex-col items-center gap-3 text-center">
+          <DverifLoader size="md" />
+          <p className="text-sm text-muted-foreground">Checking your invitation…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (invalidReason) {
+    const messages: Record<string, string> = {
+      missing: "This link is missing its invitation token.",
+      not_found: "This invitation link is invalid or has been cancelled by an administrator.",
+      used: "This invitation has already been used. Try signing in instead.",
+      expired: "This invitation link has expired. Ask your administrator to resend it.",
+    };
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+        <div className="w-full max-w-md">
+          <div className="mb-8 flex justify-center">
+            <img
+              src={logoFull}
+              alt="Dverif"
+              className="h-12 w-auto object-contain dark:invert dark:brightness-0"
+            />
+          </div>
+          <div className="rounded-2xl border border-border bg-card p-8 text-center shadow-sm">
+            <div className="mb-4 flex justify-center">
+              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-destructive/10">
+                <XCircle className="h-8 w-8 text-destructive" />
+              </div>
+            </div>
+            <h1 className="text-xl font-semibold tracking-tight text-foreground">
+              Invitation not available
+            </h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {messages[invalidReason] ?? messages.not_found}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (done) {
     return (

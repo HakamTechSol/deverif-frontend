@@ -73,7 +73,7 @@ function VerifyPage() {
                 </Button>
               </CardContent>
             </Card>
-          ) : (
+          ) : result.data ? (
             <Card className="border-border/70 bg-background shadow-none">
               <CardContent className="p-6 sm:p-8">
                 <div className="flex flex-col items-center gap-3 text-center">
@@ -127,7 +127,7 @@ function VerifyPage() {
                 </div>
               </CardContent>
             </Card>
-          )}
+          ) : null}
         </div>
       </main>
 
