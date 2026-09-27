@@ -202,7 +202,7 @@ function PendingPlanChangeCard({
             {t("payments.cancelAndRefundPendingChange")}
           </Button>
         ) : (
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-2 sm:shrink-0">
             <Button
               size="sm"
               onClick={() => cancel.mutate()}
@@ -905,7 +905,7 @@ function PlanPage({
                       return (
                         <div
                           key={r.uuid}
-                          className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/40 p-3 text-xs"
+                          className="flex min-w-0 flex-col gap-3 rounded-lg border border-border bg-muted/40 p-3 text-xs sm:flex-row sm:items-center sm:justify-between"
                         >
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -949,7 +949,7 @@ function PlanPage({
                               </p>
                             )}
                           </div>
-                          <div className="flex shrink-0 items-center gap-2">
+                          <div className="flex min-w-0 flex-wrap items-center gap-2 sm:shrink-0">
                             {canPayCustomPlan && isOrgAdmin && (
                               <Button
                                 size="sm"

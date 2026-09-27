@@ -28,12 +28,15 @@ import { TableSkeleton } from "@/routes/_app.requests";
 import { formatDateTime } from "@/lib/utils";
 import { toast } from "sonner";
 import { apiErrorMessage } from "@/lib/utils";
+import { DecisionResultDialog } from "@/components/common/DecisionResultDialog";
 
 function AttendancePage() {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const { isLocked, isModuleFlagOff } = useOrgSubscription();
   const [page, setPage] = useState(1);
+  const [attendanceResult, setAttendanceResult] = useState<"checkIn" | "checkOut" | null>(null);
+  const [pendingAction, setPendingAction] = useState<"checkIn" | "checkOut" | null>(null);
 
   const today = useQuery({
     queryKey: ["attendance-today"],
@@ -49,24 +52,32 @@ function AttendancePage() {
   const record = today.data?.record;
 
   const doCheckIn = async () => {
+    if (pendingAction) return;
+    setPendingAction("checkIn");
     try {
       await attendanceService.checkIn();
-      toast.success(t("orgAttendance.checkInSuccess"));
+      setAttendanceResult("checkIn");
       qc.invalidateQueries({ queryKey: ["attendance-today"] });
       qc.invalidateQueries({ queryKey: ["attendance-history"] });
     } catch (e) {
       toast.error(apiErrorMessage(e, t("orgAttendance.checkInFailed")));
+    } finally {
+      setPendingAction(null);
     }
   };
 
   const doCheckOut = async () => {
+    if (pendingAction) return;
+    setPendingAction("checkOut");
     try {
       await attendanceService.checkOut();
-      toast.success(t("orgAttendance.checkOutSuccess"));
+      setAttendanceResult("checkOut");
       qc.invalidateQueries({ queryKey: ["attendance-today"] });
       qc.invalidateQueries({ queryKey: ["attendance-history"] });
     } catch (e) {
       toast.error(apiErrorMessage(e, t("orgAttendance.checkOutFailed")));
+    } finally {
+      setPendingAction(null);
     }
   };
 
@@ -112,12 +123,21 @@ function AttendancePage() {
             <div className="flex-1" />
 
             {!record ? (
-              <Button onClick={doCheckIn} disabled={isLocked}>
+              <Button
+                onClick={doCheckIn}
+                disabled={isLocked || pendingAction !== null}
+                loading={pendingAction === "checkIn"}
+              >
                 {isLocked ? <Lock className="mr-2 h-4 w-4" /> : <LogIn className="mr-2 h-4 w-4" />}
                 {isLocked ? "Subscription Required" : t("orgAttendance.checkIn", "Check In")}
               </Button>
             ) : record.status === "checked_in" ? (
-              <Button variant="destructive" onClick={doCheckOut} disabled={isLocked}>
+              <Button
+                variant="destructive"
+                onClick={doCheckOut}
+                disabled={isLocked || pendingAction !== null}
+                loading={pendingAction === "checkOut"}
+              >
                 {isLocked ? <Lock className="mr-2 h-4 w-4" /> : <LogOut className="mr-2 h-4 w-4" />}
                 {isLocked ? "Subscription Required" : t("orgAttendance.checkOut", "Check Out")}
               </Button>
@@ -133,6 +153,18 @@ function AttendancePage() {
           )}
         </CardContent>
       </Card>
+
+      <DecisionResultDialog
+        open={attendanceResult !== null}
+        onOpenChange={(open) => !open && setAttendanceResult(null)}
+        outcome="success"
+        title={
+          attendanceResult === "checkOut"
+            ? t("orgAttendance.checkOutSuccess")
+            : t("orgAttendance.checkInSuccess")
+        }
+        actionLabel={t("common.close")}
+      />
 
       <Card className="border-border/70 shadow-none">
         <CardContent className="p-0">

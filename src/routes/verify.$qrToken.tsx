@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2, ExternalLink, XCircle } from "lucide-react";
 import { DverifLoader } from "@/components/common/DvarifLoader";
@@ -36,12 +36,12 @@ function VerifyPage() {
             <img src={logoMark} alt="Dverif" className="h-8 w-8" />
             <span className="text-lg font-bold text-foreground">Dverif</span>
           </div>
-          <Link
-            to="/"
+          <a
+            href="https://dverif.com"
             className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
           >
             Dverif.com
-          </Link>
+          </a>
         </div>
       </header>
 
@@ -67,9 +67,7 @@ function VerifyPage() {
                   issued it.
                 </p>
                 <Button asChild variant="outline" className="mt-2">
-                  <Link to="/">
-                    Go to Dverif.com <ExternalLink className="ml-1.5 h-3.5 w-3.5" />
-                  </Link>
+                  <a href="https://dverif.com">Go to Dverif.com <ExternalLink className="ml-1.5 h-3.5 w-3.5" /></a>
                 </Button>
               </CardContent>
             </Card>
@@ -110,14 +108,6 @@ function VerifyPage() {
                     </dt>
                     <dd className="text-sm font-semibold text-foreground">
                       {formatDateTime(result.data.verification_date)}
-                    </dd>
-                  </div>
-                  <div className="flex flex-col gap-1 rounded-lg border border-border/70 bg-muted/30 p-3 sm:flex-row sm:items-center sm:justify-between">
-                    <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                      Reference
-                    </dt>
-                    <dd className="break-all text-sm font-medium text-foreground">
-                      {result.data.request_reference}
                     </dd>
                   </div>
                 </dl>

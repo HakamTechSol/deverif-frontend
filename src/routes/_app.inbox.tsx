@@ -11,14 +11,12 @@ import { Pagination } from "@/components/common/Pagination";
 import { EmptyState } from "@/components/common/EmptyState";
 import { RequestDetailModal } from "@/components/common/RequestDetailModal";
 import { DecisionResultDialog } from "@/components/common/DecisionResultDialog";
-import { AutoVerifiedList } from "@/components/common/AutoVerifiedList";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -67,7 +65,6 @@ function InboxPage() {
   const [dateTo, setDateTo] = useState("");
   const [active, setActive] = useState<VerificationRequest | null>(null);
   const [viewing, setViewing] = useState<VerificationRequest | null>(null);
-  const [tab, setTab] = useState<"inbox" | "auto">("inbox");
   const perms = usePermissions();
   const canApprove = perms.approve_request;
 
@@ -115,23 +112,6 @@ function InboxPage() {
         description={isLocked ? t("inbox.lockedSub") : t("inbox.subtitle")}
       />
 
-      {/* Two kinds of outcome, deliberately separated.
-          Inbox   — decisions a human still has to make, plus the ones they made.
-          Auto    — decisions the reference match already made. There is nothing
-                    to action there, so it is a ledger, not a work queue. Keeping
-                    them apart stops finished work from sitting in the queue
-                    looking exactly like work. */}
-      <Tabs
-        value={tab}
-        onValueChange={(v) => setTab(v === "auto" ? "auto" : "inbox")}
-        className="space-y-4"
-      >
-        <TabsList>
-          <TabsTrigger value="inbox">{t("inbox.tabInbox")}</TabsTrigger>
-          <TabsTrigger value="auto">{t("inbox.tabAutoApproved")}</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="inbox">
       <Card className="border-border/70 shadow-none">
         <CardContent className="p-0">
           <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -240,7 +220,7 @@ function InboxPage() {
                           </>
                         )}
                       </TableCell>
-                      <TableCell data-label={t("inbox.actions")} className="text-right">
+                      <TableCell data-label={t("inbox.actions")} className="mobile-actions-cell text-right">
                         <div className="flex flex-wrap items-center justify-start gap-1 sm:justify-end">
                           {r.matched_document_path && (
                             <Button
@@ -305,12 +285,6 @@ function InboxPage() {
           )}
         </CardContent>
       </Card>
-        </TabsContent>
-
-        <TabsContent value="auto">
-          <AutoVerifiedList />
-        </TabsContent>
-      </Tabs>
 
       <VerifyDialog
         request={active}

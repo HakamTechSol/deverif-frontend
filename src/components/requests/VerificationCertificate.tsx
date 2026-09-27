@@ -17,9 +17,7 @@ import { requestsService, type VerificationRequest } from "@/services";
  * different hosts for the very same token — and the on-screen QR cannot be
  * corrected without a code change, because it used to be a hardcoded literal.
  */
-const PUBLIC_BASE_URL = (
-  import.meta.env.VITE_PUBLIC_BASE_URL ?? "http://localhost:8080"
-).replace(/\/+$/, "");
+const PUBLIC_BASE_URL = (import.meta.env.VITE_PUBLIC_BASE_URL ?? "https://dverif.com").replace(/\/+$/, "");
 
 const VERIFY_URL_BASE = `${PUBLIC_BASE_URL}/verify`;
 
@@ -65,7 +63,7 @@ export function VerificationCertificate({ request }: { request: VerificationRequ
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `Dverif-certificate-${request.uuid.slice(0, 8)}.pdf`;
+      a.download = "Dverif-verification-certificate.pdf";
       document.body.appendChild(a);
       a.click();
       a.remove();

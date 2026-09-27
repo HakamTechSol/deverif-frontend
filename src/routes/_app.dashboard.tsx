@@ -50,7 +50,6 @@ import {
   salaryService,
   attendanceService,
   orgLeavesService,
-  orgAttendanceService,
   orgSubscriptionService,
   type LeaveBalance,
   type SalaryRecord,
@@ -74,6 +73,19 @@ function money(value: string | number): string {
   const n = Number(value);
   if (!Number.isFinite(n)) return "—";
   return n.toLocaleString("en-PK", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function ratioProgress(value: number | string | null | undefined, total: number | string | null | undefined) {
+  const numerator = Number(value);
+  const denominator = Number(total);
+  if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator <= 0) return 0;
+  return Math.min(100, Math.max(0, Math.round((numerator / denominator) * 100)));
+}
+
+function normalizeProgress(value: number | undefined) {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) return 0;
+  return Math.min(100, Math.max(0, numericValue));
 }
 
 function DashboardPage() {
@@ -101,6 +113,7 @@ function SystemAdminDashboard() {
     queryFn: () => dashboardService.auto(),
     enabled: mounted,
     retry: false,
+    refetchInterval: 60_000,
   });
 
   const analyticsQ = useQuery({
@@ -108,7 +121,7 @@ function SystemAdminDashboard() {
     queryFn: () => dashboardService.analytics(),
     enabled: mounted,
     retry: false,
-    staleTime: 5 * 60 * 1000,
+    refetchInterval: 60_000,
   });
 
   const analytics = analyticsQ.data;
@@ -120,21 +133,21 @@ function SystemAdminDashboard() {
       value: data?.total_users ?? 0,
       icon: Users,
       href: "/admin/users",
-      progress: data?.users_progress ?? 0,
+      progress: ratioProgress(data?.active_users, data?.total_users),
     },
     {
       label: t("dashboard.organizations"),
       value: data?.total_organizations ?? 0,
       icon: Building2,
       href: "/admin/organizations",
-      progress: data?.organizations_progress ?? 0,
+      progress: ratioProgress(data?.verified_organizations, data?.total_organizations),
     },
     {
       label: t("dashboard.unmatchedOrgs"),
       value: data?.total_admin_requests ?? 0,
       icon: AlertTriangle,
       href: "/admin/null-requests",
-      progress: data?.unmatched_progress ?? 0,
+      progress: ratioProgress(data?.total_admin_requests, data?.total_verification_requests),
       hint: t("dashboard.pendingAdminReview"),
     },
   ];
@@ -145,25 +158,28 @@ function SystemAdminDashboard() {
       value: data?.total_verification_requests ?? 0,
       icon: Send,
       href: "/admin/requests",
-      progress: data?.requests_progress ?? 0,
+      progress: ratioProgress(data?.verified_requests, data?.total_verification_requests),
     },
     {
       label: t("dashboard.verifiedRequests"),
       value: data?.verified_requests ?? 0,
       icon: ShieldCheck,
       href: "/admin/requests",
+      progress: ratioProgress(data?.verified_requests, data?.total_verification_requests),
     },
     {
       label: t("dashboard.unverifiedRequests"),
       value: data?.unverified_requests ?? 0,
       icon: ShieldX,
       href: "/admin/requests",
+      progress: ratioProgress(data?.unverified_requests, data?.total_verification_requests),
     },
     {
       label: t("dashboard.underReview"),
       value: data?.under_review_requests ?? 0,
       icon: Eye,
       href: "/admin/requests",
+      progress: ratioProgress(data?.under_review_requests, data?.total_verification_requests),
     },
   ];
 
@@ -192,7 +208,7 @@ function SystemAdminDashboard() {
                   </div>
                   <div className="mt-0.5 text-sm text-muted-foreground">{s.label}</div>
                 </div>
-                <Progress value={s.progress ?? 0} className="mt-4 h-1.5" />
+                <Progress value={normalizeProgress(s.progress)} className="mt-4 h-1.5" />
                 {s.hint ? (
                   <p className="mt-2 text-[11px] text-muted-foreground">{s.hint}</p>
                 ) : null}
@@ -503,6 +519,7 @@ function OrgAdminDashboard({ firstName }: { firstName: string }) {
     queryFn: () => dashboardService.auto(),
     enabled: mounted,
     retry: false,
+    refetchInterval: 60_000,
   });
 
   const analyticsQ = useQuery({
@@ -510,37 +527,41 @@ function OrgAdminDashboard({ firstName }: { firstName: string }) {
     queryFn: () => dashboardService.orgAnalytics(),
     enabled: mounted,
     retry: false,
-    staleTime: 5 * 60 * 1000,
+    refetchInterval: 60_000,
   });
 
   const data = q.data;
   const analytics = analyticsQ.data;
 
+  const requestTotal = Number(data?.total_verification_requests ?? 0);
   const userStats: Stat[] = [
     {
       label: t("dashboard.myRequestsSent"),
-      value: data?.total_verification_requests ?? 0,
+      value: requestTotal,
       icon: Send,
       href: "/requests",
-      progress: data?.requests_progress ?? 0,
+      progress: ratioProgress(data?.verified_requests, requestTotal),
     },
     {
       label: t("dashboard.verified"),
       value: data?.verified_requests ?? 0,
       icon: ShieldCheck,
       href: "/requests",
+      progress: ratioProgress(data?.verified_requests, requestTotal),
     },
     {
       label: t("dashboard.unverified"),
       value: data?.unverified_requests ?? 0,
       icon: ShieldX,
       href: "/requests",
+      progress: ratioProgress(data?.unverified_requests, requestTotal),
     },
     {
       label: t("dashboard.underReview"),
       value: data?.under_review_requests ?? 0,
       icon: Eye,
       href: "/requests",
+      progress: ratioProgress(data?.under_review_requests, requestTotal),
     },
   ];
 
@@ -620,7 +641,7 @@ function OrgAdminDashboard({ firstName }: { firstName: string }) {
                       </div>
                       <div className="mt-0.5 text-sm text-muted-foreground">{s.label}</div>
                     </div>
-                    <Progress value={s.progress ?? 0} className="mt-4 h-1.5" />
+                    <Progress value={normalizeProgress(s.progress)} className="mt-4 h-1.5" />
                     {s.hint ? (
                       <p className="mt-2 text-[11px] text-muted-foreground">{s.hint}</p>
                     ) : null}
@@ -960,22 +981,26 @@ function SubAdminDashboard() {
     queryFn: () => orgLeavesService.list({ page: 1, limit: 1, status: "pending" }),
     enabled: mounted,
     retry: false,
+    refetchInterval: 60_000,
   });
 
-  const todayAttendance = useQuery({
-    queryKey: ["subadmin-dash-today-attendance"],
-    queryFn: () => orgAttendanceService.list({ page: 1, limit: 100 }),
+  const allLeaves = useQuery({
+    queryKey: ["subadmin-dash-all-leaves"],
+    queryFn: () => orgLeavesService.list({ page: 1, limit: 1 }),
     enabled: mounted,
     retry: false,
+    refetchInterval: 60_000,
   });
 
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const todaysRecords = (todayAttendance.data?.items ?? []).filter(
-    (r) => String(r.date).slice(0, 10) === todayStr,
-  );
-  const presentCount = todaysRecords.filter(
-    (r) => r.status === "checked_in" || r.status === "checked_out",
-  ).length;
+  const analyticsQ = useQuery({
+    queryKey: ["org-dashboard-analytics"],
+    queryFn: () => dashboardService.orgAnalytics(),
+    enabled: mounted,
+    retry: false,
+    refetchInterval: 60_000,
+  });
+  const attendance = analyticsQ.data?.today_attendance;
+  const presentCount = attendance?.present ?? 0;
 
   const cards: Stat[] = [
     {
@@ -983,12 +1008,14 @@ function SubAdminDashboard() {
       value: pendingLeaves.data?.total ?? 0,
       icon: CalendarClock,
       href: "/org/leaves",
+      progress: ratioProgress(pendingLeaves.data?.total, allLeaves.data?.total),
     },
     {
       label: t("dashboardSubAdmin.todayAttendance"),
-      value: presentCount,
+      value: attendance ? String(presentCount) + " / " + attendance.total : presentCount,
       icon: ClipboardCheck,
       href: "/org/attendance",
+      progress: ratioProgress(presentCount, attendance?.total),
     },
   ];
 
@@ -1000,7 +1027,7 @@ function SubAdminDashboard() {
       />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {(pendingLeaves.isLoading || todayAttendance.isLoading
+        {(pendingLeaves.isLoading || allLeaves.isLoading || analyticsQ.isLoading
           ? Array.from({ length: 2 })
           : cards
         ).map((raw, i) => {
@@ -1030,6 +1057,7 @@ function SubAdminDashboard() {
                       </div>
                       <div className="mt-0.5 text-sm text-muted-foreground">{s.label}</div>
                     </div>
+                    <Progress value={normalizeProgress(s.progress)} className="mt-4 h-1.5" />
                   </>
                 ) : (
                   <div className="flex h-[104px] items-center justify-center">

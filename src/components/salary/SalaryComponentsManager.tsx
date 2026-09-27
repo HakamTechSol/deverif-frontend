@@ -171,7 +171,8 @@ export function SalaryComponentsManager() {
 
       <Card className="border-border/70 shadow-none">
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
+          {items.length > 0 ? (
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -241,7 +242,8 @@ export function SalaryComponentsManager() {
                 ))}
               </TableBody>
             </Table>
-          </div>
+            </div>
+          ) : null}
 
           {!listQ.isLoading && (items ?? []).length === 0 && (
             <div className="p-6">

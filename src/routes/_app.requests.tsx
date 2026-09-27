@@ -287,7 +287,7 @@ function RequestsPage() {
                       >
                         {r.document_format ?? "PDF"}
                       </TableCell>
-                      <TableCell data-label={t("requests.table.actions")} className="text-right">
+                      <TableCell data-label={t("requests.table.actions")} className="mobile-actions-cell text-right">
                         <div className="flex flex-wrap items-center justify-start gap-1 sm:justify-end">
                           <Button
                             size="icon"

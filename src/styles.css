@@ -307,10 +307,12 @@
 }
 
 @media (max-width: 639px) {
-  table:has(td[data-label]) td[data-label="Actions"] { align-items: center; }
-  table:has(td[data-label]) td[data-label="Actions"]::before { align-self: center; }
-  table:has(td[data-label]) td[data-label="Actions"] > * { justify-self: end; max-width: 100%; }
+  table:has(td[data-label]) td[data-label="Actions"], table:has(td[data-label]) td.mobile-actions-cell { align-items: start; text-align: left; }
+  table:has(td[data-label]) td[data-label="Actions"]::before, table:has(td[data-label]) td.mobile-actions-cell::before { align-self: start; text-align: left; }
+  table:has(td[data-label]) td[data-label="Actions"] > *, table:has(td[data-label]) td.mobile-actions-cell > * { justify-self: start; max-width: 100%; text-align: left; }
   table:has(td[data-label]) td[data-label="Actions"] > .flex,
-  table:has(td[data-label]) td[data-label="Actions"] > .inline-flex { flex-wrap: wrap; justify-content: flex-end; gap: 0.25rem; }
+  table:has(td[data-label]) td[data-label="Actions"] > .inline-flex { flex-wrap: wrap; justify-content: flex-start; gap: 0.25rem; }
+  table:has(td[data-label]) td.mobile-actions-cell > .flex,
+  table:has(td[data-label]) td.mobile-actions-cell > .inline-flex { justify-content: flex-start; }
   table:has(td[data-label]) td[data-label="Actions"] button { flex-shrink: 0; }
 }

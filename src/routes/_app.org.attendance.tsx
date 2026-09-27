@@ -226,7 +226,7 @@ function OrgAttendanceContent() {
                 <SelectItem value="checked_out">{t("status.checked_out")}</SelectItem>
               </SelectContent>
             </Select>
-            <div className="flex items-center gap-2">
+            <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 sm:w-auto">
               <Input
                 type="date"
                 value={dateFrom}
@@ -234,7 +234,7 @@ function OrgAttendanceContent() {
                   setDateFrom(e.target.value);
                   setPage(1);
                 }}
-                className="lg:w-40"
+                className="w-full min-w-0 lg:w-40"
               />
               <span className="text-xs text-muted-foreground">{t("common.to")}</span>
               <Input
@@ -244,7 +244,7 @@ function OrgAttendanceContent() {
                   setDateTo(e.target.value);
                   setPage(1);
                 }}
-                className="lg:w-40"
+                className="w-full min-w-0 lg:w-40"
               />
             </div>
           </div>

@@ -98,7 +98,7 @@ export function EmployeeDocPicker({
   return (
     <div className={`space-y-2 ${className || ""}`}>
       <div className="grid gap-2">
-        <div className="grid grid-cols-[1fr_1fr] gap-2">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <div className="space-y-1">
             <Label className="text-xs font-medium">Document Type</Label>
             <SearchableSelect
@@ -119,10 +119,10 @@ export function EmployeeDocPicker({
                 stagePickedFile(picked);
                 e.target.value = "";
               }}
-              className="text-sm"
+              className="w-full min-w-0 text-sm"
             />
             {docFile ? (
-              <div className="mt-1 text-xs text-muted-foreground">
+              <div className="mt-1 break-all text-xs text-muted-foreground">
                 Selected: {docFile.name} — click <span className="font-medium text-foreground">Add Doc</span> to attach it
               </div>
             ) : null}
@@ -137,10 +137,10 @@ export function EmployeeDocPicker({
       {docs.length > 0 && (
         <div className="space-y-1.5">
           {docs.map((d, idx) => (
-            <div key={`${idx}-${d.file.name}`} className="flex min-w-0 max-w-full items-center justify-between gap-2 rounded-md border border-border px-2 py-1.5 text-sm">
-              <span className="flex min-w-0 max-w-[70%] items-center gap-2">
+            <div key={`${idx}-${d.file.name}`} className="flex min-w-0 max-w-full flex-col items-start gap-2 rounded-md border border-border px-2 py-1.5 text-sm sm:flex-row sm:items-center sm:justify-between">
+              <span className="flex min-w-0 w-full items-center gap-2 sm:max-w-[70%]">
                 <FileUp className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <span className="min-w-0 flex-1 truncate">
+                <span className="min-w-0 flex-1 break-all">
                   {d.name && <span className="font-medium">{d.name} — </span>}
                   <span className="text-muted-foreground">{d.file.name}</span>
                 </span>

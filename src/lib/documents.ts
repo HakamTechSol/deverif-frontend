@@ -26,12 +26,74 @@ const MIME_BY_EXT: Record<string, string> = {
   docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   xls: "application/vnd.ms-excel",
   xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  
 };
 
 function mimeForPath(path?: string | null): string {
-  const ext = String(path || "").toLowerCase().match(/\.([a-z0-9]+)$/)?.[1] ?? "";
+  const ext =
+    String(path || "")
+      .toLowerCase()
+      .match(/\.([a-z0-9]+)$/)?.[1] ?? "";
   return MIME_BY_EXT[ext] ?? "application/octet-stream";
+}
+
+/**
+ * MIME types a browser can display natively without downloading.
+ *
+ * PDF, raster images and plain text all have a built-in viewer, so they keep
+ * going to the pre-opened tab (see openStoredDocument) and are deliberately
+ * left alone. Everything else has to be rendered by us.
+ */
+function isNativelyViewable(mime: string): boolean {
+  return mime === "application/pdf" || mime.startsWith("image/") || mime.startsWith("text/");
+}
+
+/**
+ * Client-side renderers, keyed by MIME type.
+ *
+ * A registry rather than a `if (ext === "docx")` branch so that the next
+ * format a browser cannot display is added the same way: one entry here, one
+ * renderer module, no change to the call sites. The rule for every entry is the
+ * same — render in the browser from the authenticated blob, never convert on
+ * the server — so adding one cannot quietly reintroduce a server-side
+ * HTML-injection path.
+ */
+const INLINE_RENDERERS: Record<
+  string,
+  () => Promise<(blob: Blob, container: HTMLElement) => Promise<void>>
+> = {
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": () =>
+    import("./docxRenderer").then((m) => m.renderDocx),
+};
+
+export type InlineRenderKey = "docx";
+
+/**
+ * Which client-side renderer, if any, should handle a stored document.
+ *
+ * Returns null for everything the browser can already display (and for
+ * everything that has no renderer yet, which keeps the current download
+ * fallback). Detection is by the STORED file's extension, i.e. the same
+ * extension the upload allow-list admitted, not by anything the document itself
+ * claims about itself.
+ */
+export function inlineRendererForPath(path?: string | null): InlineRenderKey | null {
+  const mime = mimeForPath(path);
+  if (!INLINE_RENDERERS[mime]) return null;
+  // Native viewers win: never shadow a format that already opens correctly.
+  if (isNativelyViewable(mime)) return null;
+  return mime === "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ? "docx"
+    : null;
+}
+
+/** Load the renderer module for a key, resolved lazily. */
+export function loadInlineRenderer(key: InlineRenderKey) {
+  const loader =
+    key === "docx"
+      ? INLINE_RENDERERS["application/vnd.openxmlformats-officedocument.wordprocessingml.document"]
+      : null;
+  if (!loader) throw new Error(`No client-side renderer registered for "${key}"`);
+  return loader();
 }
 
 /**
@@ -73,60 +135,66 @@ export async function fetchStoredDocument(path?: string | null): Promise<Blob | 
 }
 
 /**
- * Open a stored document in a new tab.
+ * Open a stored document for viewing.
  *
- * Goes through axios because the API is Bearer-token authenticated — a plain
- * <a href> navigation cannot carry the Authorization header and would 401.
+ * Returns which path was taken, so a caller can tell "shown" from "saved" —
+ * the two are very different to a user who clicked View.
  *
- * The window is opened SYNCHRONOUSLY on the click, before any await. Once we
- * await the request the user-gesture context is gone, and both `window.open`
- * and a programmatic blob-URL navigation get treated as a popup/download
- * instead of a view — which is why a plain `a.click()` on a blob kept saving
- * the file. Holding the window open first and writing the viewer into it keeps
- * the tab alive and lets the browser's viewer render the file.
- *
- * Formats the browser cannot render (docx/xls/zip) are still offered as a
- * download rather than shown as broken empty space.
+ *   "viewed"  — handed to the browser's own viewer in a new tab (PDF, images,
+ *               text). Unchanged behaviour.
+ *   "rendered" — not natively viewable but a client-side renderer exists, so it
+ *               was opened in the in-page preview panel instead of being
+ *               downloaded. This is the DOCX case.
+ *   "downloaded" — the browser would have saved it and no renderer exists, so
+ *               offering the file is the honest outcome rather than a blank tab.
+ *   "failed"  — the document could not be fetched at all.
  */
-export async function openStoredDocument(path?: string | null): Promise<boolean> {
+export type OpenOutcome = "viewed" | "rendered" | "downloaded" | "failed";
+
+export async function openStoredDocument(path?: string | null): Promise<OpenOutcome> {
   const route = documentRouteFromStoredPath(path);
-  if (!route) return false;
+  if (!route) return "failed";
+
+  // A format the browser cannot display is handled by the in-page renderer, not
+  // by navigating a tab to it. No window is opened: a DOCX is shown where the
+  // user is looking rather than in a new tab that would have downloaded it.
+  const rendererKey = inlineRendererForPath(path);
+  if (rendererKey) {
+    try {
+      await loadInlineRenderer(rendererKey);
+      return "rendered";
+    } catch {
+      return "failed";
+    }
+  }
 
   const win = openViewerWindow();
   const blob = await fetchStoredDocument(path);
   if (!blob) {
     win?.close();
-    return false;
+    return "failed";
   }
 
   const mime = mimeForPath(path);
-  if (!isViewable(mime)) {
-    // Not renderable — fall back to saving the file instead of a blank tab.
+  if (!isNativelyViewable(mime)) {
+    // Not renderable and no client-side renderer — fall back to saving the file
+    // instead of showing a blank tab.
     win?.close();
-    return triggerBlob(blob, mime, basename(path));
+    return triggerBlob(blob, mime, basename(path)) ? "downloaded" : "failed";
   }
 
   if (!win) {
     // Popup blocked: fall back to a download so the user still gets the file.
-    return triggerBlob(blob, mime, basename(path));
+    return triggerBlob(blob, mime, basename(path)) ? "downloaded" : "failed";
   }
 
   const url = URL.createObjectURL(new Blob([blob], { type: mime }));
-  const title = escapeHtml(basename(path) || "Document");
-  const body = mime.startsWith("image/")
-    ? `<img src="${url}" alt="${title}" style="max-width:100%;max-height:100%;object-fit:contain">`
-    : `<embed src="${url}" type="${mime}" style="width:100%;height:100%">`;
-
-  win.document.open();
-  win.document.write(
-    `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>` +
-      `<style>html,body{margin:0;height:100%;background:#525659}` +
-      `body{display:flex;align-items:center;justify-content:center}embed{border:0}</style>` +
-      `</head><body>${body}</body></html>`
-  );
-  win.document.close();
-  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
-  return true;
+  // Navigate the pre-opened tab directly to the typed Blob. Native browser
+  // viewers reliably render PDFs and images; embedding them inside a generated
+  // HTML document can leave a blank viewer in some browsers.
+  win.location.replace(url);
+  window.setTimeout(() => URL.revokeObjectURL(url), 5 * 60_000);
+  return "viewed";
 }
 
 /** Open a blank tab up-front so the later async work is not popup-blocked. */
@@ -139,22 +207,9 @@ function openViewerWindow(): Window | null {
   return win;
 }
 
-/** MIME types a browser can display natively without downloading. */
-function isViewable(mime: string): boolean {
-  return mime === "application/pdf" || mime.startsWith("image/") || mime.startsWith("text/");
-}
-
 function basename(path?: string | null): string {
   const p = String(path || "");
   return p.split(/[\\/]/).pop() ?? "";
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
 }
 
 /**

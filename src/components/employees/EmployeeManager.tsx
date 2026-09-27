@@ -668,12 +668,12 @@ function EmployeeFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] max-w-[95vw] overflow-y-auto sm:max-w-2xl">
+      <DialogContent className="w-[calc(100vw-1rem)] max-h-[90dvh] max-w-none overflow-y-auto overscroll-contain p-4 sm:w-full sm:max-w-2xl sm:p-6">
         <DialogHeader>
           <DialogTitle>{isEdit ? "Edit Employee" : "Add Employee"}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-2">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label>Full Name *</Label>
               <Input
@@ -694,7 +694,7 @@ function EmployeeFormDialog({
               {errors.cnic && <p className="text-xs text-destructive">{errors.cnic}</p>}
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label>Email</Label>
               <Input
@@ -719,7 +719,7 @@ function EmployeeFormDialog({
               />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label>Emergency Contact</Label>
               <Input
@@ -740,7 +740,7 @@ function EmployeeFormDialog({
               />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <Label>Designation</Label>
@@ -786,7 +786,7 @@ function EmployeeFormDialog({
               </Select>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {!isEdit && (
               <div className="space-y-1.5">
                 <Label>Current Salary</Label>
@@ -838,7 +838,7 @@ function EmployeeFormDialog({
             </div>
           )}
 
-          <div className="space-y-2 rounded-lg border border-border p-3 max-w-full">
+          <div className="min-w-0 max-w-full space-y-2 rounded-lg border border-border p-3">
             <div className="flex items-center justify-between">
               <Label className="text-sm font-medium">Documents</Label>
               <span className="text-xs text-muted-foreground">
@@ -861,7 +861,7 @@ function EmployeeFormDialog({
               <div className="space-y-1.5">
                 {docsQ.isLoading && <p className="text-xs text-muted-foreground">Loading documents…</p>}
                 {(docsQ.data ?? []).map((doc: EmployeeDocument) => (
-                  <div key={doc.uuid} className="flex items-center justify-between gap-2 rounded-md border border-border px-2 py-1.5 text-sm">
+                  <div key={doc.uuid} className="flex min-w-0 flex-col gap-2 rounded-md border border-border px-2 py-1.5 text-sm sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex min-w-0 flex-1 items-center gap-2">
                       <FileUp className="h-4 w-4 shrink-0 text-muted-foreground" />
                       <span className="min-w-0 flex-1 truncate">
