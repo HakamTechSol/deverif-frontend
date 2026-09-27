@@ -65,7 +65,7 @@ import {
   type UUID,
 } from "@/services";
 import { cn, digitsOnly, formatCNIC, formatDate, parseFeatureAccess } from "@/lib/utils";
-import { UPLOADABLE_DOC_ACCEPT } from "@/lib/documentTypes";
+import { UPLOADABLE_DOC_ACCEPT, validateUploadableFile } from "@/lib/documentTypes";
 import { EMPLOYEE_DOCUMENT_TYPES } from "@/lib/documentTypes";
 import { authStore, useAuth } from "@/lib/auth";
 import { DverifLoader } from "@/components/common/DvarifLoader";
@@ -531,6 +531,14 @@ function CreateRequestDialog({
   const submit = async () => {
     if (!documentType.trim()) return toast.error(t("requests.docTypeRequired"));
     if (!file) return toast.error(t("requests.attachDocument"));
+    // Check the file against the same allow-list the server enforces, so an
+    // unsupported type or an oversized file fails immediately with a clear
+    // message instead of after a full upload that the server will reject.
+    const fileProblem = validateUploadableFile(file);
+    if (fileProblem) {
+      toast.error(fileProblem.message);
+      return;
+    }
     if (!orgUuid) return toast.error(t("requests.selectIssuingOrg"));
     if (isOther && !otherOrgName.trim()) return toast.error(t("requests.enterOrgName"));
     if (otherOrgEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(otherOrgEmail))
@@ -692,7 +700,20 @@ function CreateRequestDialog({
                 type="file"
                 accept={UPLOADABLE_DOC_ACCEPT}
                 className="hidden"
-                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                onChange={(e) => {
+                  const picked = e.target.files?.[0] ?? null;
+                  // Reject on pick, not on submit: a user who chose a .heic or
+                  // a 40MB scan finds out while the file is still in their hand.
+                  const problem = validateUploadableFile(picked);
+                  if (problem) {
+                    toast.error(problem.message);
+                    setFile(null);
+                    // Clear the input so re-picking the same file fires onChange.
+                    e.target.value = "";
+                    return;
+                  }
+                  setFile(picked);
+                }}
               />
             </label>
           </div>
@@ -822,7 +843,7 @@ function AutoVerifiedDialog({
           </div>
           <DialogTitle className="text-center text-xl">Auto Verified</DialogTitle>
           <DialogDescription className="text-center">
-            Your "{request?.document_type ?? ""}" request was verified automatically.
+            Your "{request?.document_type ?? ""}" request was verified.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
@@ -891,6 +912,15 @@ function EditRequestDialog({
   const submit = async () => {
     if (!request) return;
     if (!documentType.trim()) return toast.error(t("requests.docTypeRequired"));
+    // Same server-side allow-list check as the create form, so replacing the
+    // document on an existing request cannot fail after the upload.
+    if (file) {
+      const fileProblem = validateUploadableFile(file);
+      if (fileProblem) {
+        toast.error(fileProblem.message);
+        return;
+      }
+    }
     if (!orgUuid) return toast.error(t("requests.selectIssuingOrg"));
     if (isOther && !otherOrgName.trim()) return toast.error(t("requests.enterOrgName"));
     if (otherOrgEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(otherOrgEmail))
@@ -1029,7 +1059,17 @@ function EditRequestDialog({
                 type="file"
                 accept={UPLOADABLE_DOC_ACCEPT}
                 className="hidden"
-                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                onChange={(e) => {
+                  const picked = e.target.files?.[0] ?? null;
+                  const problem = validateUploadableFile(picked);
+                  if (problem) {
+                    toast.error(problem.message);
+                    setFile(null);
+                    e.target.value = "";
+                    return;
+                  }
+                  setFile(picked);
+                }}
               />
             </label>
           </div>

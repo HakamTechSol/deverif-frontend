@@ -10,12 +10,15 @@ import { SearchInput } from "@/components/common/SearchInput";
 import { Pagination } from "@/components/common/Pagination";
 import { EmptyState } from "@/components/common/EmptyState";
 import { RequestDetailModal } from "@/components/common/RequestDetailModal";
+import { DecisionResultDialog } from "@/components/common/DecisionResultDialog";
+import { AutoVerifiedList } from "@/components/common/AutoVerifiedList";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -64,6 +67,7 @@ function InboxPage() {
   const [dateTo, setDateTo] = useState("");
   const [active, setActive] = useState<VerificationRequest | null>(null);
   const [viewing, setViewing] = useState<VerificationRequest | null>(null);
+  const [tab, setTab] = useState<"inbox" | "auto">("inbox");
   const perms = usePermissions();
   const canApprove = perms.approve_request;
 
@@ -111,6 +115,23 @@ function InboxPage() {
         description={isLocked ? t("inbox.lockedSub") : t("inbox.subtitle")}
       />
 
+      {/* Two kinds of outcome, deliberately separated.
+          Inbox   — decisions a human still has to make, plus the ones they made.
+          Auto    — decisions the reference match already made. There is nothing
+                    to action there, so it is a ledger, not a work queue. Keeping
+                    them apart stops finished work from sitting in the queue
+                    looking exactly like work. */}
+      <Tabs
+        value={tab}
+        onValueChange={(v) => setTab(v === "auto" ? "auto" : "inbox")}
+        className="space-y-4"
+      >
+        <TabsList>
+          <TabsTrigger value="inbox">{t("inbox.tabInbox")}</TabsTrigger>
+          <TabsTrigger value="auto">{t("inbox.tabAutoApproved")}</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="inbox">
       <Card className="border-border/70 shadow-none">
         <CardContent className="p-0">
           <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -261,7 +282,11 @@ function InboxPage() {
                             </Button>
                           ) : (
                             <span className="text-xs text-muted-foreground">
-                              {r.status === "verified" ? t("inbox.approved") : t("inbox.processed")}
+                              {r.status === "verified"
+                                ? t("inbox.approved")
+                                : r.status === "unverified"
+                                  ? t("inbox.rejected")
+                                  : t("inbox.processed")}
                             </span>
                           )}
                         </div>
@@ -280,6 +305,12 @@ function InboxPage() {
           )}
         </CardContent>
       </Card>
+        </TabsContent>
+
+        <TabsContent value="auto">
+          <AutoVerifiedList />
+        </TabsContent>
+      </Tabs>
 
       <VerifyDialog
         request={active}
@@ -306,9 +337,48 @@ function VerifyDialog({
   onDone: () => void;
 }) {
   const [remarks, setRemarks] = useState("");
+  // Set only when the user actually tries to reject with no reason. Kept out of
+  // the initial render so the field is not permanently red before they type.
+  const [remarksError, setRemarksError] = useState(false);
   const [pendingAction, setPendingAction] = useState<"verified" | "unverified" | null>(null);
+  // A verification decision is acknowledged in the centre of the screen, not in
+  // a corner toast: the outcome decides somebody's document, and a toast slides
+  // away while the list is still refreshing underneath it.
+  // The receipt has to carry its own copy of what was decided. It cannot read it
+  // from `request`: onDone() closes the review dialog (setActive(null)) as part of
+  // committing the decision, so by the time this dialog renders, `request` is
+  // already null and the document type would interpolate as empty.
+  const [decision, setDecision] = useState<null | {
+    status: "verified" | "unverified";
+    documentType: string;
+  }>(null);
   const isFinalized = request && request.status !== "under_review";
   const { t } = useTranslation();
+
+  // Rejecting is a judgement ABOUT the document, so the reason is mandatory
+  // there; approving stays optional. Whitespace does not count as a reason.
+  const rejectWithoutRemarks = remarks.trim().length === 0;
+
+  // Sentences WITHOUT the {{type}} hole, used when the document type could not be
+  // read. Rendering `The "" request` or `The "-" request` would be worse than
+  // dropping the clause, so the sentence shape degrades instead of the text
+  // breaking.
+  const decisionDescription = (() => {
+    if (!decision) return undefined;
+    const approved = decision.status === "verified";
+    const type = tDocType(decision.documentType);
+    const hasType = Boolean(decision.documentType?.trim()) && type !== "-";
+    return t(
+      hasType
+        ? approved
+          ? "inbox.approvedModalDesc"
+          : "inbox.rejectedModalDesc"
+        : approved
+          ? "inbox.approvedModalDescNoType"
+          : "inbox.rejectedModalDescNoType",
+      { type }
+    );
+  })();
 
   const verify = useMutation({
     mutationFn: (status: "verified" | "unverified") =>
@@ -317,9 +387,13 @@ function VerifyDialog({
         verification_remarks: remarks,
       }),
     onSuccess: (_data, status) => {
-      toast.success(
-        status === "verified" ? t("inbox.verifiedSuccess") : t("inbox.unverifiedSuccess")
-      );
+      // The receipt is shown FIRST and the review dialog closed underneath it,
+      // so the confirmation is never competing with a list refresh. The document
+      // type is captured here, while `request` still exists.
+      setDecision({
+        status,
+        documentType: request?.document_type ?? "",
+      });
       onDone();
     },
     onError: (e: any) => toast.error(e?.response?.data?.message ?? t("common.failed")),
@@ -327,6 +401,7 @@ function VerifyDialog({
   });
 
   return (
+    <>
     <Dialog open={!!request} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-3xl sm:p-6">
         <DialogHeader>
@@ -426,14 +501,32 @@ function VerifyDialog({
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    <Label htmlFor="vrem">{t("inbox.yourVerificationRemarks")}</Label>
+                    <Label htmlFor="vrem">
+                      {t("inbox.yourVerificationRemarks")}
+                      <span className="ml-1 font-normal text-muted-foreground">
+                        ({t("inbox.requiredToReject")})
+                      </span>
+                    </Label>
                     <Textarea
                       id="vrem"
                       rows={4}
                       value={remarks}
-                      onChange={(e) => setRemarks(e.target.value)}
+                      onChange={(e) => {
+                        setRemarks(e.target.value);
+                        // Clear the error as soon as they start fixing it.
+                        if (remarksError) setRemarksError(false);
+                      }}
                       placeholder={t("inbox.remarksPlaceholder")}
+                      maxLength={500}
+                      aria-invalid={remarksError || undefined}
+                      aria-describedby={remarksError ? "vrem-error" : undefined}
+                      className={remarksError ? "border-destructive focus-visible:ring-destructive/40" : undefined}
                     />
+                    {remarksError ? (
+                      <p id="vrem-error" role="alert" className="text-xs text-destructive">
+                        {t("inbox.rejectionRemarksRequired")}
+                      </p>
+                    ) : null}
                   </div>
                 )}
               </div>
@@ -467,11 +560,21 @@ function VerifyDialog({
                 variant="outline"
                 className="w-full border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive sm:w-auto"
                 onClick={() => {
+                  // Client-side guard only. The server rejects an empty reason on
+                  // this path with a 400 regardless, so this is about a clear
+                  // message rather than about enforcement.
+                  if (rejectWithoutRemarks) {
+                    setRemarksError(true);
+                    toast.error(t("inbox.rejectionRemarksRequired"));
+                    document.getElementById("vrem")?.focus();
+                    return;
+                  }
                   setPendingAction("unverified");
                   verify.mutate("unverified");
                 }}
                 disabled={verify.isPending}
                 loading={verify.isPending && pendingAction === "unverified"}
+                title={rejectWithoutRemarks ? t("inbox.rejectionRemarksRequired") : undefined}
               >
                 <XCircle className="mr-2 h-4 w-4" />
                 {t("common.reject")}
@@ -493,6 +596,20 @@ function VerifyDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <DecisionResultDialog
+      open={decision !== null}
+      onOpenChange={(o) => !o && setDecision(null)}
+      outcome={decision?.status === "verified" ? "success" : "destructive"}
+      title={
+        decision?.status === "verified"
+          ? t("inbox.approvedModalTitle")
+          : t("inbox.rejectedModalTitle")
+      }
+      description={decisionDescription}
+      actionLabel={t("common.close")}
+    />
+    </>
   );
 }
 

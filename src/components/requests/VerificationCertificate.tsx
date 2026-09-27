@@ -6,7 +6,22 @@ import { BadgeCheck, Download, QrCode } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { requestsService, type VerificationRequest } from "@/services";
 
-const VERIFY_URL_BASE = "https://portal.dverif.com/verify";
+/**
+ * Public base URL of the deployed site, used to build the human-facing
+ * verification link that the QR encodes.
+ *
+ * This MUST equal the backend's QR_VERIFY_BASE_URL. The backend embeds its own
+ * copy of this URL in the downloadable certificate PDF (src/utils/certificatePdf.js
+ * -> buildVerifyUrl), so if the two disagree then scanning the printed
+ * certificate and scanning the certificate on screen send the customer to
+ * different hosts for the very same token — and the on-screen QR cannot be
+ * corrected without a code change, because it used to be a hardcoded literal.
+ */
+const PUBLIC_BASE_URL = (
+  import.meta.env.VITE_PUBLIC_BASE_URL ?? "http://localhost:8080"
+).replace(/\/+$/, "");
+
+const VERIFY_URL_BASE = `${PUBLIC_BASE_URL}/verify`;
 
 function buildVerifyUrl(qrToken: string) {
   return `${VERIFY_URL_BASE}/${qrToken}`;

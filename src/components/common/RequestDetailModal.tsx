@@ -129,7 +129,16 @@ export function RequestDetailModal({
               <div className="flex flex-row flex-wrap items-center gap-1.5 sm:flex-col sm:items-end">
                 <StatusBadge status={request.status} />
                 {!isAutoVerified && (
-                  <MatchStatusBadge status={request.match_status} confidence={request.match_confidence} />
+                  <MatchStatusBadge
+                    status={request.match_status}
+                    confidence={request.match_confidence}
+                    // "No reference found" is the absence of a match, not a
+                    // finding about this document, and it is the state of almost
+                    // every request until someone uploads a reference. Showing it
+                    // reads as a failed check on the document and adds nothing the
+                    // reviewer can act on, so it is suppressed here.
+                    hideNoReference
+                  />
                 )}
               </div>
             </div>

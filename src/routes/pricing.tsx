@@ -11,7 +11,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { marketingService } from "@/services";
+import { marketingService, type SubscriptionPlan } from "@/services";
+import { PlanFeatureList } from "@/components/common/PlanFeatureList";
 
 export const Route = createFileRoute("/pricing")({
   head: () => ({
@@ -73,67 +74,7 @@ function PricingPage() {
           {plans.isLoading ? (
             <p className="col-span-full text-center text-sm text-muted-foreground">Loading plans…</p>
           ) : plans.data && plans.data.length > 0 ? (
-            plans.data.map((plan) => (
-              <Card
-                key={plan.uuid}
-                className={`flex flex-col border-border/70 shadow-none transition-shadow hover:shadow-md ${
-                  plan.is_recommended === 1 ? "border-primary/60 ring-1 ring-primary/40" : ""
-                }`}
-              >
-                <CardHeader>
-                  {plan.is_recommended === 1 && (
-                    <Badge className="mb-2 w-fit gap-1 rounded-full bg-primary text-primary-foreground">
-                      <Sparkles className="h-3 w-3" /> Recommended
-                    </Badge>
-                  )}
-                  <CardTitle className="text-lg capitalize">{plan.name}</CardTitle>
-                  {plan.description && (
-                    <CardDescription>{plan.description}</CardDescription>
-                  )}
-                  <div className="mt-2 flex items-baseline gap-1">
-                    <span className="text-3xl font-bold text-foreground">
-                      Rs. {plan.monthly_price?.toLocaleString()}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      /{plan.billing_period}
-                    </span>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {plan.daily_request_quota} paid verification requests per day
-                  </p>
-                </CardHeader>
-                <CardContent className="flex flex-1 flex-col justify-between gap-5">
-                  <ul className="space-y-2.5">
-                    <li className="flex items-start gap-2 text-sm text-muted-foreground">
-                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" />
-                      1 free request per day (always included)
-                    </li>
-                    {(plan.features ?? []).map((f, i) => (
-                      <li
-                        key={i}
-                        className={`flex items-start gap-2 text-sm ${
-                          f.highlight ? "font-semibold text-foreground" : "text-muted-foreground"
-                        }`}
-                      >
-                        <Check
-                          className={`mt-0.5 h-4 w-4 shrink-0 ${f.highlight ? "text-primary" : "text-success"}`}
-                        />
-                        {f.text}
-                      </li>
-                    ))}
-                    {(plan.features ?? []).length === 0 && (
-                      <li className="flex items-start gap-2 text-sm text-muted-foreground">
-                        <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                        Standard verification features
-                      </li>
-                    )}
-                  </ul>
-                  <Button asChild className="w-full">
-                    <Link to="/login">Get started</Link>
-                  </Button>
-                </CardContent>
-              </Card>
-            ))
+            plans.data.map((plan) => <PlanCard key={plan.uuid} plan={plan} />)
           ) : (
             <p className="col-span-full text-center text-sm text-muted-foreground">
               No plans available yet.
@@ -149,5 +90,64 @@ function PricingPage() {
         </div>
       </footer>
     </div>
+  );
+}
+
+/**
+ * One public plan card.
+ *
+ * The Free plan is a real row flagged `is_free = 1` and is rendered from the
+ * data with no special-casing beyond honest copy: "Rs. 0 /monthly" and "0 paid
+ * requests per day" both read as broken for a plan that is genuinely free, has
+ * no billing cycle and never expires.
+ */
+function PlanCard({ plan }: { plan: SubscriptionPlan }) {
+  const isFree = plan.is_free === 1;
+  return (
+    <Card
+      className={`flex flex-col border-border/70 shadow-none transition-shadow hover:shadow-md ${
+        plan.is_recommended === 1 ? "border-primary/60 ring-1 ring-primary/40" : ""
+      }`}
+    >
+      <CardHeader>
+        {plan.is_recommended === 1 && (
+          <Badge className="mb-2 w-fit gap-1 rounded-full bg-primary text-primary-foreground">
+            <Sparkles className="h-3 w-3" /> Recommended
+          </Badge>
+        )}
+        <CardTitle className="text-lg capitalize">{plan.name}</CardTitle>
+        {plan.description && <CardDescription>{plan.description}</CardDescription>}
+        {isFree ? (
+          <div className="mt-2">
+            <span className="text-3xl font-bold text-foreground">Free</span>
+          </div>
+        ) : (
+          <div className="mt-2 flex items-baseline gap-1">
+            <span className="text-3xl font-bold text-foreground">
+              Rs. {plan.monthly_price?.toLocaleString()}
+            </span>
+            <span className="text-xs text-muted-foreground">/{plan.billing_period}</span>
+          </div>
+        )}
+        {!isFree && plan.daily_request_quota > 0 && (
+          <p className="text-xs text-muted-foreground">
+            {plan.daily_request_quota} paid verification requests per day
+          </p>
+        )}
+      </CardHeader>
+      <CardContent className="flex flex-1 flex-col justify-between gap-5">
+        <PlanFeatureList
+          plan={plan}
+          features={plan.features}
+          size="md"
+          className="space-y-2.5"
+          leadingItem={{ text: "1 free request per day (always included)" }}
+          fallbackText="Standard verification features"
+        />
+        <Button asChild className="w-full">
+          <Link to="/login">Get started</Link>
+        </Button>
+      </CardContent>
+    </Card>
   );
 }

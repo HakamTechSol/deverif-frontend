@@ -26,7 +26,7 @@ const MIME_BY_EXT: Record<string, string> = {
   docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   xls: "application/vnd.ms-excel",
   xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  zip: "application/zip",
+  
 };
 
 function mimeForPath(path?: string | null): string {

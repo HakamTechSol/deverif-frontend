@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { MoreVertical, Lock, Plus, ShieldCheck, ShieldOff, Trash2, Pencil } from "lucide-react";
+import { MoreVertical, Lock, Plus, ShieldCheck, ShieldOff, Trash2, Pencil, Ban } from "lucide-react";
 
 import { PageHeader } from "@/components/common/PageHeader";
 import { SearchInput } from "@/components/common/SearchInput";
@@ -103,6 +103,8 @@ function OrgAdminsPage() {
     name: string;
     action: "demote" | "deactivate";
   } | null>(null);
+  const [cancelling, setCancelling] = useState<{ uuid: UUID; name: string } | null>(null);
+  const [removing, setRemoving] = useState<{ uuid: UUID; name: string } | null>(null);
 
   const list = useQuery({
     queryKey: ["org-admin-users", page, search],
@@ -136,6 +138,27 @@ function OrgAdminsPage() {
       invalidate();
     },
     onError: (e) => toast.error(apiErrorMessage(e, "Update failed")),
+  });
+
+  // Pending-invite lifecycle, mirroring the platform /admin/users page. Both are
+  // only reachable from the UI while is_verified === 'no', and both are refused
+  // by the backend once the invite has been accepted.
+  const cancelInviteMut = useMutation({
+    mutationFn: (uuid: UUID) => orgService.adminUsers.cancelInvite(uuid),
+    onSuccess: () => {
+      toast.success("Invitation cancelled. Sub-admin marked inactive.");
+      invalidate();
+    },
+    onError: (e) => toast.error(apiErrorMessage(e, "Failed to cancel invitation")),
+  });
+
+  const removeMut = useMutation({
+    mutationFn: (uuid: UUID) => orgService.adminUsers.remove(uuid),
+    onSuccess: () => {
+      toast.success("Sub-admin permanently removed");
+      invalidate();
+    },
+    onError: (e) => toast.error(apiErrorMessage(e, "Failed to remove sub-admin")),
   });
 
   const items = list.data?.items ?? [];
@@ -261,26 +284,60 @@ function OrgAdminsPage() {
                               Edit Permissions
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              disabled={isLocked}
-                              className="text-destructive focus:text-destructive"
-                              onClick={() =>
-                                setRevoking({ uuid: u.uuid, name: u.full_name, action: "demote" })
-                              }
-                            >
-                              {isLocked ? <Lock className="mr-2 h-4 w-4" /> : <ShieldOff className="mr-2 h-4 w-4" />}
-                              Demote to Member
-                            </DropdownMenuItem>
-                              <DropdownMenuItem
-                                disabled={isLocked}
-                                className="text-destructive focus:text-destructive"
-                                onClick={() =>
-                                  setRevoking({ uuid: u.uuid, name: u.full_name, action: "deactivate" })
-                                }
-                              >
-                                {isLocked ? <Lock className="mr-2 h-4 w-4" /> : <Trash2 className="mr-2 h-4 w-4" />}
-                                Deactivate Account
-                              </DropdownMenuItem>
+                            {/* A sub-admin who has not accepted yet is not an
+                                account to demote or deactivate — it is an
+                                invitation, and the two things you can actually do
+                                with an invitation are call it off or delete it.
+                                Once accepted these disappear and the ordinary
+                                revoke actions below take over unchanged. */}
+                            {u.is_verified === "no" ? (
+                              <>
+                                <DropdownMenuItem
+                                  disabled={isLocked || !u.invitation_pending}
+                                  onClick={() =>
+                                    setCancelling({ uuid: u.uuid, name: u.full_name })
+                                  }
+                                >
+                                  <Ban className="mr-2 h-4 w-4" />
+                                  {u.invitation_pending
+                                    ? "Cancel Invitation"
+                                    : "No pending invitation"}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  disabled={isLocked}
+                                  className="text-destructive focus:text-destructive"
+                                  onClick={() =>
+                                    setRemoving({ uuid: u.uuid, name: u.full_name })
+                                  }
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Remove Permanently
+                                </DropdownMenuItem>
+                              </>
+                            ) : (
+                              <>
+                                <DropdownMenuItem
+                                  disabled={isLocked}
+                                  className="text-destructive focus:text-destructive"
+                                  onClick={() =>
+                                    setRevoking({ uuid: u.uuid, name: u.full_name, action: "demote" })
+                                  }
+                                >
+                                  {isLocked ? <Lock className="mr-2 h-4 w-4" /> : <ShieldOff className="mr-2 h-4 w-4" />}
+                                  Demote to Member
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  disabled={isLocked}
+                                  className="text-destructive focus:text-destructive"
+                                  onClick={() =>
+                                    setRevoking({ uuid: u.uuid, name: u.full_name, action: "deactivate" })
+                                  }
+                                >
+                                  {isLocked ? <Lock className="mr-2 h-4 w-4" /> : <Ban className="mr-2 h-4 w-4" />}
+                                  Deactivate Account
+                                </DropdownMenuItem>
+                              </>
+                            )}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </TableCell>
@@ -330,6 +387,30 @@ function OrgAdminsPage() {
         onConfirm={() => {
           if (revoking) revokeMut.mutate(revoking);
           setRevoking(null);
+        }}
+      />
+
+      <ConfirmDialog
+        open={!!cancelling}
+        onOpenChange={(o) => !o && setCancelling(null)}
+        title="Cancel this invitation?"
+        description={`The invite link for ${cancelling?.name} will stop working and the account will be marked inactive. The sub-admin record is kept, so you can send a new invite later.`}
+        confirmLabel="Cancel Invitation"
+        onConfirm={() => {
+          if (cancelling) cancelInviteMut.mutate(cancelling.uuid);
+          setCancelling(null);
+        }}
+      />
+
+      <ConfirmDialog
+        open={!!removing}
+        onOpenChange={(o) => !o && setRemoving(null)}
+        title="Permanently remove this sub-admin?"
+        description={`This permanently deletes ${removing?.name}'s account and any pending invite. It only applies to invitations that were never accepted, and it cannot be undone.`}
+        confirmLabel="Remove Permanently"
+        onConfirm={() => {
+          if (removing) removeMut.mutate(removing.uuid);
+          setRemoving(null);
         }}
       />
       </div>

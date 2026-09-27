@@ -50,12 +50,19 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { authStore, useAuth } from "@/lib/auth";
 import { useTheme } from "@/lib/theme";
-import { authService, requestsService, notificationService, type ModuleFlags } from "@/services";
+import {
+  authService,
+  requestsService,
+  notificationService,
+  MODULE_FEATURES,
+  type ModuleFlags,
+} from "@/services";
 import type { FileRouteTypes } from "@/routeTree.gen";
 import { cn, resolveAssetUrl, formatDateTime } from "@/lib/utils";
 import { setLanguage, getLanguage, type Language } from "@/i18n";
 import { useOrgSubscription } from "@/hooks/useOrgSubscription";
 import { SubscriptionBanner } from "@/components/common/SubscriptionLocked";
+import { PlanPickerProvider, usePlanPicker } from "@/components/common/PlanPickerProvider";
 import { usePermissions } from "@/lib/permissions";
 import type { LucideIcon } from "lucide-react";
 
@@ -104,9 +111,10 @@ const adminNav: NavItem[] = [
 export function AppShell({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
+  const { t } = useTranslation();
+  const { openPicker } = usePlanPicker();
   const { isLocked, isModuleFlagOff } = useOrgSubscription();
-  const pathModule: Record<string, keyof ModuleFlags> = {
-    "/org/team": "employee_management",
+  const pathModule: Record<string, keyof ModuleFlags> = {    "/org/team": "employee_management",
     "/org/admins": "user_management",
     "/org/leaves": "leave_management",
     "/org/attendance": "attendance_management",
@@ -117,11 +125,17 @@ export function AppShell({ children }: { children: ReactNode }) {
     "/payroll": "payroll_management",
   };
   const modulePaths = Object.keys(pathModule);
-  const moduleLockedPaths = new Set(
-    !isAdmin && isLocked
-      ? modulePaths
-      : modulePaths.filter((path) => isModuleFlagOff(pathModule[path])),
+  // Two different reasons a nav item can be locked, and they need different
+  // affordances:
+  //   - blanket isLocked  -> the subscription itself is broken; nothing to do
+  //     here beyond pointing at billing
+  //   - isModuleFlagOff   -> the org IS subscribed, this plan just does not
+  //     include the module, so the item offers "upgrade to unlock" and opens
+  //     the plan chooser. This is the common case on the Free plan.
+  const moduleOffPaths = new Set(
+    !isAdmin ? modulePaths.filter((path) => isModuleFlagOff(pathModule[path])) : []
   );
+  const blanketLockedPaths = new Set(!isAdmin && isLocked ? modulePaths : []);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const router = useRouter();
@@ -215,6 +229,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       ];
 
   return (
+    <PlanPickerProvider>
     <div className="min-h-screen bg-background">
       {/* Sidebar (desktop) */}
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 border-r border-sidebar-border bg-sidebar lg:flex lg:flex-col">
@@ -224,7 +239,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           onNavigate={() => {}}
           onLogout={onLogout}
           locked={!isAdmin && isLocked}
-          lockedPaths={moduleLockedPaths}
+          moduleOffPaths={moduleOffPaths}
+          blanketLockedPaths={blanketLockedPaths}
+          pathModule={pathModule}
         />
       </aside>
 
@@ -242,7 +259,9 @@ export function AppShell({ children }: { children: ReactNode }) {
               onNavigate={() => setMobileOpen(false)}
               onLogout={onLogout}
               locked={!isAdmin && isLocked}
-              lockedPaths={moduleLockedPaths}
+              moduleOffPaths={moduleOffPaths}
+              blanketLockedPaths={blanketLockedPaths}
+              pathModule={pathModule}
             />
           </aside>
         </div>
@@ -252,11 +271,18 @@ export function AppShell({ children }: { children: ReactNode }) {
         <TopBar onMenuClick={() => setMobileOpen(true)} />
         <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
           {isAdmin && <div className="sr-only">admin</div>}
+          {/*
+            Blanket banner: reserved for a genuinely broken/absent subscription.
+            A Free-plan org is active, so this must never appear for one -- the
+            per-module "upgrade to unlock" affordances in the sidebar and on the
+            locked feature cards cover the normal upgrade case instead.
+          */}
           {!isAdmin && isLocked && <SubscriptionBanner />}
           {children}
         </main>
       </div>
     </div>
+    </PlanPickerProvider>
   );
 }
 
@@ -266,16 +292,23 @@ function SidebarInner({
   onNavigate,
   onLogout,
   locked,
-  lockedPaths,
+  moduleOffPaths,
+  blanketLockedPaths,
+  pathModule,
 }: {
   items: NavItem[];
   pathname: string;
   onNavigate: () => void;
   onLogout: () => void;
   locked: boolean;
-  lockedPaths: Set<string>;
+  /** Paths whose module is excluded by the current plan -> "upgrade to unlock". */
+  moduleOffPaths: Set<string>;
+  /** Paths locked because the subscription itself is inactive. */
+  blanketLockedPaths: Set<string>;
+  pathModule: Record<string, keyof ModuleFlags>;
 }) {
   const { t } = useTranslation();
+  const { openPicker } = usePlanPicker();
   return (
     <>
       <div className="flex h-16 items-center justify-between border-b border-sidebar-border px-5">
@@ -292,11 +325,37 @@ function SidebarInner({
         {items.map((it) => {
           const active =
             pathname === it.to || (it.to !== "/dashboard" && pathname.startsWith(it.to));
+          const moduleKey = pathModule[it.to];
+          const moduleLabel = moduleKey
+            ? MODULE_FEATURES.find((m) => m.key === moduleKey)?.label ?? moduleKey
+            : null;
+          // The org is subscribed but this plan does not include the module:
+          // offer the upgrade inline instead of a dead-end page.
+          const needsUpgrade = !!moduleKey && moduleOffPaths.has(it.to);
+          // The subscription itself is broken: point at billing, not upgrades.
+          const needsRenewal = blanketLockedPaths.has(it.to);
           return (
             <Link
               key={it.to}
               to={it.to}
-              onClick={onNavigate}
+              onClick={(e) => {
+                if (needsUpgrade) {
+                  // Open the plan chooser for this specific module instead of
+                  // navigating to a page that can only show an error.
+                  e.preventDefault();
+                  openPicker(moduleKey);
+                  onNavigate();
+                  return;
+                }
+                onNavigate();
+              }}
+              title={
+                needsUpgrade
+                  ? `${moduleLabel} — ${t("moduleLocked.navLockedTitle", { module: moduleLabel ?? "" })}`
+                  : needsRenewal
+                    ? t("subscriptionLocked.notActive")
+                    : undefined
+              }
               className={cn(
                 "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                 active
@@ -308,11 +367,19 @@ function SidebarInner({
                 className={cn("h-4 w-4", active ? "text-sidebar-primary" : "text-muted-foreground")}
               />
               {t(it.labelKey)}
-              {lockedPaths.has(it.to) ? (
+              {needsUpgrade ? (
+                <span
+                  className="ml-auto inline-flex items-center gap-1 rounded-full border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-warning-foreground"
+                  title={t("moduleLocked.navLockedCta")}
+                >
+                  <Lock className="h-3 w-3" />
+                  {t("common.upgrade")}
+                </span>
+              ) : needsRenewal ? (
                 <Lock className="ml-auto h-3.5 w-3.5 text-muted-foreground/60" />
               ) : null}
               {it.badge && it.badge > 0 ? (
-                <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-bold text-destructive-foreground">
+                <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">
                   {it.badge > 99 ? "99+" : it.badge}
                 </span>
               ) : null}

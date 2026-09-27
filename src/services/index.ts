@@ -109,6 +109,22 @@ export type VerificationRequest = {
   matched_employee_name?: string | null;
   auto_verified?: boolean;
   doc_verification_count?: number | string | null;
+  /**
+   * Outcome of the automated document check, as recorded by the backend.
+   * - "passed": structural checks (parse / truncation / CRC / type agreement) were clean.
+   * - "flagged": a HEURISTIC quality check fired (crop detection, darkness /
+   *   low-contrast). Tuning-sensitive and possibly a false positive, so the
+   *   request was still created rather than blocked.
+   * - "unvalidated": the document service was unreachable, so nothing was
+   *   actually checked.
+   *
+   * Not surfaced in the UI — the reviewer is expected to judge the file
+   * directly — but kept on the row and exposed here for API consumers and
+   * support queries.
+   */
+  document_validation_status?: "passed" | "flagged" | "unvalidated" | null;
+  /** The validator's own message, present when status is "flagged". */
+  document_validation_reason?: string | null;
 };
 
 /** One ledger entry: a single organization's verification of a person's document. */
@@ -249,6 +265,14 @@ export type OrgAdminUserRecord = {
   org_role: "org_admin" | "sub_admin";
   feature_access?: FeatureAccess | null;
   created_at?: string;
+  /**
+   * 'no' until the invitee sets a password, 'yes' afterwards. The org sub-admin
+   * list is only allowed to offer Cancel Invitation / Remove Permanently while
+   * this is 'no' — same rule the platform /admin/users list follows.
+   */
+  is_verified?: "yes" | "no";
+  /** True while an unused invite token exists, i.e. a link that still works. */
+  invitation_pending?: boolean;
 };
 
 export type Payment = {
@@ -265,10 +289,12 @@ export type Payment = {
 };
 
 export type PlanSummary = {
+  /** "free" | "paid" — derived from the plan's is_free flag, never its name. */
   code: string;
-  label: string;
-  purchased_plan: string;
-  purchased_plan_label: string;
+  label: string | null;
+  is_free: boolean;
+  plan_name: string | null;
+  plan_uuid: string | null;
   expires_at: string | null;
   has_expiry: boolean;
   is_expired: boolean;
@@ -285,6 +311,14 @@ export type OrgSubscription = {
   status: "active" | "expired" | "none" | "pending_payment";
   plan: "monthly" | "yearly" | null;
   plan_name: string | null;
+  /**
+   * Whether the current plan is the Free plan. Every organization is always on
+   * a real plan (Free by default), and Free is identified by this flag alone --
+   * never by a name match or a zero price. A Free plan has no expiry, so
+   * `expiry === null` means "indefinite" for it rather than "expired".
+   */
+  is_free?: number | boolean | null;
+  plan_uuid?: string | null;
   monthly_price: number | null;
   daily_request_quota: number | null;
   description?: string | null;
@@ -292,6 +326,22 @@ export type OrgSubscription = {
   module_flags?: ModuleFlags | null;
   expiry: string | null;
   start: string | null;
+  /**
+   * A SCHEDULED plan change: buying the same plan again (a renewal) or a
+   * lower-tier plan while the current period is still running parks the new plan
+   * here instead of switching immediately. The change is applied automatically
+   * when `pending_plan_effective_at` passes, and can be cancelled with a refund
+   * before then.
+   *
+   * `pending_plan_name` equal to `plan_name` means it is a RENEWAL rather than a
+   * downgrade — the same one mechanism, two meanings, distinguished by whether the
+   * plan actually changes.
+   */
+  pending_plan_id?: number | null;
+  pending_plan_name?: string | null;
+  pending_plan_daily_request_quota?: number | null;
+  pending_plan_monthly_price?: number | null;
+  pending_plan_effective_at?: string | null;
 } | null;
 
 export type QuotaStatus = {
@@ -325,6 +375,15 @@ export type CustomPlanRequest = {
   organization_uuid?: string | null;
   organization_name?: string | null;
   organization_id?: number | null;
+  /**
+   * The plan this approval created, and the edge that makes it payable. NULL
+   * means the System Admin approved the terms but no plan could be linked, in
+   * which case there is nothing to pay for and the UI must not offer to pay.
+   */
+  approved_plan_id?: number | null;
+  approved_plan_uuid?: UUID | null;
+  approved_plan_name?: string | null;
+  approved_plan_monthly_price?: number | null;
 };
 
 export type SelfSubscriptionRequest = {
@@ -354,6 +413,47 @@ export type ModuleFlags = {
   leave_management: boolean;
   payroll_management: boolean;
 };
+
+/**
+ * Machine-readable error codes the API returns. The two that matter here both
+ * arrive as a 403 but need completely different UI:
+ *
+ *   SUBSCRIPTION_INACTIVE - no valid subscription at all. Rare: every org is
+ *                           always on a plan (Free by default). Reserved for a
+ *                           corrupted or lapsed state.
+ *   UPGRADE_REQUIRED     - the subscription is valid, this plan just does not
+ *                           include the module. Render an "upgrade" prompt that
+ *                           can open the plan chooser, NOT a dead-subscription
+ *                           banner.
+ */
+export type ApiErrorCode = "SUBSCRIPTION_INACTIVE" | "UPGRADE_REQUIRED" | string;
+
+/** A 403 body carrying a code plus module context. */
+export type ApiErrorBody = {
+  success: false;
+  message: string;
+  code?: ApiErrorCode;
+  module?: keyof ModuleFlags;
+  module_label?: string;
+  can_retry?: boolean;
+};
+
+/**
+ * True when this 403 means "your plan does not include X" rather than "your
+ * subscription is broken". Lets any page branch on the real cause instead of
+ * showing the same generic banner for both.
+ */
+export function isUpgradeRequiredError(e: unknown): boolean {
+  const body = (e as { response?: { data?: ApiErrorBody } })?.response?.data;
+  return body?.code === "UPGRADE_REQUIRED";
+}
+
+/** The module an UPGRADE_REQUIRED error refers to, if any. */
+export function upgradeRequiredModule(e: unknown): keyof ModuleFlags | null {
+  const body = (e as { response?: { data?: ApiErrorBody } })?.response?.data;
+  if (body?.code !== "UPGRADE_REQUIRED") return null;
+  return (body.module as keyof ModuleFlags) ?? null;
+}
 
 /**
  * The five org-scoped HR modules (+ human labels) that a plan's module_flags
@@ -722,6 +822,21 @@ export const orgSubscriptionService = {
         purpose,
       })
       .then((r) => r.data),
+  /**
+   * Pay for an APPROVED custom plan.
+   *
+   * Deliberately not `checkout(planUuid)`: that endpoint only accepts public,
+   * non-custom plans, and a custom plan is never public because its price was
+   * negotiated. So this is the only way to act on an approved custom-plan
+   * request, and the plan is activated by paying — approval alone grants nothing.
+   */
+  customPlanCheckout: (customPlanRequestUuid: UUID) =>
+    api
+      .post<{ checkout: SubscriptionCheckout; redirect_url: string }>(
+        "/org/subscription/custom-plan/checkout",
+        { custom_plan_request_uuid: customPlanRequestUuid }
+      )
+      .then((r) => r.data),
   checkoutStatus: (checkoutId: UUID) =>
     api
       .get<{ checkout: SubscriptionCheckout }>(`/org/subscription/checkout/${checkoutId}`)
@@ -729,6 +844,14 @@ export const orgSubscriptionService = {
   subscriptionStatus: () =>
     api
       .get<SubscriptionStatusResponse>("/org/subscription/status")
+      .then((r) => r.data),
+  /**
+   * Cancel a deferred downgrade before it takes effect (clears pending_plan_id).
+   * The org stays on its current plan.
+   */
+  cancelPendingPlan: () =>
+    api
+      .delete<SubscriptionStatusResponse>("/org/subscription/pending-plan")
       .then((r) => r.data),
 };
 
@@ -996,6 +1119,14 @@ export const orgService = {
       api
         .patch<{ user: OrgAdminUserRecord }>(`/org/admin-users/${uuid}`, { feature_access })
         .then((r) => r.data.user),
+    /**
+     * Cancel a pending invitation. Only valid while is_verified === 'no'; the
+     * backend refuses otherwise, so this is not merely a UI nicety.
+     */
+    cancelInvite: (uuid: UUID) =>
+      api.delete(`/org/admin-users/${uuid}/cancel-invite`).then((r) => r.data),
+    /** Permanently delete a sub-admin who never accepted. Same 'no'-only rule. */
+    remove: (uuid: UUID) => api.delete(`/org/admin-users/${uuid}`).then((r) => r.data),
   },
 };
 

@@ -1,15 +1,7 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import {
-  Lock,
-  Check,
-  RefreshCw,
-  Sparkles,
-  Send,
-  Layers,
-  MessageSquareText,
-} from "lucide-react";
+import { Lock, RefreshCw, Sparkles, Send, Layers, MessageSquareText, Clock } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 
@@ -40,13 +32,17 @@ import {
   type UUID,
 } from "@/services";
 import { useOrgSubscription } from "@/hooks/useOrgSubscription";
+import { classifyPlanForOrg, hasLiveSubscription } from "@/lib/subscription";
+import { PlanSelectCard } from "@/components/common/PlanSelectCard";
+import { usePlanPicker } from "@/components/common/PlanPickerProvider";
+import { formatDate } from "@/lib/utils";
 
 export function SubscriptionBanner() {
   const { t } = useTranslation();
   const { isOrgAdmin, isStaff } = useRoles();
-  const { orgSub, isActive } = useOrgSubscription();
+  const { orgSub, isActive, isLocked } = useOrgSubscription();
   const qc = useQueryClient();
-  const [open, setOpen] = useState(false);
+  const { open, openPicker, closePicker } = usePlanPicker();
   const [selected, setSelected] = useState<UUID | undefined>(undefined);
 
   const [quota, setQuota] = useState("");
@@ -102,7 +98,7 @@ export function SubscriptionBanner() {
     mutationFn: (planUuid: UUID) => orgSubscriptionService.checkout(planUuid),
     onSuccess: (data) => {
       if (data?.redirect_url) {
-        setOpen(false);
+        closePicker();
         window.location.href = data.redirect_url;
       } else {
         toast.error(t("payments.checkoutFailed"));
@@ -113,6 +109,22 @@ export function SubscriptionBanner() {
   });
 
   const isBusy = checkoutMut.isPending || requestCustom.isPending;
+
+  // A renewal keeps the org on the same tier and simply extends the current
+  // expiry, and a downgrade is NOT applied immediately either â€” the current
+  // plan is kept until the paid period ends. Both cases therefore have to be
+  // labelled as such instead of implying an immediate switch.
+  const hasLiveSub = hasLiveSubscription(orgSub);
+  const currentExpiryLabel = orgSub?.expiry ? formatDate(orgSub.expiry) : null;
+
+  // The confirm button must state what will actually happen for the selected
+  // plan, so work out whether the current selection is a scheduled downgrade.
+  const selectedDowngrade = useMemo(() => {
+    if (!hasLiveSub || !selected) return false;
+    const target = (plans.data ?? []).find((p) => p.uuid === selected);
+    if (!target) return false;
+    return classifyPlanForOrg(orgSub, target) === "downgrade";
+  }, [hasLiveSub, selected, plans.data, orgSub]);
 
   return (
     <div className="mb-6 flex items-center gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3">
@@ -128,13 +140,13 @@ export function SubscriptionBanner() {
         </p>
       </div>
       {isStaff && (
-        <Button size="sm" variant="outline" className="shrink-0" onClick={() => setOpen(true)}>
+        <Button size="sm" variant="outline" className="shrink-0" onClick={() => openPicker()}>
           {t("subscriptionLocked.viewPlans")}
         </Button>
       )}
 
-      <Dialog open={open} onOpenChange={(o) => !o && setOpen(false)}>
-        <DialogContent className="sm:max-w-3xl lg:max-w-4xl">
+      <Dialog open={open} onOpenChange={(o) => !o && closePicker()}>
+        <DialogContent className="sm:max-h-[92vh] sm:max-w-4xl lg:max-w-6xl">
           <DialogHeader>
             <DialogTitle>{t("subscriptionLocked.viewPlans")}</DialogTitle>
             <DialogDescription>
@@ -153,7 +165,11 @@ export function SubscriptionBanner() {
             </TabsList>
 
             <TabsContent value="plans" className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
+              {/* Every plan is listed side by side -- including Free, which is the
+                  plan an organization is on by default -- so the tiers can be
+                  compared. Three columns keep the cards short enough that the
+                  dialog does not need to scroll. */}
+              <div className="grid items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {plans.isLoading && (
                   <div className="col-span-full flex items-center justify-center py-8">
                     <DverifLoader />
@@ -165,119 +181,40 @@ export function SubscriptionBanner() {
                 {plans.data && plans.data.length === 0 && (
                   <p className="col-span-full text-sm text-muted-foreground">{t("subscriptionLocked.empty")}</p>
                 )}
-                {(plans.data ?? [])
-                  .filter((p) => p.is_free !== 1)
-                  .map((plan: SubscriptionPlan) => {
-                    const active = plan.uuid === selected;
-                    const isCurrent =
-                      isActive &&
-                      orgSub?.plan_name != null &&
-                      orgSub.plan_name.toLowerCase() === plan.name.toLowerCase();
-                    return (
-                      <Card
-                        key={plan.uuid}
-                        role="button"
-                        tabIndex={isOrgAdmin && !isCurrent ? 0 : -1}
-                        onClick={() => {
-                          if (!isOrgAdmin || isCurrent || isBusy) return;
-                          setSelected(plan.uuid);
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key !== "Enter" && e.key !== " ") return;
-                          e.preventDefault();
-                          if (!isOrgAdmin || isCurrent || isBusy) return;
-                          setSelected(plan.uuid);
-                        }}
-                        className={`flex flex-col rounded-xl bg-card text-left shadow-none transition hover:shadow-md ${
-                          isCurrent
-                            ? "border-primary/60 ring-1 ring-primary/40"
-                            : active
-                              ? "border-primary bg-primary/5"
-                              : "border-border/70 hover:border-primary/40"
-                        } ${isOrgAdmin && !isCurrent ? "cursor-pointer" : "cursor-default"}`}
-                      >
-                        <CardContent className="flex flex-1 flex-col gap-4 p-5">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                              <Layers className="h-5 w-5 text-primary" />
-                            </div>
-                            {isCurrent && (
-                              <Badge variant="secondary" className="rounded-full text-[11px]">
-                                {t("subscriptionLocked.activePlan")}
-                              </Badge>
-                            )}
-                            {active && !isCurrent && (
-                              <Check className="mt-1 h-4 w-4 shrink-0 text-primary" />
-                            )}
-                          </div>
-
-                          <div>
-                            <div className="text-base font-semibold capitalize text-foreground">
-                              {plan.name}
-                            </div>
-                            <p className="mt-0.5 text-xs text-muted-foreground">
-                              {plan.description ||
-                                `${plan.daily_request_quota} ${t("payments.requestsPerDay")}`}
-                            </p>
-                          </div>
-
-                          <div className="flex items-baseline gap-1">
-                            <span className="text-2xl font-bold text-foreground">
-                              Rs. {plan.monthly_price?.toLocaleString()}
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              / {t("payments.perMonth")}
-                            </span>
-                          </div>
-
-                          {isCurrent ? (
-                            <Button variant="outline" className="w-full" disabled>
-                              <Check className="mr-1.5 h-4 w-4" /> {t("subscriptionLocked.currentPlan")}
-                            </Button>
-                          ) : (
-                            <Button
-                              className="w-full"
-                              onClick={() => {
-                                if (!isOrgAdmin || isBusy) return;
-                                setSelected(plan.uuid);
-                              }}
-                              disabled={!isOrgAdmin || isBusy}
-                            >
-                              {t("subscriptionLocked.selectPlan")}
-                            </Button>
-                          )}
-
-                          <div className="border-t border-border pt-3">
-                            {plan.features && plan.features.length > 0 ? (
-                              <ul className="space-y-1.5">
-                                {plan.features.slice(0, 4).map((f, i) => (
-                                  <li
-                                    key={i}
-                                    className={`flex items-start gap-2 text-xs ${
-                                      f.highlight
-                                        ? "font-medium text-foreground"
-                                        : "text-muted-foreground"
-                                    }`}
-                                  >
-                                    <Check
-                                      className={`mt-0.5 h-3 w-3 shrink-0 ${f.highlight ? "text-primary" : "text-success"}`}
-                                    />
-                                    <span>{f.text}</span>
-                                  </li>
-                                ))}
-                              </ul>
-                            ) : (
-                              <p className="text-xs text-muted-foreground">{t("payments.noFeaturesDesc")}</p>
-                            )}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
+                {(plans.data ?? []).map((plan: SubscriptionPlan) => {
+                  const relation = classifyPlanForOrg(orgSub, plan);
+                  const isCurrent = relation === "current";
+                  // The Free plan is what an organization is on by default and is
+                  // never purchasable, so it must not be selectable here or the
+                  // checkout would reject it.
+                  const selectable = isOrgAdmin && !isCurrent && plan.is_free !== 1;
+                  return (
+                    <PlanSelectCard
+                      key={plan.uuid}
+                      plan={plan}
+                      relation={relation}
+                      isCurrent={isCurrent}
+                      isSelected={plan.uuid === selected}
+                      selectable={selectable}
+                      busy={isBusy}
+                      currentExpiryLabel={currentExpiryLabel}
+                      onSelect={setSelected}
+                    />
+                  );
+                })}
               </div>
 
+              {selectedDowngrade && (
+                <div className="flex items-start gap-1.5 rounded-md border border-warning/30 bg-warning/5 px-3 py-2 text-xs text-muted-foreground">
+                  <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  {t("subscriptionLocked.downgradeNotice", {
+                    date: currentExpiryLabel,
+                  })}
+                </div>
+              )}
+
               <DialogFooter>
-                <Button variant="ghost" onClick={() => setOpen(false)} disabled={isBusy}>
+                <Button variant="ghost" onClick={() => closePicker()} disabled={isBusy}>
                   {t("common.cancel")}
                 </Button>
                 {isOrgAdmin && (
@@ -287,11 +224,14 @@ export function SubscriptionBanner() {
                     loading={checkoutMut.isPending}
                     className="gap-1.5"
                   >
-                    <RefreshCw className="h-4 w-4" /> {t("subscriptionLocked.renewNow")}
+                    <RefreshCw className="h-4 w-4" />
+                    {selectedDowngrade
+                      ? t("subscriptionLocked.scheduleDowngrade")
+                      : t("subscriptionLocked.renewNow")}
                   </Button>
                 )}
                 {!isOrgAdmin && (
-                  <Button variant="ghost" onClick={() => setOpen(false)}>
+                  <Button variant="ghost" onClick={() => closePicker()}>
                     {t("common.close")}
                   </Button>
                 )}
@@ -402,7 +342,7 @@ export function SubscriptionBanner() {
                   <p className="text-xs text-muted-foreground">
                     {t("subscriptionLocked.contactAdminHint")}
                   </p>
-                  <Button variant="outline" size="sm" onClick={() => setOpen(false)}>
+                  <Button variant="outline" size="sm" onClick={() => closePicker()}>
                     {t("common.close")}
                   </Button>
                 </div>
@@ -445,14 +385,49 @@ export function FeatureLockedCard({ title, description }: { title: string; descr
   );
 }
 
+/**
+ * Shown when the organization IS subscribed but the current plan does not
+ * include this module. This is deliberately different from FeatureLockedCard
+ * (a dead subscription): here the fix is an upgrade, and the copy says so and
+ * offers the plan chooser right here.
+ */
 export function ModuleFeatureLockedCard({ feature }: { feature: keyof ModuleFlags }) {
-  const { isModuleFlagOff } = useOrgSubscription();
+  const { t } = useTranslation();
+  const { isModuleFlagOff, orgSub } = useOrgSubscription();
+  const { openPicker } = usePlanPicker();
+  const { isOrgAdmin } = useRoles();
   const label = MODULE_FEATURES.find((m) => m.key === feature)?.label ?? feature;
   if (!isModuleFlagOff(feature)) return null;
+
+  const planName = orgSub?.plan_name || t("payments.free");
+  const isFree = orgSub?.is_free === 1;
+
   return (
-    <FeatureLockedCard
-      title={`${label} unavailable`}
-      description={`${label} is not included in your organization's current plan. Contact your admin to upgrade.`}
-    />
+    <Card className="relative overflow-hidden border-dashed border-warning/40 bg-warning/5/40">
+      <CardContent className="p-6">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-warning/15">
+            <Lock className="h-5 w-5 text-warning-foreground" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-foreground">
+              {t("moduleLocked.title", { module: label })}
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              {isFree
+                ? t("moduleLocked.freeDesc", { module: label })
+                : t("moduleLocked.planDesc", { module: label, plan: planName })}
+            </p>
+          </div>
+        </div>
+        {isOrgAdmin ? (
+          <Button size="sm" className="mt-4" onClick={() => openPicker(feature)}>
+            <Sparkles className="mr-1.5 h-4 w-4" /> {t("moduleLocked.upgradeCta")}
+          </Button>
+        ) : (
+          <p className="mt-4 text-xs text-muted-foreground">{t("moduleLocked.askAdmin")}</p>
+        )}
+      </CardContent>
+    </Card>
   );
 }

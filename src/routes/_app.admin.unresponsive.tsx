@@ -1,8 +1,7 @@
-﻿import { createFileRoute } from "@tanstack/react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { createFileRoute } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { toast } from "sonner";
-import { CheckCircle2, ExternalLink, Eye, Hourglass, XCircle } from "lucide-react";
+import { ExternalLink, Eye, Hourglass } from "lucide-react";
 
 import { PageHeader } from "@/components/common/PageHeader";
 import { SearchInput } from "@/components/common/SearchInput";
@@ -12,7 +11,6 @@ import { StatusBadge } from "@/components/common/StatusBadge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -42,38 +40,27 @@ export const Route = createFileRoute("/_app/admin/unresponsive")({
 const PAGE_SIZE = 20;
 
 function UnresponsivePage() {
-  const qc = useQueryClient();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [reviewing, setReviewing] = useState<VerificationRequest | null>(null);
-  const [remarks, setRemarks] = useState("");
 
   const q = useQuery({
     queryKey: ["sla-requests", page, search],
     queryFn: () => adminService.slaRequests({ page, limit: PAGE_SIZE, search }),
   });
 
-  const verify = useMutation({
-    mutationFn: ({ uuid, status }: { uuid: string; status: "verified" | "unverified" }) =>
-      adminService.slaVerify(uuid, { status, verification_remarks: remarks }),
-    onSuccess: () => {
-      toast.success("Request updated");
-      qc.invalidateQueries({ queryKey: ["sla-requests"] });
-      qc.invalidateQueries({ queryKey: ["admin-requests"] });
-      qc.invalidateQueries({ queryKey: ["myRequests"] });
-      setReviewing(null);
-      setRemarks("");
-    },
-    onError: (e: any) => toast.error(e?.response?.data?.message ?? "Failed"),
-  });
-
+  // Deliberately no verify mutation. The system admin can see that a request has
+  // gone unresponsive and who is holding it, but the decision belongs to the
+  // issuing organization — our team contacts them directly. Approving or
+  // rejecting here meant the platform was issuing a verification decision in the
+  // organization's name, and the organization was never actually asked.
   const items = q.data?.items ?? [];
 
   return (
     <div>
       <PageHeader
         title="Unresponsive requests"
-        description="Requests left 'under review' for 3+ days by a registered organization. Resolve them directly or contact the organization."
+        description="Requests left 'under review' for 3+ days by a registered organization. Read-only — our team contacts the organization directly to resolve them."
       />
 
       <Card className="border-border/70 shadow-none">
@@ -162,12 +149,9 @@ function UnresponsivePage() {
                                 size="sm"
                                 variant="outline"
                                 className="h-7 shrink-0 text-xs"
-                                onClick={() => {
-                                  setReviewing(r);
-                                  setRemarks("");
-                                }}
+                                onClick={() => setReviewing(r)}
                               >
-                                <Eye className="mr-1 h-3 w-3" /> Review
+                                <Eye className="mr-1 h-3 w-3" /> View details
                               </Button>
                             </div>
                           </TableCell>
@@ -191,10 +175,11 @@ function UnresponsivePage() {
       <Dialog open={!!reviewing} onOpenChange={(o) => !o && setReviewing(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Review unresponsive request</DialogTitle>
+            <DialogTitle>Unresponsive request</DialogTitle>
             <DialogDescription>
-              This request exceeded the 3-day SLA. Approve or reject it on behalf of the
-              organization.
+              This request exceeded the 3-day SLA. Our team contacts the organization
+              directly to resolve it, so this screen is read-only — it shows what was
+              submitted and who is holding it.
             </DialogDescription>
           </DialogHeader>
           {reviewing && (
@@ -216,43 +201,15 @@ function UnresponsivePage() {
                   </div>
                 </div>
               )}
-              <div className="space-y-2">
-                <Label htmlFor="sla-remarks">Your verification remarks</Label>
-                <Textarea
-                  id="sla-remarks"
-                  rows={3}
-                  value={remarks}
-                  onChange={(e) => setRemarks(e.target.value)}
-                  placeholder="Reason for your decision…"
-                />
-              </div>
+              <p className="text-xs text-muted-foreground">
+                Flagged {formatDateTime(reviewing.sla_flagged_at)}. Contact{" "}
+                {reviewing.issuing_org_name ?? "the organization"} to follow up.
+              </p>
             </div>
           )}
           <DialogFooter className="gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setReviewing(null)}
-              disabled={verify.isPending}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="outline"
-              className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
-              onClick={() =>
-                reviewing && verify.mutate({ uuid: reviewing.uuid, status: "unverified" })
-              }
-              disabled={verify.isPending}
-            >
-              <XCircle className="mr-2 h-4 w-4" /> Reject
-            </Button>
-            <Button
-              onClick={() =>
-                reviewing && verify.mutate({ uuid: reviewing.uuid, status: "verified" })
-              }
-              disabled={verify.isPending}
-            >
-              <CheckCircle2 className="mr-2 h-4 w-4" /> Approve
+            <Button variant="outline" onClick={() => setReviewing(null)}>
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>

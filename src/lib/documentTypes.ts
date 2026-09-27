@@ -73,11 +73,7 @@ export const UPLOADABLE_DOC_EXTENSIONS = [
   ".bmp",
   ".doc",
   ".docx",
-  ".xls",
-  ".xlsx",
   ".txt",
-  ".csv",
-  ".zip",
 ] as const;
 
 /** Value for the accept="" attribute of a document file input. */
@@ -97,9 +93,43 @@ export const UPLOADABLE_DOC_ACCEPT = [
   ".bmp",
   ".doc",
   ".docx",
-  ".xls",
-  ".xlsx",
   ".txt",
-  ".csv",
-  ".zip",
 ].join(",");
+
+/** Server-side upload cap (multer `limits.fileSize` in uploadDocs.js). */
+export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+
+/**
+ * Human-readable list of what the file picker accepts, built from the allow-list
+ * so it can never drift from it. Used for the upload hint under the file input.
+ */
+export const UPLOADABLE_DOC_LABEL = "PDF, JPEG, PNG, Word or TXT";
+
+/** Why a chosen file was rejected, or null when it is acceptable. */
+export function validateUploadableFile(file: File | null | undefined): {
+  code: "type" | "size" | "empty";
+  message: string;
+} | null {
+  if (!file) return { code: "empty", message: "No file selected." };
+
+  const ext = `.${(file.name.split(".").pop() ?? "").toLowerCase()}`;
+  if (!(UPLOADABLE_DOC_EXTENSIONS as readonly string[]).includes(ext)) {
+    return {
+      code: "type",
+      message: `"${ext || file.name}" files are not supported. Allowed: ${UPLOADABLE_DOC_LABEL}.`,
+    };
+  }
+
+  if (file.size > MAX_UPLOAD_BYTES) {
+    return {
+      code: "size",
+      message: `That file is ${(file.size / (1024 * 1024)).toFixed(1)}MB. The maximum is 10MB.`,
+    };
+  }
+
+  if (file.size === 0) {
+    return { code: "empty", message: "That file is empty." };
+  }
+
+  return null;
+}

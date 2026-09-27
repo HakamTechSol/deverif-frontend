@@ -1,6 +1,6 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
   CreditCard,
@@ -60,7 +60,9 @@ import {
   type SubscriptionPlan,
   type UUID,
 } from "@/services";
-import { formatDate } from "@/lib/utils";
+import { formatDate, apiErrorMessage } from "@/lib/utils";
+import { classifyPlanForOrg, hasLiveSubscription, isFreePlan } from "@/lib/subscription";
+import { PlanFeatureList } from "@/components/common/PlanFeatureList";
 import { authStore } from "@/lib/auth";
 
 export const Route = createFileRoute("/_app/payments")({
@@ -118,6 +120,112 @@ function StatusBadge({ status }: { status: "pending" | "approved" | "denied" }) 
   );
 }
 
+/**
+ * A deferred downgrade is not applied immediately: the org keeps its current
+ * plan until the period it already paid for ends. Make that visible here, with
+ * the effective date and the option to call it off before it takes effect.
+ */
+function PendingPlanChangeCard({
+  orgSub,
+  onCancelled,
+}: {
+  orgSub: NonNullable<OrgSubscription>;
+  onCancelled: () => void;
+}) {
+  const { t } = useTranslation();
+  const [confirming, setConfirming] = useState(false);
+
+  const cancel = useMutation({
+    mutationFn: () => orgSubscriptionService.cancelPendingPlan(),
+    onSuccess: () => {
+      toast.success(t("payments.pendingChangeCancelledRefunded"));
+      setConfirming(false);
+      onCancelled();
+    },
+    onError: (e: unknown) => toast.error(apiErrorMessage(e, t("common.failed"))),
+  });
+
+  const effectiveAt = orgSub.pending_plan_effective_at ?? orgSub.expiry;
+  const pendingName = orgSub.pending_plan_name || t("payments.pendingPlanChangeFallbackName");
+  const currentName = orgSub.plan_name || t("payments.plan");
+  // One mechanism, two meanings. A scheduled change whose target is the plan the
+  // org is already on is a RENEWAL; anything else actually switches plans. The
+  // copy has to say which, because "you are moving to a different plan" is
+  // alarming news that a renewal does not deserve.
+  const isRenewal =
+    !!orgSub.pending_plan_name &&
+    !!orgSub.plan_name &&
+    orgSub.pending_plan_name.toLowerCase() === orgSub.plan_name.toLowerCase();
+
+  return (
+    <Card className="border-warning/40 bg-warning/5 shadow-none">
+      <CardContent className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-start gap-3">
+          <CalendarClock className="mt-0.5 h-5 w-5 shrink-0 text-warning-foreground" />
+          <div>
+            <h3 className="text-sm font-semibold text-foreground">
+              {isRenewal
+                ? t("payments.pendingRenewalTitle", { plan: currentName })
+                : t("payments.pendingPlanChangeTitle", { plan: pendingName })}
+            </h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {isRenewal
+                ? t("payments.pendingRenewalDesc", {
+                    plan: currentName,
+                    date: formatDate(effectiveAt),
+                  })
+                : t("payments.pendingPlanChangeDesc", {
+                    current: currentName,
+                    next: pendingName,
+                    date: formatDate(effectiveAt),
+                  })}
+            </p>
+            {!isRenewal && orgSub.pending_plan_daily_request_quota != null && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t("payments.pendingPlanChangeQuota", {
+                  quota: orgSub.pending_plan_daily_request_quota,
+                })}
+              </p>
+            )}
+            <p className="mt-1 text-xs text-muted-foreground">
+              {t("payments.pendingChangeRefundableNote", { date: formatDate(effectiveAt) })}
+            </p>
+          </div>
+        </div>
+        {!confirming ? (
+          <Button
+            size="sm"
+            variant="outline"
+            className="shrink-0"
+            onClick={() => setConfirming(true)}
+          >
+            {t("payments.cancelAndRefundPendingChange")}
+          </Button>
+        ) : (
+          <div className="flex shrink-0 items-center gap-2">
+            <Button
+              size="sm"
+              onClick={() => cancel.mutate()}
+              loading={cancel.isPending}
+              disabled={cancel.isPending}
+            >
+              {t("payments.confirmCancelAndRefund")}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setConfirming(false)}
+              disabled={cancel.isPending}
+            >
+              {t("common.cancel")}
+            </Button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function PaymentsPage() {
   const { t } = useTranslation();
   const plan = useQuery({ queryKey: ["plan"], queryFn: () => paymentService.plan() });
@@ -170,6 +278,11 @@ function SubscribeSection({
     queryFn: () => marketingService.listPlans(),
   });
 
+  // The Free plan is not purchasable (it is the default every org is already on,
+  // and the checkout endpoint rejects it), so it never appears in the upgrade
+  // grid -- otherwise its "Subscribe" button would always error.
+  const purchasablePlans = (plans.data ?? []).filter((p) => p.is_free !== 1);
+
   const [confirmPlan, setConfirmPlan] = useState<SubscriptionPlan | null>(null);
 
   const checkout = useMutation({
@@ -215,7 +328,7 @@ function SubscribeSection({
         <div className="py-10">
           <DverifLoader size="sm" />
         </div>
-      ) : (plans.data ?? []).length === 0 ? (
+      ) : purchasablePlans.length === 0 ? (
         <EmptyState
           icon={CreditCard}
           title={t("payments.noAvailablePlans")}
@@ -223,7 +336,13 @@ function SubscribeSection({
         />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {(plans.data ?? []).map((p: SubscriptionPlan) => (
+          {/*
+            The Free plan is not purchasable -- every organization is already on
+            it by default, and the checkout endpoint rejects it. Offering a
+            "Subscribe" button for it would produce an error, so it is filtered
+            out of the upgrade grid.
+          */}
+          {purchasablePlans.map((p: SubscriptionPlan) => (
             <Card
               key={p.uuid}
               className="flex flex-col border-border/70 shadow-none transition hover:border-primary/40 hover:shadow-sm"
@@ -251,21 +370,17 @@ function SubscribeSection({
                   <p className="mt-3 text-xs text-muted-foreground">{p.description}</p>
                 )}
                 {p.features && p.features.length > 0 && (
-                  <ul className="mt-3 space-y-1.5">
-                    {p.features.slice(0, 4).map((f, i) => (
-                      <li
-                        key={i}
-                        className={`flex items-start gap-2 text-xs ${
-                          f.highlight ? "font-semibold text-foreground" : "text-muted-foreground"
-                        }`}
-                      >
-                        <Check
-                          className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${f.highlight ? "text-primary" : "text-success"}`}
-                        />
-                        <span>{f.text}</span>
-                      </li>
-                    ))}
-                  </ul>
+                  // All features, not a truncated slice -- a plan must be
+                  // compared on everything it actually includes. A module the
+                  // plan does not include is crossed out, driven by the
+                  // authoritative module_flags rather than the `highlight`
+                  // styling flag.
+                  <PlanFeatureList
+                    plan={p}
+                    features={p.features}
+                    className="mt-3"
+                    leadingItem={{ text: t("payments.freeRequestAlways") }}
+                  />
                 )}
                 <Button className="mt-4 w-full" size="sm" onClick={() => setConfirmPlan(p)}>
                   <CreditCard className="mr-1.5 h-4 w-4" /> {t("payments.subscribe")}
@@ -442,6 +557,25 @@ function PlanPage({
     },
     onError: (e: any) => toast.error(e?.response?.data?.message ?? t("common.failed")),
   });
+
+  /**
+   * Pay for an approved custom plan.
+   *
+   * An approval is only a negotiation outcome — the plan is not granted until it
+   * is paid for, exactly like any other plan. The backend refuses to open a
+   * checkout for a custom plan through the normal endpoint (a custom plan is
+   * never public), so this is the only route to activating one, which is why an
+   * approved request used to be a dead end.
+   */
+  const payCustomPlan = useMutation({
+    mutationFn: (requestUuid: string) => orgSubscriptionService.customPlanCheckout(requestUuid),
+    onSuccess: (data) => {
+      if (data?.redirect_url) {
+        window.location.href = data.redirect_url;
+      }
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.message ?? t("common.failed")),
+  });
   const submitCustom = () => {
     const quotaNum = Number(reqQuota);
     if (!reqQuota.trim() || !Number.isInteger(quotaNum) || quotaNum <= 0) {
@@ -468,6 +602,28 @@ function PlanPage({
     enabled: changeOpen,
   });
 
+  // What a purchase of the highlighted plan would actually do. A downgrade is
+  // NOT switched on immediately: it is scheduled for the day the current period
+  // ends, so the confirm copy has to say so.
+  const selectedRelation = useMemo(() => {
+    if (!selectedPlan) return null;
+    const target = (availablePlans.data ?? []).find((p) => p.uuid === selectedPlan);
+    if (!target) return null;
+    return hasLiveSubscription(orgSub) ? classifyPlanForOrg(orgSub, target) : "upgrade";
+  }, [selectedPlan, availablePlans.data, orgSub]);
+  const selectedIsDowngrade = selectedRelation === "downgrade";
+  // A same-tier plan (different id, identical quota/price) AND the org's own
+  // current plan are both a RENEWAL. Neither switches plans: both are scheduled
+  // and take effect at expiry.
+  const selectedIsRenewal = selectedRelation === "same" || selectedRelation === "current";
+  // Name of the plan the customer highlighted, so the confirm button can tell a
+  // renewal ("this same plan, scheduled") from a genuine plan change.
+  const selectedPlanName = useMemo(() => {
+    if (!selectedPlan) return null;
+    return (availablePlans.data ?? []).find((p) => p.uuid === selectedPlan)?.name ?? null;
+  }, [selectedPlan, availablePlans.data]);
+  const currentExpiryLabel = orgSub?.expiry ? formatDate(orgSub.expiry) : null;
+
   // Changing plans ALWAYS goes through Safepay checkout. The plan only changes
   // after payment is confirmed via webhook — there is no immediate switch path.
   const changePlanCheckout = useMutation({
@@ -492,9 +648,7 @@ function PlanPage({
         actions={
           isOrgAdmin ? (
             <>
-              <Button size="sm" variant="outline" onClick={() => setViewOpen(true)}>
-                <Eye className="mr-1.5 h-4 w-4" /> {t("payments.viewPlans")}
-              </Button>
+             
               <Button size="sm" onClick={() => setChangeOpen(true)}>
                 <RefreshCw className="mr-1.5 h-4 w-4" /> {t("payments.changePlan")}
               </Button>
@@ -502,6 +656,16 @@ function PlanPage({
           ) : undefined
         }
       />
+
+      {orgSub?.pending_plan_id ? (
+        <PendingPlanChangeCard
+          orgSub={orgSub}
+          onCancelled={() => {
+            qc.invalidateQueries({ queryKey: ["plan"] });
+            qc.invalidateQueries({ queryKey: ["org-subscription"] });
+          }}
+        />
+      ) : null}
 
       {isOrgActive && orgSub ? (
         <>
@@ -525,14 +689,22 @@ function PlanPage({
                   </p>
                 </div>
               </div>
-              {orgSub.monthly_price != null && (
+              {/* A Free org is a real, active plan like any other -- it is just
+                  free and has no billing cycle, so "Rs. 0 / month" would be
+                  noise. Identified by the is_free flag, not by a zero price. */}
+              {isFreePlan(orgSub) ? (
+                <div className="shrink-0 sm:text-right">
+                  <p className="text-2xl font-semibold text-foreground">{t("payments.free")}</p>
+                  <p className="text-xs text-muted-foreground">{t("payments.freePlanNoExpiry")}</p>
+                </div>
+              ) : orgSub.monthly_price != null ? (
                 <div className="shrink-0 sm:text-right">
                   <p className="text-2xl font-semibold text-foreground">
                     Rs. {orgSub.monthly_price.toLocaleString("en-PK")}
                   </p>
                   <p className="text-xs text-muted-foreground">/ {t("payments.perMonth")}</p>
                 </div>
-              )}
+              ) : null}
             </CardContent>
           </Card>
 
@@ -549,7 +721,20 @@ function PlanPage({
               }
             />
             <StatCard icon={CalendarDays} label={t("payments.started")} value={formatDate(orgSub.start)} />
-            <StatCard icon={CalendarClock} label={t("payments.expires")} value={formatDate(orgSub.expiry)} />
+            <StatCard
+              icon={CalendarClock}
+              label={t("payments.expires")}
+              /*
+               * A Free plan has no billing cycle, so it has no expiry date --
+               * showing a renewal date for an org on Free would be wrong. The
+               * plan is identified by its is_free flag, not its name or price.
+               */
+              value={
+                orgSub.is_free === 1 || orgSub.is_free === true
+                  ? t("payments.noExpiry")
+                  : formatDate(orgSub.expiry)
+              }
+            />
           </div>
 
           {/* Quota + included features */}
@@ -704,36 +889,85 @@ function PlanPage({
                     {t("payments.yourCustomPlanRequests")}
                   </h4>
                   <div className="space-y-2">
-                    {customRequests.data.map((r: CustomPlanRequest) => (
-                      <div
-                        key={r.uuid}
-                        className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/40 p-3 text-xs"
-                      >
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                            {r.requested_quota != null && (
-                              <span className="font-medium text-foreground">
-                                {r.requested_quota} {t("payments.requestsPerDay")}
-                              </span>
+                    {customRequests.data.map((r: CustomPlanRequest) => {
+                      // Approved AND actually payable: an approval whose plan
+                      // could not be linked has nothing to charge for, so it must
+                      // not render a button that can only fail.
+                      const canPayCustomPlan =
+                        r.status === "approved" && r.approved_plan_uuid != null;
+                      // Paying for the plan you are already on is a renewal, not
+                      // an activation. Offering "Pay & activate" with "not active
+                      // yet" next to a plan that IS active would both misdescribe
+                      // the org's state and invite a duplicate charge for a plan
+                      // they believe they have not bought.
+                      const isAlreadyOnThisPlan =
+                        canPayCustomPlan && r.approved_plan_uuid === orgSub?.plan_uuid;
+                      return (
+                        <div
+                          key={r.uuid}
+                          className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/40 p-3 text-xs"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                              {r.requested_quota != null && (
+                                <span className="font-medium text-foreground">
+                                  {r.requested_quota} {t("payments.requestsPerDay")}
+                                </span>
+                              )}
+                              {(r.requested_price ?? r.approved_price) != null && (
+                                <span className="text-muted-foreground">
+                                  Rs. {Number(r.requested_price ?? r.approved_price).toLocaleString("en-PK")}
+                                </span>
+                              )}
+                              {r.status === "approved" && r.approved_daily_quota != null && (
+                                <span className="text-success">
+                                  {t("payments.customPlanApprovedQuota", { quota: r.approved_daily_quota })}
+                                </span>
+                              )}
+                              {isAlreadyOnThisPlan && (
+                                <span className="text-success">{t("payments.customPlanIsCurrent")}</span>
+                              )}
+                            </div>
+                            {r.message && (
+                              <p className="mt-1 truncate text-muted-foreground">{r.message}</p>
                             )}
-                            {(r.requested_price ?? r.approved_price) != null && (
-                              <span className="text-muted-foreground">
-                                Rs. {Number(r.requested_price ?? r.approved_price).toLocaleString("en-PK")}
-                              </span>
+                            {canPayCustomPlan && !isAlreadyOnThisPlan && (
+                              <p className="mt-1 text-muted-foreground">
+                                {t("payments.customPlanPayToActivate")}
+                              </p>
                             )}
-                            {r.status === "approved" && r.approved_daily_quota != null && (
-                              <span className="text-success">
-                                {t("payments.customPlanApprovedQuota", { quota: r.approved_daily_quota })}
-                              </span>
+                            {isAlreadyOnThisPlan && orgSub?.expiry && (
+                              <p className="mt-1 text-muted-foreground">
+                                {t("payments.customPlanRenewInstead", {
+                                  date: formatDate(orgSub.expiry),
+                                })}
+                              </p>
+                            )}
+                            {r.status === "approved" && !canPayCustomPlan && (
+                              <p className="mt-1 text-warning-foreground">
+                                {t("payments.customPlanNotPayable")}
+                              </p>
                             )}
                           </div>
-                          {r.message && (
-                            <p className="mt-1 truncate text-muted-foreground">{r.message}</p>
-                          )}
+                          <div className="flex shrink-0 items-center gap-2">
+                            {canPayCustomPlan && isOrgAdmin && (
+                              <Button
+                                size="sm"
+                                className="h-8"
+                                disabled={payCustomPlan.isPending}
+                                loading={payCustomPlan.isPending}
+                                onClick={() => payCustomPlan.mutate(r.uuid)}
+                              >
+                                {isAlreadyOnThisPlan
+                                  ? t("payments.customPlanRenew")
+                                  : t("payments.customPlanPayAndActivate")}
+                              </Button>
+                            )}
+                            <StatusBadge status={r.status} />
+                          </div>
                         </div>
-                        <StatusBadge status={r.status} />
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -754,75 +988,18 @@ function PlanPage({
       <BillingHistory payments={payments} />
 
       {/* View plan (view-only — no actions) */}
-      <Dialog open={viewOpen} onOpenChange={(o) => !o && setViewOpen(false)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>{t("payments.viewPlans")}</DialogTitle>
-            <DialogDescription>{t("payments.viewPlanDescription")}</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div className="rounded-md border border-border bg-muted/40 p-3 text-xs">
-              <div className="text-muted-foreground">{t("payments.plan")}</div>
-              <div className="mt-0.5 text-sm font-medium capitalize text-foreground">{planName}</div>
-            </div>
-            {orgSub?.monthly_price != null && (
-              <div className="rounded-md border border-border bg-muted/40 p-3 text-xs">
-                <div className="text-muted-foreground">{t("payments.price")}</div>
-                <div className="mt-0.5 text-sm font-medium text-foreground">
-                  Rs. {orgSub.monthly_price?.toLocaleString("en-PK")} / {t("payments.perMonth")}
-                </div>
-              </div>
-            )}
-            {orgSub?.daily_request_quota != null && (
-              <div className="rounded-md border border-border bg-muted/40 p-3 text-xs">
-                <div className="text-muted-foreground">{t("payments.requestLimit")}</div>
-                <div className="mt-0.5 text-sm font-medium text-foreground">
-                  {orgSub.daily_request_quota} {t("payments.requestsPerDay")}
-                </div>
-              </div>
-            )}
-            {orgSub?.expiry && (
-              <div className="rounded-md border border-border bg-muted/40 p-3 text-xs">
-                <div className="text-muted-foreground">{t("payments.expires")}</div>
-                <div className="mt-0.5 text-sm font-medium text-foreground">{formatDate(orgSub.expiry)}</div>
-              </div>
-            )}
-            {orgSub?.features && orgSub.features.length > 0 && (
-              <div className="rounded-md border border-border bg-muted/40 p-3">
-                <div className="text-xs text-muted-foreground">{t("payments.includedWithPlan")}</div>
-                <ul className="mt-1 space-y-1">
-                  {orgSub.features.map((f, i) => (
-                    <li
-                      key={i}
-                      className={`flex items-start gap-2 text-xs ${
-                        f.highlight ? "font-medium text-foreground" : "text-muted-foreground"
-                      }`}
-                    >
-                      <Check
-                        className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${f.highlight ? "text-primary" : "text-success"}`}
-                      />
-                      <span>{f.text}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setViewOpen(false)}>
-              {t("common.close")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
+    
       {/* Change plan — always via Safepay checkout */}
       <Dialog open={changeOpen} onOpenChange={(o) => !o && setChangeOpen(false)}>
-        <DialogContent className="sm:max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>{t("payments.changePlan")}</DialogTitle>
-            <DialogDescription>{t("payments.changePlanCheckoutDesc")}</DialogDescription>
-          </DialogHeader>
+        <DialogContent className="max-h-[90vh] overflow-y-auto p-0 sm:max-w-4xl">
+          <div className="border-b border-border bg-muted/20 px-6 py-5 sm:px-7">
+            <DialogHeader>
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10"><Layers className="h-5 w-5 text-primary" /></div>
+                <div className="space-y-1"><DialogTitle className="text-lg">{t("payments.changePlan")}</DialogTitle><DialogDescription>{t("payments.changePlanCheckoutDesc")}</DialogDescription></div>
+              </div>
+            </DialogHeader>
+          </div>
 
           {changePlanCheckout.isPending ? (
             <div className="flex flex-col items-center justify-center gap-3 py-16">
@@ -834,25 +1011,35 @@ function PlanPage({
               {t("payments.noAvailablePlans")}
             </p>
           ) : (
-            <div className="grid max-h-[52vh] gap-3 overflow-y-auto py-1 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-4 px-6 py-5 sm:grid-cols-2 sm:px-7">
               {(availablePlans.data ?? [])
                 .filter((p) => p.is_free !== 1)
                 .map((p: SubscriptionPlan) => {
                   const selected = selectedPlan === p.uuid;
                   const isCurrent = !!orgSub?.plan_name && orgSub.plan_name === p.name;
+                  // A downgrade is a plan that actually changes. A same-plan
+                  // selection is a RENEWAL, and is equally scheduled — so it is
+                  // labelled separately instead of being lumped in with upgrades.
+                  const isDowngrade =
+                    !isCurrent &&
+                    hasLiveSubscription(orgSub) &&
+                    classifyPlanForOrg(orgSub, p) === "downgrade";
+                  const somethingPending = !!orgSub?.pending_plan_id;
                   return (
                     <button
                       key={p.uuid}
                       type="button"
-                      onClick={() => !isCurrent && setSelectedPlan(p.uuid)}
-                      disabled={isCurrent}
+                      // The current plan is no longer inert. Re-selecting it is a
+                      // renewal, and renewals are scheduled like any other change
+                      // — so the card has to be clickable to be reachable at all.
+                      onClick={() => setSelectedPlan(p.uuid)}
                       aria-pressed={selected}
-                      className={`flex flex-col rounded-lg border p-4 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                      className={`group relative flex h-full flex-col rounded-xl border p-5 text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                         isCurrent
-                          ? "cursor-default border-success/50 bg-success/5"
+                          ? "cursor-pointer border-success/40 bg-success/[0.035] hover:border-primary/60 hover:shadow-md"
                           : selected
-                            ? "cursor-pointer border-primary bg-primary/5 ring-2 ring-primary"
-                            : "cursor-pointer border-border bg-card hover:border-primary/50 hover:bg-accent/40"
+                            ? "cursor-pointer border-primary bg-primary/[0.04] ring-2 ring-primary/20 shadow-md"
+                            : "cursor-pointer border-border bg-card hover:border-primary/50 hover:shadow-md"
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2">
@@ -861,6 +1048,13 @@ function PlanPage({
                           <Badge className="shrink-0 rounded-full bg-success/15 text-success hover:bg-success/15">
                             {t("payments.currentPlan")}
                           </Badge>
+                        ) : isDowngrade ? (
+                          <Badge
+                            variant="outline"
+                            className="shrink-0 rounded-full border-warning/30 bg-warning/10 text-warning-foreground"
+                          >
+                            {t("payments.downgradeBadge")}
+                          </Badge>
                         ) : selected ? (
                           <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
                             <Check className="h-3 w-3" />
@@ -868,9 +1062,21 @@ function PlanPage({
                         ) : null}
                       </div>
 
-                      <div className="mt-3 flex items-baseline gap-1">
-                        <span className="text-2xl font-bold text-foreground">
-                          Rs. {p.monthly_price?.toLocaleString()}
+                      {/* A same-plan selection is a renewal: say so on the card,
+                          because a customer looking at "your current plan" with
+                          no way to act on it has no idea renewal is possible. */}
+                      {isCurrent ? (
+                        <p className="mt-1.5 flex items-start gap-1.5 text-xs font-medium text-warning-foreground">
+                          <RefreshCw className="mt-0.5 h-3 w-3 shrink-0" />
+                          {somethingPending
+                            ? t("payments.replaceScheduledWithRenewal")
+                            : t("payments.scheduleRenewal")}
+                        </p>
+                      ) : null}
+
+                      <div className="mt-5 flex items-baseline gap-1 border-b border-border/70 pb-4">
+                        <span className="text-3xl font-semibold tracking-tight text-foreground">
+                          Rs. {p.monthly_price?.toLocaleString("en-PK")}
                         </span>
                         <span className="text-xs text-muted-foreground">/{p.billing_period}</span>
                       </div>
@@ -891,37 +1097,49 @@ function PlanPage({
                         </p>
                       ) : null}
 
-                      <ul className="mt-3 space-y-1.5">
-                        <li className="flex items-start gap-1.5 text-xs text-muted-foreground">
-                          <Check className="mt-0.5 h-3 w-3 shrink-0 text-success" />
-                          {t("payments.freeRequestAlways")}
-                        </li>
-                        {(p.features ?? []).slice(0, 3).map((f, i) => (
-                          <li key={i} className="flex items-start gap-1.5 text-xs text-muted-foreground">
-                            <Check className="mt-0.5 h-3 w-3 shrink-0 text-success" />
-                            <span className="line-clamp-1">{f.text}</span>
-                          </li>
-                        ))}
-                      </ul>
+                      {/* All features, not a slice -- switching plans is a
+                          comparison, and hiding entries made two plans look
+                          identical when they were not. */}
+                      <PlanFeatureList
+                        plan={p}
+                        features={p.features}
+                        size="xs"
+                        className="mt-3"
+                        leadingItem={{ text: t("payments.freeRequestAlways") }}
+                      />
                     </button>
                   );
                 })}
             </div>
           )}
 
-          <div className="space-y-1.5 border-t border-border pt-3">
-            <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
-              <RefreshCw className="mt-0.5 h-3 w-3 shrink-0" />
-              {t("payments.changePlanRestart")}
-            </p>
+          <div className="space-y-2 border-t border-border bg-muted/10 px-6 py-4 sm:px-7">
+            {selectedIsDowngrade ? (
+              <p className="flex items-start gap-1.5 text-xs font-medium text-warning-foreground">
+                <CalendarClock className="mt-0.5 h-3 w-3 shrink-0" />
+                {t("payments.changePlanDowngradeNote", { date: currentExpiryLabel })}
+              </p>
+            ) : selectedIsRenewal ? (
+              <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                <RefreshCw className="mt-0.5 h-3 w-3 shrink-0" />
+                {selectedRelation === "current"
+                  ? t("payments.scheduleRenewalNote", { date: currentExpiryLabel })
+                  : t("payments.renewalKeepsRemainingDays")}
+              </p>
+            ) : (
+              <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                <RefreshCw className="mt-0.5 h-3 w-3 shrink-0" />
+                {t("payments.changePlanRestart")}
+              </p>
+            )}
             <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
               <Clock className="mt-0.5 h-3 w-3 shrink-0" />
               {t("payments.changePlanCheckoutNote")}
             </p>
           </div>
 
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setChangeOpen(false)} disabled={changePlanCheckout.isPending}>
+          <DialogFooter className="border-t border-border bg-background px-6 py-4 sm:px-7">
+            <Button variant="outline" onClick={() => setChangeOpen(false)} disabled={changePlanCheckout.isPending}>
               {t("common.cancel")}
             </Button>
             <Button
@@ -929,7 +1147,16 @@ function PlanPage({
               disabled={!selectedPlan || changePlanCheckout.isPending}
               loading={changePlanCheckout.isPending}
             >
-              {t("payments.confirmChange")}
+              {/* Upgrade keeps its existing immediate copy. A scheduled change —
+                  renewal or downgrade — says "schedule" so the customer is not
+                  led to expect a switch that will not happen today. */}
+              {selectedIsDowngrade
+                ? t("payments.confirmDowngrade")
+                : selectedPlan && orgSub?.plan_name === selectedPlanName
+                  ? orgSub?.pending_plan_id
+                    ? t("payments.confirmReplaceScheduledWithRenewal")
+                    : t("payments.confirmScheduleRenewal")
+                  : t("payments.confirmChange")}
             </Button>
           </DialogFooter>
         </DialogContent>
