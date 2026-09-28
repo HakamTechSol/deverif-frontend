@@ -24,7 +24,7 @@ import { formatDateTime } from "@/lib/utils";
 import { adminSupportService, type SupportReply, type SupportTicket } from "@/services";
 
 export const Route = createFileRoute("/_app/admin/support/$uuid")({
-  head: () => ({ meta: [{ title: "Support Ticket — Dverif Admin" }] }),
+  head: () => ({ meta: [{ title: "Support Ticket â€” Dverif Admin" }] }),
   component: AdminSupportDetailPage,
 });
 
@@ -47,6 +47,7 @@ function AdminSupportDetailPage() {
       toast.success(t("supportTickets.replySent"));
       setMessage("");
       qc.invalidateQueries({ queryKey: ["adminSupport", uuid] });
+      qc.invalidateQueries({ queryKey: ["admin-sidebar-counts"] });
     },
     onError: (e: any) => toast.error(e?.response?.data?.message ?? t("common.failed")),
   });
@@ -57,6 +58,7 @@ function AdminSupportDetailPage() {
       toast.success(t("supportTickets.statusUpdated"));
       setStatus("");
       qc.invalidateQueries({ queryKey: ["adminSupport", uuid] });
+      qc.invalidateQueries({ queryKey: ["admin-sidebar-counts"] });
     },
     onError: (e: any) => toast.error(e?.response?.data?.message ?? t("common.failed")),
   });
@@ -89,9 +91,9 @@ function AdminSupportDetailPage() {
               <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                 <StatusBadge status={ticket.status} />
                 <PriorityBadge priority={ticket.priority} />
-                <span>{ticket.organization_name ?? "—"}</span>
+                <span>{ticket.organization_name ?? "â€”"}</span>
                 <span>
-                  {t("supportTickets.raisedBy")}: {ticket.raised_by_name ?? ticket.raised_by_email ?? "—"}
+                  {t("supportTickets.raisedBy")}: {ticket.raised_by_name ?? ticket.raised_by_email ?? "â€”"}
                 </span>
               </div>
             </div>

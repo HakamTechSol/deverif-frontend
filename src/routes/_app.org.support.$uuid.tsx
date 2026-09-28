@@ -7,6 +7,7 @@ import { ArrowLeft, Send } from "lucide-react";
 
 import { useAuth } from "@/lib/auth";
 import { authStore } from "@/lib/auth";
+import { canAccessRoute } from "@/lib/routeAccess";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { PriorityBadge } from "./_app.org.support";
 import { Card, CardContent } from "@/components/ui/card";
@@ -19,8 +20,10 @@ import { orgSupportService, type SupportReply } from "@/services";
 export const Route = createFileRoute("/_app/org/support/$uuid")({
   beforeLoad: () => {
     if (typeof window === "undefined") return;
-    const user = authStore.get().user;
-    if (!user || user.role !== "user") {
+    // Deliberately the same call the sidebar makes when deciding whether to
+    // render this page's link -- one table, so a visible link and a reachable
+    // page cannot disagree. See lib/routeAccess.
+    if (!canAccessRoute(authStore.get().user, "/org/support")) {
       throw redirect({ to: "/dashboard" });
     }
   },

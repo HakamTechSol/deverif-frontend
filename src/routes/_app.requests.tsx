@@ -1,6 +1,6 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import {
@@ -28,6 +28,7 @@ import { EmptyState } from "@/components/common/EmptyState";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { RequestDetailModal } from "@/components/common/RequestDetailModal";
+import { RequestSubmittedModal } from "@/components/common/RequestSubmittedModal";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -64,19 +65,21 @@ import {
   type VerificationRequest,
   type UUID,
 } from "@/services";
-import { cn, digitsOnly, formatCNIC, formatDate, parseFeatureAccess } from "@/lib/utils";
+import { digitsOnly, formatCNIC, formatDate, parseFeatureAccess } from "@/lib/utils";
 import { UPLOADABLE_DOC_ACCEPT, validateUploadableFile } from "@/lib/documentTypes";
 import { EMPLOYEE_DOCUMENT_TYPES } from "@/lib/documentTypes";
 import { authStore, useAuth } from "@/lib/auth";
+import { canAccessRoute } from "@/lib/routeAccess";
 import { DverifLoader } from "@/components/common/DvarifLoader";
 import { ProtectedDocumentLink } from "@/components/common/ProtectedDocumentLink";
 
 export const Route = createFileRoute("/_app/requests")({
   beforeLoad: () => {
     if (typeof window === "undefined") return;
-    const user = authStore.get().user;
-    if (!user || user.role !== "user") throw redirect({ to: "/dashboard" });
-    if (user.org_role !== "org_admin" && !parseFeatureAccess(user.feature_access).generate_request) {
+    // Deliberately the same call the sidebar makes when deciding whether to
+    // render this page's link -- one table, so a visible link and a reachable
+    // page cannot disagree. See lib/routeAccess.
+    if (!canAccessRoute(authStore.get().user, "/requests")) {
       throw redirect({ to: "/dashboard" });
     }
   },
@@ -522,7 +525,7 @@ function CreateRequestDialog({
   const [documentOwnerName, setDocumentOwnerName] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [autoVerified, setAutoVerified] = useState<VerificationRequest | null>(null);
+  const [submitted, setSubmitted] = useState<VerificationRequest | null>(null);
 
   const isOther = orgUuid === "__other__";
 
@@ -564,13 +567,11 @@ function CreateRequestDialog({
         form.append("issuing_organization_uuid", orgUuid);
       }
       const created = await requestsService.create(form);
-      if (created?.auto_verified) {
-        // The Auto Verified modal is the only feedback here — no toast, so the
-        // animated check mark is the single confirmation the user sees.
-        setAutoVerified(created);
-      } else {
-        toast.success(t("requests.requestSubmitted"));
-      }
+      // The success modal is the only feedback here — no toast, so the animated
+      // check mark is the single confirmation the user sees. It carries the
+      // summary and the next steps, which a toast could not hold on screen
+      // long enough to be read.
+      setSubmitted(created);
       setDocumentType("");
       setOrgUuid("");
       setOtherOrgName("");
@@ -765,94 +766,8 @@ function CreateRequestDialog({
       </DialogContent>
     </Dialog>
 
-    <AutoVerifiedDialog
-      request={autoVerified}
-      onClose={() => {
-        setAutoVerified(null);
-        onOpenChange(false);
-      }}
-    />
+    <RequestSubmittedModal request={submitted} onClose={() => setSubmitted(null)} />
     </>
-  );
-}
-
-function AutoVerifiedDialog({
-  request,
-  onClose,
-}: {
-  request: VerificationRequest | null;
-  onClose: () => void;
-}) {
-  const [shown, setShown] = useState(false);
-  useEffect(() => {
-    if (!request) {
-      setShown(false);
-      return;
-    }
-    // Reset then flip on the next frame so the entry animation replays on
-    // every open (the SVG dash offset is inline, not a CSS class).
-    setShown(false);
-    const raf = requestAnimationFrame(() => setShown(true));
-    return () => cancelAnimationFrame(raf);
-  }, [request]);
-
-  return (
-    <Dialog open={!!request} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <div className="flex justify-center pt-2 pb-1">
-            <div className="relative flex h-24 w-24 items-center justify-center">
-              <span
-                className={cn(
-                  "absolute inset-0 rounded-full bg-success/15",
-                  shown && "animate-success-ring",
-                )}
-              />
-              <span
-                className={cn(
-                  "absolute inset-0 rounded-full bg-success/20",
-                  shown && "animate-success-ring-delayed",
-                )}
-              />
-              <span
-                className={cn(
-                  "relative flex h-20 w-20 items-center justify-center rounded-full bg-success text-success-foreground shadow-lg",
-                  shown && "animate-success-pop",
-                )}
-              >
-                <svg
-                  viewBox="0 0 52 52"
-                  className="h-11 w-11"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={4}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path
-                    d="M14 27l8 8 16-17"
-                    style={{
-                      strokeDasharray: 44,
-                      strokeDashoffset: shown ? 0 : 44,
-                      transition: "stroke-dashoffset 380ms cubic-bezier(0.65, 0, 0.35, 1)",
-                    }}
-                  />
-                </svg>
-              </span>
-            </div>
-          </div>
-          <DialogTitle className="text-center text-xl">Auto Verified</DialogTitle>
-          <DialogDescription className="text-center">
-            Your "{request?.document_type ?? ""}" request was verified.
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <Button onClick={onClose} className="w-full">
-            Done
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }
 

@@ -2,14 +2,17 @@ import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 
 import { authStore } from "@/lib/auth";
+import { canAccessRoute } from "@/lib/routeAccess";
 import { Badge } from "@/components/ui/badge";
 import { type SupportTicket } from "@/services";
 
 export const Route = createFileRoute("/_app/org/support")({
   beforeLoad: () => {
     if (typeof window === "undefined") return;
-    const user = authStore.get().user;
-    if (!user || user.role !== "user") {
+    // Deliberately the same call the sidebar makes when deciding whether to
+    // render this page's link -- one table, so a visible link and a reachable
+    // page cannot disagree. See lib/routeAccess.
+    if (!canAccessRoute(authStore.get().user, "/org/support")) {
       throw redirect({ to: "/dashboard" });
     }
   },

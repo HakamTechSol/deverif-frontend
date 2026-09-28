@@ -1,4 +1,4 @@
-﻿import { createFileRoute, useSearch } from "@tanstack/react-router";
+import { createFileRoute, useSearch } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -526,6 +526,7 @@ function CustomPlanRequestsTab() {
   });
 
   const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ["admin-sidebar-counts"] });
     qc.invalidateQueries({ queryKey: ["admin-custom-plan-requests"] });
     qc.invalidateQueries({ queryKey: ["admin-orgs"] });
     qc.invalidateQueries({ queryKey: ["admin-orgs-subs"] });

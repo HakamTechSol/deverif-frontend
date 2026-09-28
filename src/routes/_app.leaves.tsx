@@ -1,6 +1,6 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import { CalendarPlus, CalendarX2, Lock } from "lucide-react";
@@ -40,30 +40,26 @@ import {
 } from "@/components/ui/table";
 import { leavesService } from "@/services";
 import { countDays, formatDate, formatDateTime } from "@/lib/utils";
-import { useAuth } from "@/lib/auth";
+import { authStore } from "@/lib/auth";
+import { canAccessRoute } from "@/lib/routeAccess";
 import { useOrgSubscription } from "@/hooks/useOrgSubscription";
 import { ModuleFeatureLockedCard } from "@/components/common/SubscriptionLocked";
 
 export const Route = createFileRoute("/_app/leaves")({
+  beforeLoad: () => {
+    if (typeof window === "undefined") return;
+    // Self-service leave is employee-only server-side. This used to be a
+    // useEffect in the component that only bounced org_admin, so a sub_admin
+    // who typed the URL got the page and a wall of 403s instead of a redirect.
+    if (!canAccessRoute(authStore.get().user, "/leaves")) {
+      throw redirect({ to: "/dashboard" });
+    }
+  },
   head: () => ({ meta: [{ title: "Leaves — Dverif" }] }),
-  component: LeavesPage,
+  component: LeavesContent,
 });
 
 const PAGE_SIZE = 10;
-
-function LeavesPage() {
-  const { user } = useAuth();
-  const navigate = useNavigate();
-  const isOrgAdmin = user?.role !== "admin" && user?.org_role === "org_admin";
-
-  useEffect(() => {
-    if (user && isOrgAdmin) navigate({ to: "/dashboard" });
-  }, [user, isOrgAdmin, navigate]);
-
-  if (user && isOrgAdmin) return null;
-
-  return <LeavesContent />;
-}
 
 function LeavesContent() {
   const qc = useQueryClient();

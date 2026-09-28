@@ -1,6 +1,14 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/_app/attendance")({
+  beforeLoad: () => {
+    if (typeof window === "undefined") return;
+    // Self-service check-in/out is employee-only server-side, and the sidebar
+    // hides this page from staff via the same table.
+    if (!canAccessRoute(authStore.get().user, "/attendance")) {
+      throw redirect({ to: "/dashboard" });
+    }
+  },
   component: AttendancePage,
 });
 
@@ -9,6 +17,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { LogIn, LogOut, Clock, CalendarDays, Lock } from "lucide-react";
 import { attendanceService, type AttendanceRecord } from "@/services";
+import { authStore } from "@/lib/auth";
+import { canAccessRoute } from "@/lib/routeAccess";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Pagination } from "@/components/common/Pagination";
 import { Badge } from "@/components/ui/badge";

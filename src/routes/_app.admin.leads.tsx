@@ -56,7 +56,7 @@ import { TableSkeleton } from "./_app.requests";
 import { formatDateTime, formatDate, apiErrorMessage } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/admin/leads")({
-  head: () => ({ meta: [{ title: "Leads — Dverif Admin" }] }),
+  head: () => ({ meta: [{ title: "Leads â€” Dverif Admin" }] }),
   component: AdminLeadsPage,
 });
 
@@ -93,7 +93,7 @@ function AdminLeadsPage() {
   );
 }
 
-/* ── Status badge ──────────────────────────────────────────────── */
+/* â”€â”€ Status badge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 const STATUS_STYLES: Record<string, string> = {
   new: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
@@ -111,7 +111,7 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-/* ── CSV Export ──────────────────────────────────────────────── */
+/* â”€â”€ CSV Export â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 function exportCsv(filename: string, rows: Record<string, unknown>[], headers: string[]) {
   const escape = (v: unknown) => {
@@ -130,7 +130,7 @@ function exportCsv(filename: string, rows: Record<string, unknown>[], headers: s
   URL.revokeObjectURL(url);
 }
 
-/* ── Contact Leads Tab ──────────────────────────────────────── */
+/* â”€â”€ Contact Leads Tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 function ContactLeadsTab() {
   const [page, setPage] = useState(1);
@@ -152,7 +152,7 @@ function ContactLeadsTab() {
           <SearchInput
             value={search}
             onChange={(v) => { setSearch(v); setPage(1); }}
-            placeholder="Search name, email, phone…"
+            placeholder="Search name, email, phoneâ€¦"
           />
           <Button
             variant="outline"
@@ -252,6 +252,7 @@ function ContactLeadRow({
     onSuccess: () => {
       toast.success("Status updated");
       queryClient.invalidateQueries({ queryKey: ["admin-contact-leads"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-sidebar-counts"] });
       setExpanded(false);
       setNotesDraft("");
     },
@@ -264,15 +265,15 @@ function ContactLeadRow({
         <TableCell data-label="S.No" className="w-10 text-muted-foreground">{serial}</TableCell>
         <TableCell data-label="Name" className="font-medium">{lead.name}</TableCell>
         <TableCell data-label="Email" className="text-muted-foreground">{lead.email}</TableCell>
-        <TableCell data-label="Phone" className="text-muted-foreground">{lead.phone ?? "—"}</TableCell>
+        <TableCell data-label="Phone" className="text-muted-foreground">{lead.phone ?? "â€”"}</TableCell>
         <TableCell data-label="Message" className="max-w-xs truncate text-muted-foreground">
-          {lead.message ?? "—"}
+          {lead.message ?? "â€”"}
         </TableCell>
         <TableCell data-label="Status" onClick={(e) => e.stopPropagation()}>
           <StatusBadge status={lead.status} />
         </TableCell>
         <TableCell data-label="Latest Note" className="max-w-[200px] truncate text-xs text-muted-foreground">
-          {lead.latest_note ?? "—"}
+          {lead.latest_note ?? "â€”"}
         </TableCell>
         <TableCell data-label="Date" className="whitespace-nowrap text-xs text-muted-foreground">
           {formatDate(lead.created_at)}
@@ -331,7 +332,7 @@ function ContactLeadRow({
                   </Button>
                 </div>
                 <Textarea
-                  placeholder="Add a note (optional)…"
+                  placeholder="Add a note (optional)â€¦"
                   value={notesDraft}
                   onChange={(e) => setNotesDraft(e.target.value)}
                   rows={2}
@@ -372,7 +373,7 @@ function ContactLeadDetailDialog({
           <DialogDescription>Full submission and status history</DialogDescription>
         </DialogHeader>
         {detail.isLoading ? (
-          <div className="py-8 text-center text-sm text-muted-foreground">Loading…</div>
+          <div className="py-8 text-center text-sm text-muted-foreground">Loadingâ€¦</div>
         ) : lead ? (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3 text-sm">
@@ -385,7 +386,7 @@ function ContactLeadDetailDialog({
             </div>
             <div>
               <Label className="text-xs font-medium text-muted-foreground">Message</Label>
-              <p className="mt-1 whitespace-pre-wrap text-sm">{lead.message || "—"}</p>
+              <p className="mt-1 whitespace-pre-wrap text-sm">{lead.message || "â€”"}</p>
             </div>
             {history.length > 0 && (
               <div>
@@ -399,7 +400,7 @@ function ContactLeadDetailDialog({
                         {h.old_status && (
                           <>
                             <StatusBadge status={h.old_status} />
-                            <span>→</span>
+                            <span>â†’</span>
                           </>
                         )}
                         <StatusBadge status={h.new_status} />
@@ -421,7 +422,7 @@ function ContactLeadDetailDialog({
   );
 }
 
-/* ── Access Requests Tab ──────────────────────────────────────── */
+/* â”€â”€ Access Requests Tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 function AccessRequestsTab() {
   const [page, setPage] = useState(1);
@@ -442,7 +443,7 @@ function AccessRequestsTab() {
           <SearchInput
             value={search}
             onChange={(v) => { setSearch(v); setPage(1); }}
-            placeholder="Search organization, contact, email…"
+            placeholder="Search organization, contact, emailâ€¦"
           />
           <Button
             variant="outline"
@@ -546,6 +547,7 @@ function AccessRequestRow({
     onSuccess: () => {
       toast.success("Status updated");
       queryClient.invalidateQueries({ queryKey: ["admin-access-requests"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-sidebar-counts"] });
       setExpanded(false);
       setNotesDraft("");
     },
@@ -559,13 +561,13 @@ function AccessRequestRow({
         <TableCell data-label="Organization" className="font-medium">{req.organization_name}</TableCell>
         <TableCell data-label="Contact" className="text-muted-foreground">{req.contact_name}</TableCell>
         <TableCell data-label="Email" className="text-muted-foreground">{req.email}</TableCell>
-        <TableCell data-label="Phone" className="text-muted-foreground">{req.phone ?? "—"}</TableCell>
-        <TableCell data-label="Company Size" className="text-muted-foreground">{req.company_size ?? "—"}</TableCell>
+        <TableCell data-label="Phone" className="text-muted-foreground">{req.phone ?? "â€”"}</TableCell>
+        <TableCell data-label="Company Size" className="text-muted-foreground">{req.company_size ?? "â€”"}</TableCell>
         <TableCell data-label="Status" onClick={(e) => e.stopPropagation()}>
           <StatusBadge status={req.status} />
         </TableCell>
         <TableCell data-label="Latest Note" className="max-w-[200px] truncate text-xs text-muted-foreground">
-          {req.latest_note ?? "—"}
+          {req.latest_note ?? "â€”"}
         </TableCell>
         <TableCell data-label="Date" className="whitespace-nowrap text-xs text-muted-foreground">
           {formatDate(req.created_at)}
@@ -624,7 +626,7 @@ function AccessRequestRow({
                   </Button>
                 </div>
                 <Textarea
-                  placeholder="Add a note (optional)…"
+                  placeholder="Add a note (optional)â€¦"
                   value={notesDraft}
                   onChange={(e) => setNotesDraft(e.target.value)}
                   rows={2}
@@ -682,7 +684,7 @@ function AccessRequestDetailDialog({
           <DialogDescription>Full submission and status history</DialogDescription>
         </DialogHeader>
         {detail.isLoading ? (
-          <div className="py-8 text-center text-sm text-muted-foreground">Loading…</div>
+          <div className="py-8 text-center text-sm text-muted-foreground">Loadingâ€¦</div>
         ) : request ? (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3 text-sm">
@@ -697,7 +699,7 @@ function AccessRequestDetailDialog({
             </div>
             <div>
               <Label className="text-xs font-medium text-muted-foreground">Message</Label>
-              <p className="mt-1 whitespace-pre-wrap text-sm">{request.message || "—"}</p>
+              <p className="mt-1 whitespace-pre-wrap text-sm">{request.message || "â€”"}</p>
             </div>
             {history.length > 0 && (
               <div>
@@ -711,7 +713,7 @@ function AccessRequestDetailDialog({
                         {h.old_status && (
                           <>
                             <StatusBadge status={h.old_status} />
-                            <span>→</span>
+                            <span>â†’</span>
                           </>
                         )}
                         <StatusBadge status={h.new_status} />
@@ -733,7 +735,7 @@ function AccessRequestDetailDialog({
   );
 }
 
-/* ── Create Organization from Access Request ──────────────── */
+/* â”€â”€ Create Organization from Access Request â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 function CreateOrgFromLeadDialog({
   request: req,
@@ -804,7 +806,7 @@ function CreateOrgFromLeadDialog({
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button onClick={submit} disabled={!name.trim() || submitting}>
-            {submitting ? "Creating…" : "Create Organization"}
+            {submitting ? "Creatingâ€¦" : "Create Organization"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -812,17 +814,17 @@ function CreateOrgFromLeadDialog({
   );
 }
 
-/* ── Shared helpers ──────────────────────────────────────── */
+/* â”€â”€ Shared helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 function DetailField({ label, value, children }: { label: string; value?: string | null; children?: React.ReactNode }) {
   return (
     <div>
       <Label className="text-xs font-medium text-muted-foreground">{label}</Label>
-      <div className="mt-0.5 text-sm">{children ?? value ?? "—"}</div>
+      <div className="mt-0.5 text-sm">{children ?? value ?? "â€”"}</div>
     </div>
   );
 }
 
-/* ── Inline Tabs (avoid importing external tabs lib) ──────────── */
+/* â”€â”€ Inline Tabs (avoid importing external tabs lib) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";

@@ -1,4 +1,4 @@
-﻿import { api, type Paginated } from "@/lib/api";
+import { api, type Paginated } from "@/lib/api";
 
 export type UUID = string;
 
@@ -95,6 +95,17 @@ export type VerificationRequest = {
   requester_org_logo?: string | null;
   issuing_org_logo?: string | null;
   qr_token?: string | null;
+  /**
+   * The public verification link, built server-side by the same helper that
+   * stamps the downloadable certificate PDF. Present only when the request
+   * carries a QR token.
+   *
+   * Always render this rather than assembling a URL from a base: the frontend
+   * used to keep its own VITE_PUBLIC_BASE_URL copy, which drifted from the
+   * backend's QR_VERIFY_BASE_URL and sent people to a different host than the
+   * printed certificate did.
+   */
+  verify_url?: string | null;
   sla_reminder_sent_at?: string | null;
   sla_flagged_at?: string | null;
   match_status?: MatchStatus | null;
@@ -758,14 +769,54 @@ export type PublicVerification = {
   valid: boolean;
   status: "verified";
   document_type: string;
+  /** The document owner's name as captured on the request. */
+  person_name: string | null;
+  /** CNIC with everything but the last 4 digits masked, e.g. "*****-****234-3". */
+  cnic_masked: string | null;
   organization_name: string | null;
   verification_date: string | null;
+  /** Short human-readable code, e.g. "7K2M-9XQ4P". Stable for a certificate. */
+  certificate_code: string | null;
   request_reference: string;
+  /** What the stored file actually is, from a server-side extension allowlist. */
+  file_type: "pdf" | "image" | "docx" | null;
+  /** False when the server is not serving previews (PUBLIC_VERIFY_SHOW_DOCUMENT). */
+  document_available: boolean;
+  /**
+   * SHA-256 of the original file, for pdf/image only. Null for every other
+   * format and whenever the deployment disables previews — "Check your copy"
+   * hides itself when this is null rather than showing a comparison that can
+   * only fail.
+   */
+  document_hash: string | null;
 };
+
+const API_BASE =
+  (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_API_BASE_URL) || "/api/v1";
 
 export const verifyService = {
   verify: (qrToken: string) =>
     api.get<PublicVerification>(`/verify/${qrToken}`).then((r) => r.data),
+
+  /**
+   * Absolute URL of the public document stream. The browser fetches this
+   * directly (it is unauthenticated and the token IS the credential), so it is
+   * built here rather than going through the axios instance's auth interceptor.
+   */
+  documentUrl: (qrToken: string) => `${API_BASE}/verify/${encodeURIComponent(qrToken)}/document`,
+
+  /**
+   * Fetch the document as a blob. Used for DOCX, which the page renders
+   * client-side; PDF and image are shown straight from the URL so the browser's
+   * own viewer does the work.
+   */
+  documentBlob: async (qrToken: string): Promise<Blob> => {
+    const res = await fetch(verifyService.documentUrl(qrToken), {
+      credentials: "omit",
+    });
+    if (!res.ok) throw new Error(`Document request failed (${res.status})`);
+    return res.blob();
+  },
 };
 
 /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ PAYMENTS (user) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
@@ -864,7 +915,10 @@ export const marketingService = {
 };
 
 /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ ADMIN â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+export type AdminSidebarCounts = { leads: number; support_tickets: number; custom_plan_requests: number; unmatched_requests: number };
+
 export const adminService = {
+  sidebarCounts: () => api.get<AdminSidebarCounts>("/admin/sidebar-counts").then((r) => r.data),
   users: (params: { page?: number; limit?: number; search?: string } = {}) =>
     api.get<Paginated<AdminUserRecord>>("/admin/users", { params }).then((r) => r.data),
   createUser: (form: FormData) =>
@@ -1748,4 +1802,3 @@ export const adminSupportService = {
       .patch<{ ticket: SupportTicket }>(`/admin/support-tickets/${uuid}/status`, { status })
       .then((r) => r.data),
 };
-

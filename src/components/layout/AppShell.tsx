@@ -4,37 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import notificationSound from "@/assets/NotificationSound/universfield-new-notification-040-493469.mp3";
-import {
-  LayoutDashboard,
-  Send,
-  Inbox,
-  CreditCard,
-  Settings,
-  Users,
-  Building2,
-  FileCheck2,
-  AlertTriangle,
-  Wallet,
-  LogOut,
-  Menu,
-  X,
-  Moon,
-  Sun,
-  Bell,
-  CheckCheck,
-  MessageSquare,
-  History,
-  ScrollText,
-  Hourglass,
-  CalendarDays,
-  CalendarClock,
-  ClipboardCheck,
-  Headset,
-  Languages,
-  ShieldCheck,
-  Lock,
-  BadgeCheck,
-} from "lucide-react";
+import { Bell, CheckCheck, Inbox, Languages, Lock, LogOut, Menu, Moon, Settings, Sun, X } from "lucide-react";
 import { Logo } from "@/components/common/Logo";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -52,6 +22,7 @@ import { authStore, useAuth } from "@/lib/auth";
 import { useTheme } from "@/lib/theme";
 import {
   authService,
+  adminService,
   requestsService,
   notificationService,
   MODULE_FEATURES,
@@ -63,50 +34,14 @@ import { setLanguage, getLanguage, type Language } from "@/i18n";
 import { useOrgSubscription } from "@/hooks/useOrgSubscription";
 import { SubscriptionBanner } from "@/components/common/SubscriptionLocked";
 import { PlanPickerProvider, usePlanPicker } from "@/components/common/PlanPickerProvider";
-import { usePermissions } from "@/lib/permissions";
-import type { LucideIcon } from "lucide-react";
-
-type NavItem = { to: string; labelKey: string; icon: LucideIcon; badge?: number };
-
-const userNavItems: NavItem[] = [
-  { to: "/dashboard", labelKey: "nav.dashboard", icon: LayoutDashboard },
-  { to: "/requests", labelKey: "nav.myRequests", icon: Send },
-  { to: "/leaves", labelKey: "nav.leaves", icon: CalendarDays },
-  { to: "/inbox", labelKey: "nav.inbox", icon: Inbox },
-  { to: "/auto-verified", labelKey: "nav.autoVerified", icon: BadgeCheck },
-];
-
-const memberNavItems: NavItem[] = [
-  { to: "/attendance", labelKey: "nav.attendance", icon: ClipboardCheck },
-  { to: "/payroll", labelKey: "nav.payroll", icon: Wallet },
-  { to: "/org/support", labelKey: "nav.support", icon: Headset },
-];
-
-const orgAdminNavItems: NavItem[] = [
-  { to: "/org/team", labelKey: "nav.myTeam", icon: Users },
-  { to: "/org/admins", labelKey: "nav.orgAdmins", icon: ShieldCheck },
-  { to: "/org/leaves", labelKey: "nav.leaveRequests", icon: CalendarClock },
-  { to: "/org/attendance", labelKey: "nav.attendance", icon: ClipboardCheck },
-  { to: "/org/salary-components", labelKey: "nav.payrollComponents", icon: Wallet },
-  { to: "/org/payroll", labelKey: "nav.payroll", icon: Wallet },
-  { to: "/org/support", labelKey: "nav.support", icon: Headset },
-  { to: "/payments", labelKey: "nav.payments", icon: CreditCard },
-];
-
-const adminNav: NavItem[] = [
-  { to: "/dashboard", labelKey: "nav.dashboard", icon: LayoutDashboard },
-  { to: "/admin/users", labelKey: "nav.users", icon: Users },
-  { to: "/admin/organizations", labelKey: "nav.organizations", icon: Building2 },
-  { to: "/admin/requests", labelKey: "nav.verificationRequests", icon: FileCheck2 },
-  { to: "/admin/null-requests", labelKey: "nav.unmatchedOrgs", icon: AlertTriangle },
-  { to: "/admin/unresponsive", labelKey: "nav.unresponsive", icon: Hourglass },
-  { to: "/admin/payments", labelKey: "nav.payments", icon: Wallet },
-  { to: "/admin/leads", labelKey: "nav.leads", icon: MessageSquare },
-  { to: "/admin/login-history", labelKey: "nav.loginHistory", icon: History },
-  { to: "/admin/activity-logs", labelKey: "nav.activityLogs", icon: ScrollText },
-  { to: "/admin/support", labelKey: "nav.supportTickets", icon: Headset },
-  { to: "/settings", labelKey: "nav.settings", icon: Settings },
-];
+import { canAccessRoute } from "@/lib/routeAccess";
+import {
+  adminNav,
+  memberNavItems,
+  orgAdminNavItems,
+  userNavItems,
+  type NavItem,
+} from "@/lib/navItems";
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { user } = useAuth();
@@ -155,11 +90,9 @@ export function AppShell({ children }: { children: ReactNode }) {
     router.navigate({ to: user?.role === "admin" ? "/system-admin/login" : "/login" });
   };
 
-  const isOrgAdmin = !isAdmin && user?.org_role === "org_admin";
-  const isSubAdmin = !isAdmin && user?.org_role === "sub_admin";
-  const perms = usePermissions();
-  const canApprove = isOrgAdmin || perms.approve_request;
-  const canGenerate = isOrgAdmin || perms.generate_request;
+  // Whether the inbox is reachable, from the same table the sidebar and the
+  // route guard use. Drives the unread badge poll; it must not 403.
+  const canApprove = canAccessRoute(user, "/inbox");
 
   const inboxCount = useQuery({
     queryKey: ["inbox-count"],
@@ -169,6 +102,14 @@ export function AppShell({ children }: { children: ReactNode }) {
     retry: false,
   });
 
+  const adminSidebarCounts = useQuery({
+    queryKey: ["admin-sidebar-counts"],
+    queryFn: () => adminService.sidebarCounts(),
+    enabled: mounted && !!user && isAdmin,
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
+    retry: false,
+  });
   const meSync = useQuery({
     queryKey: ["me-sync"],
     queryFn: () => authService.me(),
@@ -185,45 +126,33 @@ export function AppShell({ children }: { children: ReactNode }) {
     if (Object.keys(updates).length) authStore.updateUser({ ...user, ...updates });
   }, [meSync.data, user, isAdmin]);
 
-  const userNavVisible = userNavItems.filter((it) => {
-    if (it.to === "/requests") return isOrgAdmin ? canGenerate : perms.generate_request;
-    if (it.to === "/leaves") return isOrgAdmin || isSubAdmin ? false : perms.leave;
-    if (it.to === "/inbox") return canApprove;
-    if (it.to === "/auto-verified") return canApprove;
-    return true;
-  });
+  // The sidebar asks the SAME question the route guards ask, via the same
+  // table. Previously each group below re-derived visibility by hand from
+  // role checks and feature flags, which is how an employee ended up with a
+  // Support link that the guards bounced straight back to the dashboard.
+  const userNavVisible = userNavItems.filter((it) => canAccessRoute(user, it.to));
 
-  const memberServiceVisible = memberNavItems.filter((it) => {
-    if (isOrgAdmin || isSubAdmin) return false;
-    if (it.to === "/attendance") return perms.attendance;
-    if (it.to === "/payroll") return perms.payroll;
-    return true;
-  });
+  const memberServiceVisible = memberNavItems.filter((it) => canAccessRoute(user, it.to));
 
-  // org_admin gets full operational org access. sub_admin only gets the org
-  // pages matching their granted feature_access permissions, and never
-  // sub-admin management, org billing, or org settings.
-  const subAdminForbidden = new Set(["/org/admins", "/payments"]);
-  const orgNavVisible: NavItem[] = isOrgAdmin || isSubAdmin
-    ? isOrgAdmin
-      ? orgAdminNavItems
-      : orgAdminNavItems.filter((it) => {
-          if (subAdminForbidden.has(it.to)) return false;
-          if (it.to === "/org/team") return perms.manage_employees;
-          if (it.to === "/org/leaves") return perms.leave;
-          if (it.to === "/org/attendance") return perms.attendance;
-          if (it.to === "/org/salary-components" || it.to === "/org/payroll") return perms.payroll;
-          return true;
-        })
-    : [];
+  const orgNavVisible: NavItem[] = orgAdminNavItems.filter((it) => canAccessRoute(user, it.to));
 
   const items: NavItem[] = isAdmin
-    ? adminNav
+    ? adminNav.filter((it) => canAccessRoute(user, it.to)).map((it) => {
+        const counts = adminSidebarCounts.data;
+        const badge = it.to === "/admin/leads" ? counts?.leads
+          : it.to === "/admin/support" ? counts?.support_tickets
+          : it.to === "/admin/payments" ? counts?.custom_plan_requests
+          : it.to === "/admin/null-requests" ? counts?.unmatched_requests
+          : undefined;
+        return { ...it, badge };
+      })
     : [
         ...userNavVisible.map((it) =>
           it.to === "/inbox" ? { ...it, badge: inboxCount.data ?? 0 } : it,
         ),
-        ...(isOrgAdmin || isSubAdmin ? [] : memberServiceVisible),
+        // No role special-casing: canAccessRoute already answers false for
+        // staff on the self-service pages and for employees on the org pages.
+        ...memberServiceVisible,
         ...orgNavVisible,
         { to: "/settings", labelKey: "nav.settings", icon: Settings },
       ];
@@ -351,7 +280,7 @@ function SidebarInner({
               }}
               title={
                 needsUpgrade
-                  ? `${moduleLabel} — ${t("moduleLocked.navLockedTitle", { module: moduleLabel ?? "" })}`
+                  ? `${moduleLabel} â€” ${t("moduleLocked.navLockedTitle", { module: moduleLabel ?? "" })}`
                   : needsRenewal
                     ? t("subscriptionLocked.notActive")
                     : undefined
@@ -366,7 +295,7 @@ function SidebarInner({
               <it.icon
                 className={cn("h-4 w-4", active ? "text-sidebar-primary" : "text-muted-foreground")}
               />
-              {t(it.labelKey)}
+              <span className="min-w-0 flex-1">{t(it.labelKey)}</span>
               {needsUpgrade ? (
                 <span
                   className="ml-auto inline-flex items-center gap-1 rounded-full border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-warning-foreground"
@@ -378,8 +307,10 @@ function SidebarInner({
               ) : needsRenewal ? (
                 <Lock className="ml-auto h-3.5 w-3.5 text-muted-foreground/60" />
               ) : null}
-              {it.badge && it.badge > 0 ? (
-                <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">
+              {it.badge !== undefined && it.badge > 0 ? (
+                <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground"
+                  aria-label={`${it.badge} new`}
+                  role="status">
                   {it.badge > 99 ? "99+" : it.badge}
                 </span>
               ) : null}

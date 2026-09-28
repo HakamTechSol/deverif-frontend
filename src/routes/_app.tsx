@@ -1,47 +1,28 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { AppShell } from "@/components/layout/AppShell";
 import { authStore } from "@/lib/auth";
-import { parseFeatureAccess } from "@/lib/utils";
+import { canAccessRoute } from "@/lib/routeAccess";
 
 export const Route = createFileRoute("/_app")({
   beforeLoad: ({ location }) => {
     if (typeof window === "undefined") return;
 
-    const token = authStore.get().token;
+    const { token, user } = authStore.get();
     if (!token) throw redirect({ to: "/login" });
 
-    const user = authStore.get().user;
-
-    if (location.pathname.startsWith("/admin")) {
-      if (!user || user.role !== "admin") throw redirect({ to: "/dashboard" });
-    }
-
-    if (location.pathname === "/requests") {
-      if (!user || user.role !== "user" || (user.org_role !== "org_admin" && !parseFeatureAccess(user.feature_access).generate_request)) {
-        throw redirect({ to: "/dashboard" });
-      }
-    }
-
-    if (location.pathname === "/payments") {
-      if (!user || user.role !== "user" || user.org_role !== "org_admin") {
-        throw redirect({ to: "/dashboard" });
-      }
-    }
-
-    if (location.pathname === "/inbox") {
-      if (!user || user.role !== "user" || (user.org_role !== "org_admin" && user.org_role !== "sub_admin")) {
-        throw redirect({ to: "/dashboard" });
-      }
-    }
-
-    if (location.pathname.startsWith("/org/support")) {
-      if (!user || user.role !== "user") throw redirect({ to: "/dashboard" });
-    }
-
-    if (location.pathname.startsWith("/org/")) {
-      if (!user || user.role !== "user" || (user.org_role !== "org_admin" && user.org_role !== "sub_admin")) {
-        throw redirect({ to: "/dashboard" });
-      }
+    // One question, one table, for every page under this layout. The sidebar
+    // asks it through the same canAccessRoute() when deciding what to render.
+    //
+    // This replaces a stack of overlapping `if (location.pathname...)` blocks
+    // that each re-derived the rule by hand. They overlapped in a way that made
+    // one of them unreachable: the `/org/support` case allowed any org user,
+    // but the very next block re-tested the same pathname against the stricter
+    // `startsWith("/org/")` staff-only rule, so an employee who clicked Support
+    // was silently redirected to the dashboard and the page never opened.
+    // Sequential ifs cannot express "this exception", only "and also" -- which
+    // is exactly the shape that produced the bug.
+    if (!canAccessRoute(user, location.pathname)) {
+      throw redirect({ to: "/dashboard" });
     }
   },
   component: () => (

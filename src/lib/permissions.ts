@@ -30,25 +30,10 @@ export function isStaff(user?: AuthUser | null): boolean {
 }
 
 /**
- * Role-based access for the org workspace.
- * - org_admin: full control (including deletes + sub-admin mgmt + org settings)
- * - sub_admin: operations access (no deletes, no sub-admin mgmt, no org settings)
- * - employee: self-service only
+ * Role predicates only. "May this user open this page?" is answered by
+ * canAccessRoute() in @/lib/routeAccess, which is the single source of truth
+ * shared by the sidebar and every route guard.
  */
-const SUB_ADMIN_FORBIDDEN = new Set<string>([
-  "org.admins",
-  "org.settings",
-]);
-
-/** Whether the given org nav/page key is reachable by the user's role. */
-export function canAccessPage(user: AuthUser | null | undefined, pageKey: string): boolean {
-  if (!user || isPlatformAdmin(user)) return false;
-  const staffOnly = pageKey.startsWith("org.");
-  if (!staffOnly) return true;
-  if (isOrgAdmin(user)) return true;
-  if (isSubAdmin(user)) return !SUB_ADMIN_FORBIDDEN.has(pageKey);
-  return false;
-}
 
 /** True when the user has full staff (org_admin or sub_admin) power. */
 export function can(user: AuthUser | null | undefined): boolean {

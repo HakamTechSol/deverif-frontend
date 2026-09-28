@@ -1,6 +1,14 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/_app/payroll")({
+  beforeLoad: () => {
+    if (typeof window === "undefined") return;
+    // Payslips are employee-only server-side, and the sidebar hides this page
+    // from staff via the same table.
+    if (!canAccessRoute(authStore.get().user, "/payroll")) {
+      throw redirect({ to: "/dashboard" });
+    }
+  },
   component: PayrollPage,
 });
 
@@ -9,6 +17,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Wallet } from "lucide-react";
 import { salaryService, type SalaryRecord } from "@/services";
+import { authStore } from "@/lib/auth";
+import { canAccessRoute } from "@/lib/routeAccess";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Pagination } from "@/components/common/Pagination";
 import { Card, CardContent } from "@/components/ui/card";

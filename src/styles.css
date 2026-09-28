@@ -252,6 +252,57 @@
   animation: success-ring 0.75s ease-out 0.12s both;
 }
 
+/* --- Request submitted: two-beat check draw ---
+   The mark is drawn in sequence — the ring first (600ms), then the tick on top
+   of it (400ms, offset by a 600ms delay). Both strokes are driven by CLASSES
+   rather than inline styles for the same reason as .decision-mark below: an
+   inline style cannot be reached from the prefers-reduced-motion media query,
+   so it would keep animating for users who have asked the OS to stop motion.
+   Each stroke's dash length is passed in via a custom property so the value
+   never has to be kept in sync between the markup and the keyframes. */
+@keyframes submitted-ring-draw {
+  from {
+    stroke-dashoffset: var(--submitted-ring-dash, 151);
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes submitted-tick-draw {
+  from {
+    stroke-dashoffset: var(--submitted-tick-dash, 44);
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Both the dasharray and the initial dashoffset are set from the same custom
+   property, and the property is always >= the real path length. That is what
+   makes stroke-dashoffset meaningful at all: with `stroke-dasharray: none` the
+   offset is ignored and the stroke renders solid from the first frame, so the
+   "draw" would be a no-op. Offsetting by a full dash puts the start of the
+   path inside the gap (invisible); animating back to 0 walks the dash over it
+   until the whole path is covered. */
+.submitted-ring {
+  stroke-dasharray: var(--submitted-ring-dash, 151);
+  stroke-dashoffset: var(--submitted-ring-dash, 151);
+}
+
+.submitted-ring--drawn {
+  animation: submitted-ring-draw 600ms cubic-bezier(0.65, 0, 0.35, 1) forwards;
+}
+
+.submitted-tick {
+  stroke-dasharray: var(--submitted-tick-dash, 44);
+  stroke-dashoffset: var(--submitted-tick-dash, 44);
+}
+
+.submitted-tick--drawn {
+  animation: submitted-tick-draw 400ms cubic-bezier(0.65, 0, 0.35, 1) 600ms forwards;
+}
+
 /* --- Manual verification decision: approve / reject acknowledgement ---
    Shares the visual language of the auto-verified check (ring + pop), but the
    stroke is drawn via a class rather than an inline transition so that
@@ -280,6 +331,20 @@
   }
 
   .decision-mark--drawn {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+
+  /* Same rule for the submitted-request check: jump straight to the finished
+     mark — a full, undrawn circle with a full tick — instead of animating. */
+  .submitted-ring,
+  .submitted-ring--drawn {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+
+  .submitted-tick,
+  .submitted-tick--drawn {
     animation: none;
     stroke-dashoffset: 0;
   }

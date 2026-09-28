@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { authStore } from "@/lib/auth";
+import { canAccessRoute } from "@/lib/routeAccess";
 import { formatDateTime, resolveAssetUrl } from "@/lib/utils";
 import { tDocType } from "@/i18n";
 import {
@@ -25,8 +26,10 @@ import {
 export const Route = createFileRoute("/_app/auto-verified_/$uuid")({
   beforeLoad: () => {
     if (typeof window === "undefined") return;
-    const user = authStore.get().user;
-    if (!user || user.role !== "user" || (user.org_role !== "org_admin" && user.org_role !== "sub_admin")) {
+    // Deliberately the same call the sidebar makes when deciding whether to
+    // render this page's link -- one table, so a visible link and a reachable
+    // page cannot disagree. See lib/routeAccess.
+    if (!canAccessRoute(authStore.get().user, "/auto-verified")) {
       throw redirect({ to: "/dashboard" });
     }
   },

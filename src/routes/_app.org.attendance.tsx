@@ -7,6 +7,7 @@ import { Info, Lock, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { authStore } from "@/lib/auth";
+import { canAccessRoute } from "@/lib/routeAccess";
 import { useAuth } from "@/lib/auth";
 import { useOrgSubscription } from "@/hooks/useOrgSubscription";
 import { ModuleFeatureLockedCard } from "@/components/common/SubscriptionLocked";
@@ -41,8 +42,10 @@ import { formatDate, formatDateTime, parseFeatureAccess } from "@/lib/utils";
 export const Route = createFileRoute("/_app/org/attendance")({
   beforeLoad: () => {
     if (typeof window === "undefined") return;
-    const user = authStore.get().user;
-    if (!user || user.role !== "user" || (user.org_role !== "org_admin" && user.org_role !== "sub_admin")) {
+    // Deliberately the same call the sidebar makes when deciding whether to
+    // render this page's link -- one table, so a visible link and a reachable
+    // page cannot disagree. See lib/routeAccess.
+    if (!canAccessRoute(authStore.get().user, "/org/attendance")) {
       throw redirect({ to: "/dashboard" });
     }
   },

@@ -1,4 +1,4 @@
-﻿import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
@@ -261,6 +261,7 @@ function UnmatchedOrgDetailDialog({
       toast.success("Request updated");
       qc.invalidateQueries({ queryKey: ["null-org-detail", uuid] });
       qc.invalidateQueries({ queryKey: ["null-org-requests"] });
+      qc.invalidateQueries({ queryKey: ["admin-sidebar-counts"] });
       setReviewing(null);
       setRemarks("");
     },
@@ -566,6 +567,7 @@ function AssignDialog({
     onSuccess: () => {
       toast.success("Organization assigned and requests routed");
       qc.invalidateQueries({ queryKey: ["null-org-requests"] });
+      qc.invalidateQueries({ queryKey: ["admin-sidebar-counts"] });
       qc.invalidateQueries({ queryKey: ["null-org-detail"] });
       onClose();
     },
@@ -624,4 +626,3 @@ function AssignDialog({
     </Dialog>
   );
 }
-

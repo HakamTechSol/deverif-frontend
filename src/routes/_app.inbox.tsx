@@ -40,14 +40,17 @@ import { tDocType } from "@/i18n";
 import { useOrgSubscription } from "@/hooks/useOrgSubscription";
 import { usePermissions } from "@/lib/permissions";
 import { authStore } from "@/lib/auth";
+import { canAccessRoute } from "@/lib/routeAccess";
 import { Lock } from "lucide-react";
 import { ProtectedDocumentLink } from "@/components/common/ProtectedDocumentLink";
 
 export const Route = createFileRoute("/_app/inbox")({
   beforeLoad: () => {
     if (typeof window === "undefined") return;
-    const user = authStore.get().user;
-    if (!user || user.role !== "user" || (user.org_role !== "org_admin" && user.org_role !== "sub_admin")) {
+    // Deliberately the same call the sidebar makes when deciding whether to
+    // render this page's link -- one table, so a visible link and a reachable
+    // page cannot disagree. See lib/routeAccess.
+    if (!canAccessRoute(authStore.get().user, "/inbox")) {
       throw redirect({ to: "/dashboard" });
     }
   },

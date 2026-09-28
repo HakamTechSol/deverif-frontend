@@ -1,41 +1,34 @@
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
 import { toast } from "sonner";
-import { BadgeCheck, Download, QrCode } from "lucide-react";
+import { BadgeCheck, Check, Copy, Download, QrCode } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { requestsService, type VerificationRequest } from "@/services";
 
 /**
- * Public base URL of the deployed site, used to build the human-facing
- * verification link that the QR encodes.
+ * The on-screen verification certificate.
  *
- * This MUST equal the backend's QR_VERIFY_BASE_URL. The backend embeds its own
- * copy of this URL in the downloadable certificate PDF (src/utils/certificatePdf.js
- * -> buildVerifyUrl), so if the two disagree then scanning the printed
- * certificate and scanning the certificate on screen send the customer to
- * different hosts for the very same token — and the on-screen QR cannot be
- * corrected without a code change, because it used to be a hardcoded literal.
+ * Every link and every QR image here comes from `request.verify_url`, which the
+ * backend builds with the same helper that stamps the downloadable PDF. The
+ * client deliberately constructs nothing from a base URL: a second copy of that
+ * string is exactly how the printed certificate and this screen came to point
+ * at two different hosts for the same token, and it could not be fixed without
+ * editing source. Changing QR_VERIFY_BASE_URL and restarting the backend moves
+ * the QR, the link and the PDF together.
  */
-const PUBLIC_BASE_URL = (import.meta.env.VITE_PUBLIC_BASE_URL ?? "https://dverif.com").replace(/\/+$/, "");
-
-const VERIFY_URL_BASE = `${PUBLIC_BASE_URL}/verify`;
-
-function buildVerifyUrl(qrToken: string) {
-  return `${VERIFY_URL_BASE}/${qrToken}`;
-}
-
 export function VerificationCertificate({ request }: { request: VerificationRequest }) {
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
+  const [copied, setCopied] = useState(false);
 
-  const qrToken = request.qr_token;
+  const verifyUrl = request.verify_url;
   const isVerified = request.status === "verified";
 
   useEffect(() => {
     let cancelled = false;
-    if (isVerified && qrToken) {
-      QRCode.toDataURL(buildVerifyUrl(qrToken), {
+    if (isVerified && verifyUrl) {
+      QRCode.toDataURL(verifyUrl, {
         width: 220,
         margin: 1,
         color: { dark: "#0f172a" },
@@ -52,9 +45,11 @@ export function VerificationCertificate({ request }: { request: VerificationRequ
     return () => {
       cancelled = true;
     };
-  }, [isVerified, qrToken]);
+  }, [isVerified, verifyUrl]);
 
-  if (!isVerified || !qrToken) return null;
+  // No URL means there is nothing to show: an unverified request, or a verified
+  // one minted before the backend could build links.
+  if (!isVerified || !verifyUrl) return null;
 
   const download = async () => {
     setDownloading(true);
@@ -72,6 +67,18 @@ export function VerificationCertificate({ request }: { request: VerificationRequ
       toast.error(e?.response?.data?.message ?? "Certificate download failed");
     } finally {
       setDownloading(false);
+    }
+  };
+
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(verifyUrl);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard is blocked in some in-app browsers; the link is on screen and
+      // selectable, so a failure here is not worth interrupting the user for.
+      toast.error("Could not copy to clipboard");
     }
   };
 
@@ -95,15 +102,25 @@ export function VerificationCertificate({ request }: { request: VerificationRequ
         <div className="min-w-0 flex-1 space-y-3">
           <p className="text-xs leading-relaxed text-muted-foreground">
             Scan this QR code or open the link below to confirm the document was officially verified
-            on Dverif.com. The code is tamper-evident and cannot be forged for a fake record.
+            on Dverif. The code is tamper-evident and cannot be forged for a fake record.
           </p>
           <div className="rounded-md border border-border bg-muted/40 px-3 py-2">
-            <div className="text-[10px] font-medium uppercase text-muted-foreground">
-              Verify link
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-[10px] font-medium uppercase text-muted-foreground">
+                Verify link
+              </div>
+              <button
+                type="button"
+                onClick={copyLink}
+                className="inline-flex items-center gap-1 rounded px-1 text-[10px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+                aria-label="Copy verify link"
+                title="Copy link"
+              >
+                {copied ? <Check className="h-3 w-3 text-success" /> : <Copy className="h-3 w-3" />}
+                {copied ? "Copied" : "Copy"}
+              </button>
             </div>
-            <div className="break-all text-xs font-medium text-foreground">
-              {buildVerifyUrl(qrToken)}
-            </div>
+            <div className="break-all text-xs font-medium text-foreground">{verifyUrl}</div>
           </div>
           <Button onClick={download} disabled={downloading} className="w-full sm:w-auto">
             <Download className="mr-2 h-4 w-4" />

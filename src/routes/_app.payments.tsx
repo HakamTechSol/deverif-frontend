@@ -64,12 +64,15 @@ import { formatDate, apiErrorMessage } from "@/lib/utils";
 import { classifyPlanForOrg, hasLiveSubscription, isFreePlan } from "@/lib/subscription";
 import { PlanFeatureList } from "@/components/common/PlanFeatureList";
 import { authStore } from "@/lib/auth";
+import { canAccessRoute } from "@/lib/routeAccess";
 
 export const Route = createFileRoute("/_app/payments")({
   beforeLoad: () => {
     if (typeof window === "undefined") return;
-    const user = authStore.get().user;
-    if (!user || user.role !== "user" || user.org_role !== "org_admin") {
+    // Deliberately the same call the sidebar makes when deciding whether to
+    // render this page's link -- one table, so a visible link and a reachable
+    // page cannot disagree. See lib/routeAccess.
+    if (!canAccessRoute(authStore.get().user, "/payments")) {
       throw redirect({ to: "/dashboard" });
     }
   },
