@@ -6,10 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SearchableSelect } from "@/components/common/SearchableSelect";
 import {
-  EMPLOYEE_DOCUMENT_TYPE_OPTIONS,
   UPLOADABLE_DOC_ACCEPT,
   UPLOADABLE_DOC_EXTENSIONS,
 } from "@/lib/documentTypes";
+import { useDocumentTypes } from "@/lib/useDocumentTypes";
 import { formatFileSize } from "@/lib/utils";
 
 export type StagedDoc = { name: string; file: File };
@@ -95,6 +95,11 @@ export function EmployeeDocPicker({
     setError("");
   };
 
+  // The catalogue is fetched from the API so a type a system admin added appears
+  // here without a frontend deploy; the built-in list stands in if it is
+  // unreachable, so this picker can never be emptied out by a failed request.
+  const { items: documentTypeOptions } = useDocumentTypes();
+
   return (
     <div className={`space-y-2 ${className || ""}`}>
       <div className="grid gap-2">
@@ -102,7 +107,7 @@ export function EmployeeDocPicker({
           <div className="space-y-1">
             <Label className="text-xs font-medium">Document Type</Label>
             <SearchableSelect
-              items={EMPLOYEE_DOCUMENT_TYPE_OPTIONS}
+              items={documentTypeOptions}
               value={docType}
               onChange={setDocType}
               placeholder="Select document type"

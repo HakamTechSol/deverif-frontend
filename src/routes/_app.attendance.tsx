@@ -23,6 +23,7 @@ import { PageHeader } from "@/components/common/PageHeader";
 import { Pagination } from "@/components/common/Pagination";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useOrgSubscription } from "@/hooks/useOrgSubscription";
 import { ModuleFeatureLockedCard } from "@/components/common/SubscriptionLocked";
@@ -45,6 +46,9 @@ function AttendancePage() {
   const qc = useQueryClient();
   const { isLocked, isModuleFlagOff } = useOrgSubscription();
   const [page, setPage] = useState(1);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [status, setStatus] = useState("");
   const [attendanceResult, setAttendanceResult] = useState<"checkIn" | "checkOut" | null>(null);
   const [pendingAction, setPendingAction] = useState<"checkIn" | "checkOut" | null>(null);
 
@@ -55,8 +59,8 @@ function AttendancePage() {
   });
 
   const history = useQuery({
-    queryKey: ["attendance-history", page],
-    queryFn: () => attendanceService.history({ page, limit: 10 }),
+    queryKey: ["attendance-history", page, dateFrom, dateTo, status],
+    queryFn: () => attendanceService.history({ page, limit: 10, dateFrom: dateFrom || undefined, dateTo: dateTo || undefined, status: status || undefined }),
   });
 
   const record = today.data?.record;
@@ -176,6 +180,16 @@ function AttendancePage() {
         actionLabel={t("common.close")}
       />
 
+      <div className="mb-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        <Input type="date" aria-label={t("orgAttendance.fromDate", "From date")} value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setPage(1); }} />
+        <Input type="date" aria-label={t("orgAttendance.toDate", "To date")} value={dateTo} onChange={(e) => { setDateTo(e.target.value); setPage(1); }} />
+        <select aria-label={t("orgAttendance.status", "Status")} value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }} className="h-10 rounded-md border border-input bg-background px-3 text-sm">
+          <option value="">{t("common.allStatuses", "All statuses")}</option>
+          <option value="checked_in">{t("orgAttendance.checkedIn", "Checked In")}</option>
+          <option value="checked_out">{t("orgAttendance.checkedOut", "Checked Out")}</option>
+        </select>
+        {(dateFrom || dateTo || status) && <Button variant="outline" onClick={() => { setDateFrom(""); setDateTo(""); setStatus(""); setPage(1); }}>{t("common.clear", "Clear")}</Button>}
+      </div>
       <Card className="border-border/70 shadow-none">
         <CardContent className="p-0">
           <div className="border-b border-border px-4 py-3">

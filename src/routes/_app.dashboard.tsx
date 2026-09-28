@@ -1201,7 +1201,7 @@ function EmployeeDashboard({ firstName }: { firstName: string }) {
               </div>
             ) : (
               <div className="mt-3 space-y-2">
-                {balances.map((b) => (
+                {balances.slice(0, 2).map((b) => (
                   <div
                     key={b.id}
                     className="flex items-center justify-between rounded-md border border-border bg-card/50 px-3 py-2"

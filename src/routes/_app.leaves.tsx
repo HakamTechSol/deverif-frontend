@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
-import { CalendarPlus, CalendarX2, Lock } from "lucide-react";
+import { CalendarPlus, CalendarX2, Eye, Lock } from "lucide-react";
 
 import { PageHeader } from "@/components/common/PageHeader";
 import { EmptyState } from "@/components/common/EmptyState";
@@ -14,7 +14,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -38,12 +37,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { leavesService } from "@/services";
+import { leavesService, type LeaveRequest } from "@/services";
 import { countDays, formatDate, formatDateTime } from "@/lib/utils";
 import { authStore } from "@/lib/auth";
 import { canAccessRoute } from "@/lib/routeAccess";
 import { useOrgSubscription } from "@/hooks/useOrgSubscription";
 import { ModuleFeatureLockedCard } from "@/components/common/SubscriptionLocked";
+import { LeaveRequestDetailsDialog } from "@/components/leaves/LeaveRequestDetailsDialog";
+import { LeaveReasonEditor } from "@/components/leaves/LeaveReasonEditor";
+import { FormattedLeaveReason } from "@/components/leaves/FormattedLeaveReason";
 
 export const Route = createFileRoute("/_app/leaves")({
   beforeLoad: () => {
@@ -66,7 +68,11 @@ function LeavesContent() {
   const { t } = useTranslation();
   const { isLocked, isModuleFlagOff } = useOrgSubscription();
   const [page, setPage] = useState(1);
+  const [status, setStatus] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [applyOpen, setApplyOpen] = useState(false);
+  const [selectedLeave, setSelectedLeave] = useState<LeaveRequest | null>(null);
 
   const balance = useQuery({
     queryKey: ["myLeaveBalance"],
@@ -74,8 +80,8 @@ function LeavesContent() {
   });
 
   const history = useQuery({
-    queryKey: ["myLeaves", page],
-    queryFn: () => leavesService.mine({ page, limit: PAGE_SIZE }),
+    queryKey: ["myLeaves", page, status, dateFrom, dateTo],
+    queryFn: () => leavesService.mine({ page, limit: PAGE_SIZE, status: status || undefined, dateFrom: dateFrom || undefined, dateTo: dateTo || undefined }),
   });
 
   const items = history.data?.items ?? [];
@@ -133,6 +139,20 @@ function LeavesContent() {
         )}
       </div>
 
+      <div className="mt-4 mb-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        <Select value={status || "all"} onValueChange={(value) => { setStatus(value === "all" ? "" : value); setPage(1); }}>
+          <SelectTrigger><SelectValue placeholder={t("leaves.status", "Status")} /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{t("common.allStatuses", "All statuses")}</SelectItem>
+            <SelectItem value="pending">{t("status.pending", "Pending")}</SelectItem>
+            <SelectItem value="approved">{t("status.approved", "Approved")}</SelectItem>
+            <SelectItem value="rejected">{t("status.rejected", "Rejected")}</SelectItem>
+          </SelectContent>
+        </Select>
+        <Input type="date" aria-label={t("leaves.fromDate", "From date")} value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setPage(1); }} />
+        <Input type="date" aria-label={t("leaves.toDate", "To date")} value={dateTo} onChange={(e) => { setDateTo(e.target.value); setPage(1); }} />
+        {(status || dateFrom || dateTo) && <Button variant="outline" onClick={() => { setStatus(""); setDateFrom(""); setDateTo(""); setPage(1); }}>{t("common.clear", "Clear")}</Button>}
+      </div>
       <Card className="mt-4 border-border/70 shadow-none">
         <CardContent className="p-0">
           {history.isLoading ? (
@@ -157,6 +177,7 @@ function LeavesContent() {
                       <TableHead className="whitespace-nowrap">{t("leaves.days")}</TableHead>
                       <TableHead className="whitespace-nowrap">{t("leaves.status")}</TableHead>
                       <TableHead className="whitespace-nowrap">{t("leaves.submitted")}</TableHead>
+                      <TableHead className="text-right whitespace-nowrap">{t("common.actions", "Actions")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -169,7 +190,7 @@ function LeavesContent() {
                           {r.leave_type_name}
                           {r.reason && (
                             <div className="mt-0.5 max-w-[240px] truncate text-xs font-normal text-muted-foreground">
-                              {r.reason}
+                              <FormattedLeaveReason text={r.reason} />
                             </div>
                           )}
                         </TableCell>
@@ -184,6 +205,19 @@ function LeavesContent() {
                         </TableCell>
                         <TableCell data-label="Submitted" className="whitespace-nowrap text-xs text-muted-foreground">
                           {formatDateTime(r.created_at)}
+                        </TableCell>
+                        <TableCell data-label="Actions" className="text-right">
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8"
+                            aria-label={t("leaves.viewDetails", "View details")}
+                            title={t("leaves.viewDetails", "View details")}
+                            onClick={() => setSelectedLeave(r)}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -202,6 +236,10 @@ function LeavesContent() {
       </Card>
 
       <ApplyLeaveDialog open={applyOpen} onOpenChange={setApplyOpen} />
+      <LeaveRequestDetailsDialog
+        request={selectedLeave}
+        onOpenChange={(open) => !open && setSelectedLeave(null)}
+      />
     </div>
   );
 }
@@ -232,7 +270,7 @@ function ApplyLeaveDialog({
         leave_type_id: Number(leaveTypeId),
         start_date: startDate,
         end_date: endDate,
-        reason: reason.trim() || undefined,
+        reason: reason.trim(),
       }),
     onSuccess: () => {
       toast.success(t("leaves.requestSubmitted"));
@@ -253,6 +291,8 @@ function ApplyLeaveDialog({
     if (!leaveTypeId) return toast.error(t("leaves.selectLeaveType"));
     if (!startDate || !endDate) return toast.error(t("leaves.selectDates"));
     if (endDate < startDate) return toast.error(t("leaves.endDateBeforeStart"));
+    const reasonText = reason.replace(/\*\*/g, "").replace(/__/g, "").trim();
+    if (!reasonText) return toast.error(t("leaves.reasonRequired"));
     create.mutate();
   };
 
@@ -305,12 +345,11 @@ function ApplyLeaveDialog({
             </p>
           )}
           <div className="space-y-2">
-            <Label htmlFor="leave-reason">{t("leaves.reason")}</Label>
-            <Textarea
+            <Label htmlFor="leave-reason">{t("leaves.reason")} <span className="text-destructive">*</span></Label>
+            <LeaveReasonEditor
               id="leave-reason"
-              rows={3}
               value={reason}
-              onChange={(e) => setReason(e.target.value)}
+              onChange={setReason}
               placeholder={t("leaves.reasonPlaceholder")}
             />
           </div>

@@ -2,6 +2,38 @@ import { api, type Paginated } from "@/lib/api";
 
 export type UUID = string;
 
+/**
+ * A document type in the system-admin catalogue.
+ *
+ * `schema_key` is the important one: it names the canonical field schema the OCR
+ * service extracts with. A type with no schema (or `generic`) still works — it
+ * extracts name + CNIC — but a type pointed at, say, `cnic` also gets DOB, and
+ * one pointed at `offer_letter` gets designation and joining date.
+ */
+export type DocumentType = {
+  id: number;
+  name: string;
+  /** The label normalized the same way the OCR service normalizes it. */
+  label_key: string;
+  schema_key: string;
+  is_active: number;
+  sort_order: number;
+  description: string | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
+/** What the OCR service reports about itself, for the "is it in step?" indicator. */
+export type DocumentTypeSyncStatus = {
+  reachable: boolean;
+  error?: string;
+  kind?: string;
+  catalogue_count?: number;
+  auto_match_ineligible?: string[];
+  schemas?: Record<string, { fields: string[]; required: string[]; auto_match_eligible: boolean }>;
+  generic?: { fields: string[]; required: string[]; auto_match_eligible: boolean };
+};
+
 export type Organization = {
   uuid: UUID;
   name: string;
@@ -915,6 +947,24 @@ export const marketingService = {
 };
 
 /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ ADMIN â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─────────────────────────── DOCUMENT TYPES ─────────────────────────── */
+
+/**
+ * The active document-type catalogue.
+ *
+ * Its own small service rather than a member of `adminService`, because the
+ * ADMINISTRATION of the catalogue is system-admin-only while this READ is not:
+ * an organization has to be able to populate its document-type dropdowns, so
+ * `GET /document-types` is authenticated but open to any signed-in user. It
+ * returns labels and schema keys only — no ids, no audit fields.
+ */
+export const documentTypeService = {
+  list: () =>
+    api
+      .get<{ items: { value: string; label: string; schema_key: string }[] }>("/document-types")
+      .then((r) => r.data.items),
+};
+
 export type AdminSidebarCounts = { leads: number; support_tickets: number; custom_plan_requests: number; unmatched_requests: number };
 
 export const adminService = {
@@ -941,6 +991,51 @@ export const adminService = {
       .then((r) => r.data.organization_type),
   deleteOrganizationType: (id: number) =>
     api.delete(`/admin/organization-types/${id}`).then((r) => r.data),
+
+  // ── Document types (system-admin catalogue) ───────────────────────────────
+  // The list used to be a hard-coded array (lib/documentTypes.ts) plus a mirrored
+  // alias table in the Python service. It is now data, so a system admin can add
+  // a type without a code change in two repositories.
+  documentTypes: () =>
+    api
+      .get<{ items: DocumentType[] }>("/admin/document-types")
+      .then((r) => r.data.items),
+  createDocumentType: (body: {
+    name: string;
+    schema_key?: string;
+    description?: string;
+  }) =>
+    api
+      .post<{ document_type: DocumentType }>("/admin/document-types", body)
+      .then((r) => r.data.document_type),
+  updateDocumentType: (
+    id: number,
+    body: { name?: string; schema_key?: string; description?: string; is_active?: boolean }
+  ) =>
+    api
+      .put<{ document_type: DocumentType }>(`/admin/document-types/${id}`, body)
+      .then((r) => r.data.document_type),
+  deleteDocumentType: (id: number) =>
+    api.delete(`/admin/document-types/${id}`).then((r) => r.data),
+  /** Whether the OCR service currently knows the catalogue (shown in the panel). */
+  documentTypeSyncStatus: () =>
+    api
+      .get<{ status: DocumentTypeSyncStatus }>("/admin/document-types/sync-status")
+      .then((r) => r.data.status),
+
+  /**
+   * Full logical database backup (schema + data) as a .sql file.
+   *
+   * `responseType: "blob"` bypasses the response interceptor's envelope
+   * unwrapping, so `r.data` is the file itself. Note that on failure axios
+   * still resolves with a Blob containing the JSON error envelope, so callers
+   * must not assume a Blob means success — the panel checks the content type.
+   */
+  downloadDatabaseBackup: async () => {
+    const r = await api.get("/admin/database/backup", { responseType: "blob" });
+    return r.data as Blob;
+  },
+
   createOrganization: (form: FormData) =>
     api
       .post<{ organization: Organization }>("/admin/organizations", form)
@@ -1254,7 +1349,7 @@ export const leavesService = {
   types: () => api.get<{ leaveTypes: LeaveType[] }>("/leaves/types").then((r) => r.data.leaveTypes),
   balance: () =>
     api.get<{ balances: LeaveBalance[] }>("/leaves/balance").then((r) => r.data.balances),
-  mine: (params: { page?: number; limit?: number } = {}) =>
+  mine: (params: { page?: number; limit?: number; status?: string; dateFrom?: string; dateTo?: string } = {}) =>
     api.get<Paginated<LeaveRequest>>("/leaves/mine", { params }).then((r) => r.data),
   create: (data: {
     leave_type_id: number;
@@ -1717,7 +1812,7 @@ export const attendanceService = {
     api.post<{ record: AttendanceRecord }>("/attendance/check-in").then((r) => r.data),
   checkOut: () =>
     api.post<{ record: AttendanceRecord }>("/attendance/check-out").then((r) => r.data),
-  history: (params: { page?: number; limit?: number } = {}) =>
+  history: (params: { page?: number; limit?: number; status?: string; dateFrom?: string; dateTo?: string } = {}) =>
     api.get<Paginated<AttendanceRecord>>("/attendance/history", { params }).then((r) => r.data),
 };
 

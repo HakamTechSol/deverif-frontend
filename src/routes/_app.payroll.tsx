@@ -23,6 +23,7 @@ import { PageHeader } from "@/components/common/PageHeader";
 import { Pagination } from "@/components/common/Pagination";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -95,13 +96,17 @@ function PayslipDialog({ record, onClose }: { record: SalaryRecord; onClose: () 
 function PayrollPage() {
   const { t } = useTranslation();
   const [page, setPage] = useState(1);
+  const [period, setPeriod] = useState("");
   const [selected, setSelected] = useState<SalaryRecord | null>(null);
 
   const { isModuleFlagOff } = useOrgSubscription();
 
   const records = useQuery({
-    queryKey: ["my-salary-records", page],
-    queryFn: () => salaryService.mine({ page, limit: 10 }),
+    queryKey: ["my-salary-records", page, period],
+    queryFn: () => {
+      const [year, month] = period ? period.split("-") : ["", ""];
+      return salaryService.mine({ page, limit: 10, year: year || undefined, month: month || undefined });
+    },
   });
 
   const items = useMemo(() => records.data?.items ?? [], [records.data]);
@@ -116,6 +121,10 @@ function PayrollPage() {
         description={t("orgPayroll.description", "View your salary records")}
       />
 
+      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+        <Input type="month" aria-label={t("orgPayroll.filterPeriod", "Filter by period")} value={period} onChange={(e) => { setPeriod(e.target.value); setPage(1); }} className="w-full sm:w-56" />
+        {period && <Button variant="outline" onClick={() => { setPeriod(""); setPage(1); }}>{t("common.clear", "Clear")}</Button>}
+      </div>
       <Card className="border-border/70 shadow-none">
         <CardContent className="p-0">
           {records.isLoading ? (

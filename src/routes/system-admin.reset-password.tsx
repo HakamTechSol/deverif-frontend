@@ -9,10 +9,13 @@ import { PasswordInput } from "@/components/common/PasswordInput";
 import { Label } from "@/components/ui/label";
 import { DverifLoader } from "@/components/common/DvarifLoader";
 import { authService } from "@/services";
+import { authStore } from "@/lib/auth";
 
 export const Route = createFileRoute("/system-admin/reset-password")({
   beforeLoad: () => {
     if (typeof window !== "undefined") {
+      const { token: sessionToken, user } = authStore.get();
+      if (sessionToken && user) throw redirect({ to: "/dashboard" });
       const token = new URL(window.location.href).searchParams.get("token");
       if (!token) throw redirect({ to: "/system-admin/login" });
     }

@@ -67,7 +67,7 @@ import {
 } from "@/services";
 import { digitsOnly, formatCNIC, formatDate, parseFeatureAccess } from "@/lib/utils";
 import { UPLOADABLE_DOC_ACCEPT, validateUploadableFile } from "@/lib/documentTypes";
-import { EMPLOYEE_DOCUMENT_TYPES } from "@/lib/documentTypes";
+import { useDocumentTypes } from "@/lib/useDocumentTypes";
 import { authStore, useAuth } from "@/lib/auth";
 import { canAccessRoute } from "@/lib/routeAccess";
 import { DverifLoader } from "@/components/common/DvarifLoader";
@@ -514,6 +514,12 @@ function CreateRequestDialog({
     enabled: open,
   });
 
+  // The document-type catalogue is API-driven (a system admin can add types), so
+  // a type added in the admin panel is selectable here without a frontend deploy.
+  // The built-in list stands in if the request fails, so this form can never be
+  // emptied out and block submissions entirely.
+  const { items: documentTypeOptions } = useDocumentTypes();
+
   const [documentType, setDocumentType] = useState("");
   const [orgUuid, setOrgUuid] = useState<string>("");
   const [otherOrgName, setOtherOrgName] = useState("");
@@ -606,7 +612,7 @@ function CreateRequestDialog({
           <div className="space-y-2">
             <Label>{t("requests.table.docType")}</Label>
             <SearchableSelect
-              items={EMPLOYEE_DOCUMENT_TYPES.map((d) => ({ value: d, label: d }))}
+              items={documentTypeOptions}
               value={documentType}
               onChange={setDocumentType}
               placeholder={t("requests.create.selectDocType")}

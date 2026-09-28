@@ -1,9 +1,18 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useSearch } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
-import { Camera, Save, Lock, Building2, Languages } from "lucide-react";
+import {
+  Camera,
+  Save,
+  Lock,
+  Building2,
+  Languages,
+  Database,
+  FileStack,
+  UserCog,
+} from "lucide-react";
 
 import { PageHeader } from "@/components/common/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -11,23 +20,42 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { authService } from "@/services";
 import { PasswordInput } from "@/components/common/PasswordInput";
+import { DocumentTypesPanel } from "@/components/admin/DocumentTypesPanel";
+import { DatabaseBackupPanel } from "@/components/admin/DatabaseBackupPanel";
 import { authStore, useAuth } from "@/lib/auth";
 import { digitsOnly, resolveAssetUrl } from "@/lib/utils";
 import { setLanguage, getLanguage } from "@/i18n";
 
 export const Route = createFileRoute("/_app/settings")({
+  validateSearch: (search: Record<string, unknown>): { tab?: string } => ({
+    tab: typeof search.tab === "string" ? search.tab : undefined,
+  }),
   head: () => ({ meta: [{ title: "Settings — Dverif" }] }),
   component: SettingsPage,
 });
+
+/** Tabs the system admin gets that an org user never sees. */
+const ADMIN_TABS = ["account", "document-types", "database"] as const;
 
 function SettingsPage() {
   const qc = useQueryClient();
   const { t } = useTranslation();
   const { user } = useAuth();
+  const search = useSearch({ from: "/_app/settings" });
+
+  const isPlatformAdmin = user?.role === "admin";
+  // URL-driven so an admin can link straight to a tab. The value is validated
+  // against the list, so a hand-edited ?tab= cannot put a non-admin tab on screen.
+  const requested = search.tab;
+  const initialTab =
+    isPlatformAdmin && requested && (ADMIN_TABS as readonly string[]).includes(requested)
+      ? requested
+      : "account";
 
   type ProfileData = {
     full_name?: string;
@@ -62,8 +90,16 @@ function SettingsPage() {
   const save = useMutation({
     mutationFn: async () => {
       const form = new FormData();
-      form.append("full_name", fullName);
-      form.append("phone", phone);
+      const saved = me.data;
+      if (!saved) throw new Error("Profile is still loading");
+
+      const nextName = fullName.trim();
+      if (nextName !== (saved.full_name ?? "")) form.append("full_name", nextName);
+
+      const nextPhone = digitsOnly(phone);
+      const savedPhone = digitsOnly(saved.phone ?? "");
+      if (nextPhone !== savedPhone) form.append("phone", nextPhone);
+
       if (image) form.append("profile_image", image);
       if (user?.role === "admin") {
         return authService.updateAdminProfile(form);
@@ -72,6 +108,7 @@ function SettingsPage() {
     },
     onSuccess: (u) => {
       toast.success(t("settings.profileUpdated"));
+      setImage(null);
       if (u && user) {
         authStore.updateUser({
           ...user,
@@ -85,6 +122,9 @@ function SettingsPage() {
     onError: (e: any) => toast.error(e?.response?.data?.message ?? t("settings.updateFailed")),
   });
 
+  const hasProfileChanges = Boolean(image)
+    || (me.data != null && fullName.trim() !== (me.data.full_name ?? ""))
+    || (me.data != null && digitsOnly(phone) !== digitsOnly(me.data.phone ?? ""));
   const initials = (fullName || "U")
     .split(" ")
     .map((p) => p[0])
@@ -96,10 +136,38 @@ function SettingsPage() {
     <div>
       <PageHeader title={t("settings.title")} description={t("settings.description")} />
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <Card className="border-border/70 shadow-none lg:col-span-2">
-          <CardContent className="p-6">
-            <h2 className="text-sm font-semibold text-foreground">{t("settings.profile")}</h2>
+      <Tabs defaultValue={initialTab}>
+        <TabsList
+          className={`mb-4 grid h-auto w-full gap-1 p-1 sm:w-auto ${
+            isPlatformAdmin ? "sm:grid-cols-3" : "sm:grid-cols-1"
+          }`}
+        >
+          <TabsTrigger value="account" className="text-sm">
+            <UserCog className="mr-1.5 h-4 w-4 shrink-0" />
+            Account
+          </TabsTrigger>
+          {/* System-admin-only tabs. Gated on the role here AND on the route in
+              routeAccess.ts, and the endpoints themselves are behind
+              authAdminEnv — this is just the UI half. */}
+          {isPlatformAdmin && (
+            <>
+              <TabsTrigger value="document-types" className="text-sm">
+                <FileStack className="mr-1.5 h-4 w-4 shrink-0" />
+                Document Types
+              </TabsTrigger>
+              <TabsTrigger value="database" className="text-sm">
+                <Database className="mr-1.5 h-4 w-4 shrink-0" />
+                Database Backup
+              </TabsTrigger>
+            </>
+          )}
+        </TabsList>
+
+        <TabsContent value="account">
+          <div className="grid gap-6 lg:grid-cols-3">
+            <Card className="border-border/70 shadow-none lg:col-span-2">
+              <CardContent className="p-6">
+                <h2 className="text-sm font-semibold text-foreground">{t("settings.profile")}</h2>
             <p className="text-xs text-muted-foreground">{t("settings.profileSubtitle")}</p>
 
             <div className="mt-6 flex items-center gap-5">
@@ -114,7 +182,7 @@ function SettingsPage() {
                   <Camera className="h-3.5 w-3.5" />
                   <input
                     type="file"
-                    accept="image/*"
+                    accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
                     className="hidden"
                     onChange={(e) => {
                       const f = e.target.files?.[0] ?? null;
@@ -133,6 +201,32 @@ function SettingsPage() {
               </div>
             </div>
 
+            {user?.role !== "admin" && me.data?.organization_name ? (
+              <div className="mt-6 flex items-center gap-4 overflow-hidden rounded-xl border border-primary/15 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent p-4">
+                <Avatar className="h-16 w-16 shrink-0 rounded-xl border border-border bg-background shadow-sm">
+                  <AvatarImage
+                    src={resolveAssetUrl(me.data.organization_logo) ?? undefined}
+                    alt={`${me.data.organization_name} logo`}
+                    className="bg-background p-1 object-contain"
+                  />
+                  <AvatarFallback className="rounded-xl bg-primary/10 text-primary">
+                    <Building2 className="h-7 w-7" />
+                  </AvatarFallback>
+                </Avatar>
+                <div className="min-w-0">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    {t("settings.organization")}
+                  </p>
+                  <p className="mt-1 truncate text-base font-semibold text-foreground">
+                    {me.data.organization_name}
+                  </p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {t("settings.organizationWorkspace", "Your organization workspace")}
+                  </p>
+                </div>
+              </div>
+            ) : null}
+
             <Separator className="my-6" />
 
             <div className="grid gap-4 sm:grid-cols-2">
@@ -148,19 +242,11 @@ function SettingsPage() {
                 <Label>{t("settings.phone")}</Label>
                 <Input value={phone} onChange={(e) => setPhone(digitsOnly(e.target.value))} />
               </div>
-              {user?.role !== "admin" && me.data?.organization_name && (
-                <div className="space-y-2">
-                  <Label>{t("settings.organization")}</Label>
-                  <div className="flex h-10 w-full items-center gap-2 rounded-md border border-border bg-muted/40 px-3 text-sm text-foreground">
-                    <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    <span className="truncate">{me.data.organization_name}</span>
-                  </div>
-                </div>
-              )}
+
             </div>
 
             <div className="mt-6 flex justify-end">
-              <Button onClick={() => save.mutate()} disabled={save.isPending}>
+              <Button onClick={() => save.mutate()} disabled={save.isPending || !me.data || !hasProfileChanges}>
                 <Save className="mr-2 h-4 w-4" />
                 {save.isPending ? t("settings.saving") : t("settings.saveChanges")}
               </Button>
@@ -189,11 +275,24 @@ function SettingsPage() {
             </CardContent>
           </Card>
         )}
-      </div>
+          </div>
 
-      <div className="mt-6">
-        {user?.role !== "admin" && <LanguagePreferenceCard />}
-      </div>
+            <div className="mt-6">
+              {user?.role !== "admin" && <LanguagePreferenceCard />}
+            </div>
+          </TabsContent>
+
+        {isPlatformAdmin && (
+          <>
+            <TabsContent value="document-types">
+              <DocumentTypesPanel />
+            </TabsContent>
+            <TabsContent value="database">
+              <DatabaseBackupPanel />
+            </TabsContent>
+          </>
+        )}
+      </Tabs>
     </div>
   );
 }

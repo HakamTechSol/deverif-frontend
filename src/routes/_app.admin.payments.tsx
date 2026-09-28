@@ -62,7 +62,13 @@ export const Route = createFileRoute("/_app/admin/payments")({
 
 function AdminPaymentsPage() {
   const search = useSearch({ from: "/_app/admin/payments" });
-  const initialTab = search.tab && ["history", "self-subscriptions", "custom-plans", "plans"].includes(search.tab)
+  const sidebarCounts = useQuery({
+    queryKey: ["admin-sidebar-counts"],
+    queryFn: () => adminService.sidebarCounts(),
+    refetchInterval: 30_000,
+    retry: false,
+  });
+  const initialTab = search.tab && ["history", "self-subscriptions", "custom-plans", "custom-plan-catalog", "plans"].includes(search.tab)
     ? search.tab
     : "history";
 
@@ -74,18 +80,26 @@ function AdminPaymentsPage() {
       />
 
       <Tabs defaultValue={initialTab}>
-        <TabsList className="mb-4 grid w-full grid-cols-4 sm:inline-flex sm:w-auto">
-          <TabsTrigger value="history">
-            <Wallet className="mr-1.5 h-4 w-4" /> Payment History
+        <TabsList className="mb-4 grid h-auto w-full grid-cols-2 gap-1 p-1 sm:inline-flex sm:w-auto sm:grid-cols-none">
+          <TabsTrigger value="history" className="min-w-0 whitespace-normal px-1.5 text-center text-[11px] leading-tight sm:whitespace-nowrap sm:px-3 sm:text-sm">
+            <Wallet className="mr-1.5 h-4 w-4 shrink-0" /> Payment History
           </TabsTrigger>
-          <TabsTrigger value="self-subscriptions">
-            <Clock className="mr-1.5 h-4 w-4" /> Self-subscriptions
+          <TabsTrigger value="self-subscriptions" className="min-w-0 whitespace-normal px-1.5 text-center text-[11px] leading-tight sm:whitespace-nowrap sm:px-3 sm:text-sm">
+            <Clock className="mr-1.5 h-4 w-4 shrink-0" /> Self-subscriptions
           </TabsTrigger>
-          <TabsTrigger value="custom-plans">
-            <Sparkles className="mr-1.5 h-4 w-4" /> Custom Plan Requests
+          <TabsTrigger value="custom-plans" className="min-w-0 whitespace-normal px-1.5 text-center text-[11px] leading-tight sm:whitespace-nowrap sm:px-3 sm:text-sm">
+            <Sparkles className="mr-1.5 h-4 w-4 shrink-0" /> Custom Plan Requests
+            {(sidebarCounts.data?.custom_plan_requests ?? 0) > 0 ? (
+              <Badge variant="destructive" className="ml-1 h-5 min-w-5 shrink-0 px-1 text-[10px]">
+                {sidebarCounts.data!.custom_plan_requests}
+              </Badge>
+            ) : null}
           </TabsTrigger>
-          <TabsTrigger value="plans">
-            <Layers className="mr-1.5 h-4 w-4" /> Plans
+          <TabsTrigger value="custom-plan-catalog" className="min-w-0 whitespace-normal px-1.5 text-center text-[11px] leading-tight sm:whitespace-nowrap sm:px-3 sm:text-sm">
+            <Sparkles className="mr-1.5 h-4 w-4 shrink-0" /> Custom Plans
+          </TabsTrigger>
+          <TabsTrigger value="plans" className="min-w-0 whitespace-normal px-1.5 text-center text-[11px] leading-tight sm:whitespace-nowrap sm:px-3 sm:text-sm">
+            <Layers className="mr-1.5 h-4 w-4 shrink-0" /> Plans
           </TabsTrigger>
         </TabsList>
 
@@ -99,6 +113,10 @@ function AdminPaymentsPage() {
 
         <TabsContent value="custom-plans">
           <CustomPlanRequestsTab />
+        </TabsContent>
+
+        <TabsContent value="custom-plan-catalog">
+          <CustomPlansTab />
         </TabsContent>
 
         <TabsContent value="plans">
@@ -199,7 +217,7 @@ function PaymentHistoryTab() {
               <TableBody>
                 {items.map((p, i) => (
                   <TableRow key={p.uuid}>
-                    <TableCell className="w-10 text-muted-foreground">{(page - 1) * 10 + i + 1}</TableCell>
+                    <TableCell data-label="S.No" className="w-10 text-muted-foreground">{(page - 1) * 10 + i + 1}</TableCell>
                     <TableCell data-label="Reference" className="font-mono text-xs">{p.transaction_reference}</TableCell>
                     <TableCell data-label="User" className="text-muted-foreground">
                       {p.full_name ?? "—"}
@@ -477,18 +495,18 @@ function SelfSubscriptionTab() {
                 <TableBody>
                   {list.data.items.map((c: SubscriptionCheckout, i: number) => (
                     <TableRow key={c.uuid}>
-                      <TableCell className="w-10 text-muted-foreground">{(page - 1) * 10 + i + 1}</TableCell>
-                      <TableCell className="font-medium">{c.organization_name ?? "—"}</TableCell>
-                      <TableCell className="capitalize">{c.plan_name ?? "—"}</TableCell>
-                      <TableCell className="capitalize text-muted-foreground">{c.gateway ?? "—"}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
+                      <TableCell data-label="S.No" className="w-10 text-muted-foreground">{(page - 1) * 10 + i + 1}</TableCell>
+                      <TableCell data-label="Organization" className="font-medium">{c.organization_name ?? "—"}</TableCell>
+                      <TableCell data-label="Plan" className="capitalize">{c.plan_name ?? "—"}</TableCell>
+                      <TableCell data-label="Gateway" className="capitalize text-muted-foreground">{c.gateway ?? "—"}</TableCell>
+                      <TableCell data-label="Amount" className="text-xs text-muted-foreground">
                         {c.amount != null
                           ? `Rs. ${Number(c.amount).toLocaleString()}${c.currency ? ` ${c.currency}` : ""}`
                           : "—"}
                       </TableCell>
-                      <TableCell>{checkoutBadge(c.status)}</TableCell>
-                      <TableCell>{orgStatusBadge(c)}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
+                      <TableCell data-label="Status">{checkoutBadge(c.status)}</TableCell>
+                      <TableCell data-label="Org Status">{orgStatusBadge(c)}</TableCell>
+                      <TableCell data-label="Date" className="text-xs text-muted-foreground">
                         {formatDate(c.completed_at ?? c.created_at)}
                       </TableCell>
                     </TableRow>
@@ -571,7 +589,7 @@ function CustomPlanRequestsTab() {
 
   return (
     <Card className="border-border/70 shadow-none">
-      <CardContent className="p-6">
+      <CardContent className="p-3 sm:p-6">
         <div className="mb-4 flex items-center gap-2">
           <Sparkles className="h-4 w-4 text-primary" />
           <h3 className="text-sm font-semibold text-foreground">Custom Plan Requests</h3>
@@ -616,7 +634,7 @@ function CustomPlanRequestsTab() {
               <TableBody>
                 {list.data.items.map((r: CustomPlanRequest, i: number) => (
                   <TableRow key={r.uuid}>
-                    <TableCell className="w-12 text-muted-foreground">{i + 1}</TableCell>
+                    <TableCell data-label="S.No" className="w-12 text-muted-foreground">{i + 1}</TableCell>
                     <TableCell
                       data-label="Organization"
                       className="font-medium text-foreground"
@@ -775,6 +793,69 @@ function CustomPlanRequestsTab() {
 }
 
 /* ─────────── Plans Tab (admin-managed public plans) ─────────── */
+function CustomPlansTab() {
+  const list = useQuery({
+    queryKey: ["admin-plans"],
+    queryFn: () => adminService.plans(),
+  });
+  const items = (list.data?.items ?? []).filter((plan) => plan.is_custom === 1);
+
+  return (
+    <Card className="border-border/70 shadow-none">
+      <CardContent className="p-3 sm:p-6">
+        <div className="mb-4 flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-primary" />
+          <h3 className="text-sm font-semibold text-foreground">Custom Plans</h3>
+        </div>
+        {list.isLoading ? (
+          <TableSkeleton />
+        ) : items.length === 0 ? (
+          <EmptyState
+            icon={Sparkles}
+            title="No custom plans yet"
+            description="Approved custom plan requests will appear here, separate from standard plans."
+          />
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {items.map((plan) => (
+              <div key={plan.uuid} className="rounded-xl border border-border bg-card p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="break-words text-sm font-semibold text-foreground">{plan.name}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{plan.billing_period} custom plan</p>
+                  </div>
+                  <Badge variant="outline" className="shrink-0 rounded-full border-primary/30 text-primary">
+                    Custom
+                  </Badge>
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-3 rounded-lg bg-muted/40 p-3">
+                  <div>
+                    <p className="text-[11px] text-muted-foreground">Price</p>
+                    <p className="mt-1 text-sm font-semibold text-foreground">
+                      Rs. {Number(plan.monthly_price ?? 0).toLocaleString()}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-muted-foreground">Daily quota</p>
+                    <p className="mt-1 text-sm font-semibold text-foreground">
+                      {plan.daily_request_quota}/day
+                    </p>
+                  </div>
+                </div>
+                {plan.description ? (
+                  <p className="mt-3 line-clamp-3 text-xs leading-5 text-muted-foreground">
+                    {plan.description}
+                  </p>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function PlansTab() {
   const qc = useQueryClient();
   const [openForm, setOpenForm] = useState(false);
@@ -922,7 +1003,7 @@ function PlansTab() {
     });
   };
 
-  const items = list.data?.items ?? [];
+  const items = (list.data?.items ?? []).filter((plan) => plan.is_custom !== 1);
 
   return (
     <Card className="border-border/70 shadow-none">
@@ -971,8 +1052,8 @@ function PlansTab() {
               <TableBody>
                 {items.map((p, i) => (
                   <TableRow key={p.uuid}>
-                    <TableCell className="w-10 text-muted-foreground">{i + 1}</TableCell>
-                    <TableCell className="font-medium capitalize">
+                    <TableCell data-label="S.No" className="w-10 text-muted-foreground">{i + 1}</TableCell>
+                    <TableCell data-label="Name" className="font-medium capitalize">
                       <span className="flex items-center gap-2">
                         {p.name}
                         {p.is_free === 1 && (
@@ -982,11 +1063,11 @@ function PlansTab() {
                         )}
                       </span>
                     </TableCell>
-                    <TableCell>Rs. {p.monthly_price?.toLocaleString()}</TableCell>
-                    <TableCell>{p.daily_request_quota}</TableCell>
-                    <TableCell className="capitalize">{p.billing_period}</TableCell>
-                    <TableCell className="text-muted-foreground">{(p.features ?? []).length}</TableCell>
-                    <TableCell>
+                    <TableCell data-label="Price">Rs. {p.monthly_price?.toLocaleString()}</TableCell>
+                    <TableCell data-label="Quota / Day">{p.daily_request_quota}</TableCell>
+                    <TableCell data-label="Billing" className="capitalize">{p.billing_period}</TableCell>
+                    <TableCell data-label="Features" className="text-muted-foreground">{(p.features ?? []).length}</TableCell>
+                    <TableCell data-label="Modules">
                       <div className="flex items-center gap-1">
                         {MODULE_FEATURES.map(({ key, label }) => {
                           const on = p.module_flags?.[key] ?? true;
@@ -1009,7 +1090,7 @@ function PlansTab() {
                         </span>
                       </div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell data-label="Public">
                       {p.is_custom === 1 ? (
                         <Badge variant="outline" className="rounded-full text-muted-foreground">Custom</Badge>
                       ) : (
@@ -1020,14 +1101,14 @@ function PlansTab() {
                         />
                       )}
                     </TableCell>
-                    <TableCell>
+                    <TableCell data-label="Recommended">
                       <Switch
                         checked={p.is_recommended === 1}
                         onCheckedChange={() => toggleRecommended.mutate(p)}
                         disabled={toggleRecommended.isPending || p.is_custom === 1}
                       />
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell data-label="Actions" className="text-right">
                       {p.is_custom !== 1 && (
                         <div className="flex justify-end gap-1.5">
                           <Button size="sm" variant="outline" onClick={() => openEdit(p)}>

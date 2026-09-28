@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect, useRouter } from "@tanstack/react-router";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
@@ -17,6 +17,11 @@ import { authStore, type AuthUser } from "@/lib/auth";
 import { setLanguage } from "@/i18n";
 
 export const Route = createFileRoute("/login")({
+  beforeLoad: () => {
+    if (typeof window === "undefined") return;
+    const { token, user } = authStore.get();
+    if (token && user) throw redirect({ to: "/dashboard" });
+  },
   head: () => ({
     meta: [
       { title: "Sign in — Dverif" },

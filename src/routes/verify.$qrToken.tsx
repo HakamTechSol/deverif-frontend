@@ -182,12 +182,6 @@ function DocumentCard({ data, qrToken }: { data: PublicVerification; qrToken: st
           <h2 className="text-sm font-semibold text-foreground">Verified document</h2>
         </div>
 
-        {data.file_type === "pdf" ? (
-          <div className="overflow-hidden rounded-lg border border-border bg-muted/30">
-            <DocumentPreview url={url} />
-          </div>
-        ) : null}
-
         <div className="mt-3 flex flex-col gap-2 sm:flex-row">
           <Button asChild variant="outline" className="w-full sm:w-auto">
             <a href={url} target="_blank" rel="noopener noreferrer">
@@ -212,14 +206,4 @@ function fileExtensionFor(fileType: PublicVerification["file_type"]): string {
   if (fileType === "docx") return ".docx";
   if (fileType === "image") return "";
   return "";
-}
-
-function DocumentPreview({ url }: { url: string }) {
-  return (
-    <iframe
-      src={url}
-      title="The verified document (PDF)"
-      className="h-[70vh] min-h-[420px] w-full bg-white"
-    />
-  );
 }

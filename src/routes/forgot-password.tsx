@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 import { ArrowLeft, Mail } from "lucide-react";
@@ -9,8 +9,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authService } from "@/services";
+import { authStore } from "@/lib/auth";
 
 export const Route = createFileRoute("/forgot-password")({
+  beforeLoad: () => {
+    if (typeof window !== "undefined") {
+      const { token, user } = authStore.get();
+      if (token && user) throw redirect({ to: "/dashboard" });
+    }
+  },
   head: () => ({
     meta: [
       { title: "Forgot password — Dverif" },

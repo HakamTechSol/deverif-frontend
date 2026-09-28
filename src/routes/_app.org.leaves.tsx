@@ -22,6 +22,7 @@ import { canAccessRoute } from "@/lib/routeAccess";
 import { useAuth } from "@/lib/auth";
 import { useOrgSubscription } from "@/hooks/useOrgSubscription";
 import { ModuleFeatureLockedCard } from "@/components/common/SubscriptionLocked";
+import { LeaveRequestDetailsDialog } from "@/components/leaves/LeaveRequestDetailsDialog";
 import { PageHeader } from "@/components/common/PageHeader";
 import { SearchInput } from "@/components/common/SearchInput";
 import { EmptyState } from "@/components/common/EmptyState";
@@ -106,7 +107,8 @@ function OrgLeavesContent() {
   const canDelete = user?.org_role === "org_admin";
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("pending");
+  const [status, setStatus] = useState("");
+  const [selectedLeave, setSelectedLeave] = useState<LeaveRequest | null>(null);
   const [confirming, setConfirming] = useState<LeaveRequest | null>(null);
   const [decideAction, setDecideAction] = useState<"approved" | "rejected">("approved");
   const [typeDialog, setTypeDialog] = useState<{ open: boolean; editing: LeaveType | null }>({
@@ -231,9 +233,9 @@ function OrgLeavesContent() {
                   placeholder={t("orgLeaves.searchPlaceholder")}
                 />
                 <Select
-                  value={status}
+                  value={status || "all"}
                   onValueChange={(v) => {
-                    setStatus(v);
+                    setStatus(v === "all" ? "" : v);
                     setPage(1);
                   }}
                 >
@@ -244,7 +246,7 @@ function OrgLeavesContent() {
                     <SelectItem value="pending">{t("status.pending")}</SelectItem>
                     <SelectItem value="approved">{t("status.approved")}</SelectItem>
                     <SelectItem value="rejected">{t("status.rejected")}</SelectItem>
-                    <SelectItem value="">{t("orgLeaves.all")}</SelectItem>
+                    <SelectItem value="all">{t("orgLeaves.all")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -317,40 +319,53 @@ function OrgLeavesContent() {
                               <StatusBadge status={r.status} />
                             </TableCell>
                             <TableCell data-label="Actions" className="text-right whitespace-nowrap">
-                              {r.status === "pending" ? (
-                                <div className="flex items-center justify-end gap-1">
-                                   <Button
-                                     size="sm"
-                                     variant="outline"
-                                     className="h-7 text-xs"
-                                     disabled={isLocked}
-                                     onClick={() => {
-                                       setDecideAction("approved");
-                                       setConfirming(r);
-                                     }}
-                                   >
-                                     {isLocked ? <Lock className="mr-1 h-3.5 w-3.5" /> : <CheckCircle2 className="mr-1 h-3.5 w-3.5 text-success" />}
-                                     {t("orgLeaves.approve")}
-                                   </Button>
-                                   <Button
-                                     size="sm"
-                                     variant="outline"
-                                     className="h-7 text-xs"
-                                     disabled={isLocked}
-                                     onClick={() => {
-                                       setDecideAction("rejected");
-                                       setConfirming(r);
-                                     }}
-                                   >
-                                     {isLocked ? <Lock className="mr-1 h-3.5 w-3.5" /> : <XCircle className="mr-1 h-3.5 w-3.5 text-destructive" />}
-                                     {t("orgLeaves.reject")}
-                                   </Button>
-                                </div>
-                              ) : (
-                                <span className="text-xs text-muted-foreground">
-                                  {formatDateTime(r.approved_at)}
-                                </span>
-                              )}
+                              <div className="flex items-center justify-end gap-1">
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-8 w-8"
+                                  aria-label={t("leaves.viewDetails", "View details")}
+                                  title={t("leaves.viewDetails", "View details")}
+                                  onClick={() => setSelectedLeave(r)}
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                                {r.status === "pending" ? (
+                                  <>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-7 text-xs"
+                                      disabled={isLocked}
+                                      onClick={() => {
+                                        setDecideAction("approved");
+                                        setConfirming(r);
+                                      }}
+                                    >
+                                      {isLocked ? <Lock className="mr-1 h-3.5 w-3.5" /> : <CheckCircle2 className="mr-1 h-3.5 w-3.5 text-success" />}
+                                      {t("orgLeaves.approve")}
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-7 text-xs"
+                                      disabled={isLocked}
+                                      onClick={() => {
+                                        setDecideAction("rejected");
+                                        setConfirming(r);
+                                      }}
+                                    >
+                                      {isLocked ? <Lock className="mr-1 h-3.5 w-3.5" /> : <XCircle className="mr-1 h-3.5 w-3.5 text-destructive" />}
+                                      {t("orgLeaves.reject")}
+                                    </Button>
+                                  </>
+                                ) : (
+                                  <span className="px-2 text-xs text-muted-foreground">
+                                    {formatDateTime(r.approved_at)}
+                                  </span>
+                                )}
+                              </div>
                             </TableCell>
                           </TableRow>
                         ))}
@@ -418,6 +433,10 @@ function OrgLeavesContent() {
         open={typeDialog.open}
         editing={typeDialog.editing}
         onOpenChange={(o) => setTypeDialog({ open: o, editing: null })}
+      />
+      <LeaveRequestDetailsDialog
+        request={selectedLeave}
+        onOpenChange={(open) => !open && setSelectedLeave(null)}
       />
     </div>
   );

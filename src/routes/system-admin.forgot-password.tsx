@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 import { ArrowLeft, Mail, ShieldCheck } from "lucide-react";
@@ -10,8 +10,15 @@ import { Label } from "@/components/ui/label";
 import { DverifLoader } from "@/components/common/DvarifLoader";
 import { authService } from "@/services";
 import { useTranslation } from "react-i18next";
+import { authStore } from "@/lib/auth";
 
 export const Route = createFileRoute("/system-admin/forgot-password")({
+  beforeLoad: () => {
+    if (typeof window !== "undefined") {
+      const { token, user } = authStore.get();
+      if (token && user) throw redirect({ to: "/dashboard" });
+    }
+  },
   head: () => ({
     meta: [
       { title: "System Admin Forgot Password — Dverif" },
