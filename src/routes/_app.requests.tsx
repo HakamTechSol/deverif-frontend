@@ -156,9 +156,9 @@ function RequestsPage() {
           hasPaidPlan
             ? t("requests.description")
             : t(
-                "requests.freeTierDescription",
-                "Your organization does not have an active subscription right now, but one free verification request is still available each day.",
-              )
+              "requests.freeTierDescription",
+              "Your organization does not have an active subscription right now, but one free verification request is still available each day.",
+            )
         }
         actions={
           <Button
@@ -229,9 +229,9 @@ function RequestsPage() {
                   hasPaidPlan
                     ? t("requests.emptyDescription")
                     : t(
-                        "requests.freeTierEmptyDesc",
-                        "Your free daily request is still available. Submit one verification request to get started.",
-                      )
+                      "requests.freeTierEmptyDesc",
+                      "Your free daily request is still available. Submit one verification request to get started.",
+                    )
                 }
                 action={
                   <Button
@@ -272,7 +272,7 @@ function RequestsPage() {
                           <span className="italic">{r.unmatched_org_name ?? "—"} {t("requests.table.unmatched")}</span>
                         )}
                       </TableCell>
-                      <TableCell data-label={t("requests.table.status")}> 
+                      <TableCell data-label={t("requests.table.status")}>
                         <StatusBadge status={r.status} />
                       </TableCell>
                       <TableCell data-label={t("requests.table.submitted")} className="text-xs text-muted-foreground">
@@ -410,7 +410,7 @@ function QuotaSummary({
         <ProgressBar percent={percent} exhausted={exhausted} />
       </StatCard>
 
-    
+
 
       <StatCard
         icon={Activity}
@@ -423,7 +423,7 @@ function QuotaSummary({
         }
         tone={exhausted ? "muted" : "default"}
       >
-       
+
       </StatCard>
     </div>
   );
@@ -449,13 +449,12 @@ function StatCard({
       <CardContent className="p-4">
         <div className="flex items-start gap-3">
           <div
-            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
-              tone === "accent"
-                ? "bg-primary/10 text-primary"
-                : tone === "muted"
-                  ? "bg-muted text-muted-foreground"
-                  : "bg-muted/40 text-foreground"
-            }`}
+            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${tone === "accent"
+              ? "bg-primary/10 text-primary"
+              : tone === "muted"
+                ? "bg-muted text-muted-foreground"
+                : "bg-muted/40 text-foreground"
+              }`}
           >
             <Icon className="h-4.5 w-4.5" />
           </div>
@@ -599,7 +598,7 @@ function CreateRequestDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-3xl">
           <DialogHeader>
             <DialogTitle>{t("requests.create.title")}</DialogTitle>
             <DialogDescription>
@@ -607,172 +606,175 @@ function CreateRequestDialog({
             </DialogDescription>
           </DialogHeader>
 
-        <div className="space-y-5">
-          {/* Document type */}
-          <div className="space-y-2">
-            <Label>{t("requests.table.docType")}</Label>
-            <SearchableSelect
-              items={documentTypeOptions}
-              value={documentType}
-              onChange={setDocumentType}
-              placeholder={t("requests.create.selectDocType")}
-              searchPlaceholder={t("requests.create.searchDocType", "Search document…")}
-            />
-          </div>
-
-          <Separator />
-
-          {/* Issuing organization */}
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <Building2 className="h-4 w-4 text-muted-foreground" />
-              <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                {t("requests.create.targetOrg")}
-              </Label>
-            </div>
-            <SearchableSelect
-              items={[
-                ...orgOptions.map((o) => ({ value: o.uuid, label: o.name })),
-                { value: "__other__", label: t("requests.create.otherNotListed") },
-              ]}
-              value={orgUuid}
-              onChange={setOrgUuid}
-              placeholder={t("requests.create.selectOrg")}
-              searchPlaceholder={t("requests.create.searchOrg", "Search organization…")}
-            />
-          </div>
-
-          {isOther ? (
-            <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-3">
-              <p className="text-xs font-medium text-muted-foreground">{t("requests.create.orgDetails")}</p>
+          <div className="space-y-5">
+            <div className="grid gap-5 sm:grid-cols-2">
+              {/* Document type */}
               <div className="space-y-2">
-                <Label>{t("requests.create.orgName")}</Label>
-                <Input
-                  value={otherOrgName}
-                  onChange={(e) => setOtherOrgName(e.target.value)}
-                  placeholder={t("requests.create.orgNamePlaceholder")}
+                <Label>{t("requests.table.docType")}</Label>
+                <SearchableSelect
+                  items={documentTypeOptions}
+                  value={documentType}
+                  onChange={setDocumentType}
+                  placeholder={t("requests.create.selectDocType")}
+                  searchPlaceholder={t("requests.create.searchDocType", "Search document…")}
                 />
               </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>{t("requests.create.emailOptional")}</Label>
-                  <Input
-                    type="email"
-                    value={otherOrgEmail}
-                    onChange={(e) => setOtherOrgEmail(e.target.value)}
-                    placeholder="org@example.com"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>{t("requests.create.phoneOptional")}</Label>
-                  <Input
-                    value={otherOrgPhone}
-                    onChange={(e) => setOtherOrgPhone(digitsOnly(e.target.value))}
-                    placeholder="+92 300 1234567"
-                  />
-                </div>
-              </div>
+
+              {/* Issuing organization */}
               <div className="space-y-2">
-                <Label>{t("requests.create.websiteOptional")}</Label>
-                <Input
-                  value={otherOrgWebsite}
-                  onChange={(e) => setOtherOrgWebsite(e.target.value)}
-                  placeholder="https://example.com"
+                <div className="flex h-5 items-center gap-2">
+                  <Building2 className="h-4 w-4 text-muted-foreground" />
+                  <Label>{t("requests.create.targetOrg")}</Label>
+                </div>
+                <SearchableSelect
+                  items={[
+                    ...orgOptions.map((o) => ({ value: o.uuid, label: o.name })),
+                    { value: "__other__", label: t("requests.create.otherNotListed") },
+                  ]}
+                  value={orgUuid}
+                  onChange={setOrgUuid}
+                  placeholder={t("requests.create.selectOrg")}
+                  searchPlaceholder={t("requests.create.searchOrg", "Search organization…")}
                 />
               </div>
-              <p className="text-xs text-muted-foreground">
-                {t("requests.create.onboardNote")}
-              </p>
             </div>
-          ) : null}
 
-          <Separator />
-
-          {/* Document */}
-          <div className="space-y-2">
-            <Label>{t("requests.create.document")}</Label>
-            <label
-              htmlFor="doc-file"
-              className="flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-lg border-2 border-dashed border-border bg-muted/25 px-4 py-5 text-center transition-colors hover:border-primary/50 hover:bg-muted/40"
-            >
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                <UploadCloud className="h-5 w-5 text-primary" />
+            {isOther ? (
+              <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-3">
+                <p className="text-xs font-medium text-muted-foreground">{t("requests.create.orgDetails")}</p>
+                <div className="space-y-2">
+                  <Label>{t("requests.create.orgName")}</Label>
+                  <Input
+                    value={otherOrgName}
+                    onChange={(e) => setOtherOrgName(e.target.value)}
+                    placeholder={t("requests.create.orgNamePlaceholder")}
+                  />
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>{t("requests.create.emailOptional")}</Label>
+                    <Input
+                      type="email"
+                      value={otherOrgEmail}
+                      onChange={(e) => setOtherOrgEmail(e.target.value)}
+                      placeholder="org@example.com"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{t("requests.create.phoneOptional")}</Label>
+                    <Input
+                      value={otherOrgPhone}
+                      onChange={(e) => setOtherOrgPhone(digitsOnly(e.target.value))}
+                      placeholder="+92 300 1234567"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>{t("requests.create.websiteOptional")}</Label>
+                  <Input
+                    value={otherOrgWebsite}
+                    onChange={(e) => setOtherOrgWebsite(e.target.value)}
+                    placeholder="https://example.com"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {t("requests.create.onboardNote")}
+                </p>
               </div>
-              <span className="text-sm font-medium text-foreground">
-                {file ? file.name : t("requests.create.clickToUpload")}
-              </span>
-              <span className="text-xs text-muted-foreground">{t("requests.create.fileHint")}</span>
-              <input
-                id="doc-file"
-                type="file"
-                accept={UPLOADABLE_DOC_ACCEPT}
-                className="hidden"
-                onChange={(e) => {
-                  const picked = e.target.files?.[0] ?? null;
-                  // Reject on pick, not on submit: a user who chose a .heic or
-                  // a 40MB scan finds out while the file is still in their hand.
-                  const problem = validateUploadableFile(picked);
-                  if (problem) {
-                    toast.error(problem.message);
-                    setFile(null);
-                    // Clear the input so re-picking the same file fires onChange.
-                    e.target.value = "";
-                    return;
-                  }
-                  setFile(picked);
-                }}
-              />
-            </label>
+            ) : null}
+
+            <Separator />
+
+            <div className="grid gap-5 sm:grid-cols-2">
+              {/* Document owner's name */}
+              <div className="space-y-2">
+                <Label>{t("requests.create.documentOwnerName")}</Label>
+                <Input
+                  value={documentOwnerName}
+                  onChange={(e) => setDocumentOwnerName(e.target.value)}
+                  placeholder={t("requests.create.documentOwnerNamePlaceholder")}
+                  maxLength={200}
+                />
+              </div>
+
+              {/* Document owner's CNIC */}
+              <div className="space-y-2">
+                <Label>{t("requests.create.documentOwnerCnic")}</Label>
+                <Input
+                  value={documentOwnerCnic}
+                  onChange={(e) => setDocumentOwnerCnic(formatCNIC(e.target.value))}
+                  placeholder="XXXXX-XXXXXXX-X"
+                  maxLength={15}
+                  inputMode="numeric"
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-5 sm:grid-cols-2">
+              {/* Document */}
+              <div className="space-y-2">
+                <Label>{t("requests.create.document")}</Label>
+                <label
+                  htmlFor="doc-file"
+                  className="flex h-full cursor-pointer flex-col items-center justify-center gap-1.5 rounded-lg border-2 border-dashed border-border bg-muted/25 px-4 py-5 text-center transition-colors hover:border-primary/50 hover:bg-muted/40"
+                >
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+                    <UploadCloud className="h-5 w-5 text-primary" />
+                  </div>
+                  <span className="text-sm font-medium text-foreground">
+                    {file ? file.name : t("requests.create.clickToUpload")}
+                  </span>
+                  <span className="text-xs text-muted-foreground">{t("requests.create.fileHint")}</span>
+                  <input
+                    id="doc-file"
+                    type="file"
+                    accept={UPLOADABLE_DOC_ACCEPT}
+                    className="hidden"
+                    onChange={(e) => {
+                      const picked = e.target.files?.[0] ?? null;
+                      // Reject on pick, not on submit: a user who chose a .heic or
+                      // a 40MB scan finds out while the file is still in their hand.
+                      const problem = validateUploadableFile(picked);
+                      if (problem) {
+                        toast.error(problem.message);
+                        setFile(null);
+                        // Clear the input so re-picking the same file fires onChange.
+                        e.target.value = "";
+                        return;
+                      }
+                      setFile(picked);
+                    }}
+                  />
+                </label>
+              </div>
+
+              {/* Remarks */}
+              <div className="space-y-2">
+                <Label>{t("requests.create.remarksOptional")}</Label>
+                <Textarea
+                  rows={3}
+                  className="h-full min-h-[104px] resize-none"
+                  value={remarks}
+                  onChange={(e) => setRemarks(e.target.value)}
+                  placeholder={t("requests.create.remarksPlaceholder")}
+                />
+              </div>
+            </div>
           </div>
 
-          {/* Document owner's name */}
-          <div className="space-y-2">
-            <Label>{t("requests.create.documentOwnerName")}</Label>
-            <Input
-              value={documentOwnerName}
-              onChange={(e) => setDocumentOwnerName(e.target.value)}
-              placeholder={t("requests.create.documentOwnerNamePlaceholder")}
-              maxLength={200}
-            />
-          </div>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
+              {t("requests.create.cancel")}
+            </Button>
+            <Button onClick={submit} loading={submitting}>
+              {!submitting && <FileCheck2 className="mr-2 h-4 w-4" />}
+              {t("requests.create.submit")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-          {/* Document owner's CNIC */}
-          <div className="space-y-2">
-            <Label>{t("requests.create.documentOwnerCnic")}</Label>
-            <Input
-              value={documentOwnerCnic}
-              onChange={(e) => setDocumentOwnerCnic(formatCNIC(e.target.value))}
-              placeholder="XXXXX-XXXXXXX-X"
-              maxLength={15}
-              inputMode="numeric"
-            />
-          </div>
-
-          {/* Remarks */}
-          <div className="space-y-2">
-            <Label>{t("requests.create.remarksOptional")}</Label>
-            <Textarea
-              rows={3}
-              value={remarks}
-              onChange={(e) => setRemarks(e.target.value)}
-              placeholder={t("requests.create.remarksPlaceholder")}
-            />
-          </div>
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
-            {t("requests.create.cancel")}
-          </Button>
-          <Button onClick={submit} loading={submitting}>
-            {!submitting && <FileCheck2 className="mr-2 h-4 w-4" />}
-            {t("requests.create.submit")}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-
-    <RequestSubmittedModal request={submitted} onClose={() => setSubmitted(null)} />
+      <RequestSubmittedModal request={submitted} onClose={() => setSubmitted(null)} />
     </>
   );
 }
@@ -877,7 +879,7 @@ function EditRequestDialog({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onOpenChange()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle>{t("requests.edit.title")}</DialogTitle>
           <DialogDescription>
@@ -886,30 +888,32 @@ function EditRequestDialog({
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="space-y-2">
-            <Label>{t("requests.table.docType")}</Label>
-            <Input
-              value={documentType}
-              onChange={(e) => setDocumentType(e.target.value)}
-              placeholder={t("requests.edit.docTypePlaceholder")}
-            />
-          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label>{t("requests.table.docType")}</Label>
+              <Input
+                value={documentType}
+                onChange={(e) => setDocumentType(e.target.value)}
+                placeholder={t("requests.edit.docTypePlaceholder")}
+              />
+            </div>
 
-          <div className="space-y-2">
-            <Label>{t("requests.edit.issuingOrg")}</Label>
-            <Select value={orgUuid} onValueChange={setOrgUuid}>
-              <SelectTrigger>
-                <SelectValue placeholder={t("requests.edit.selectOrg")} />
-              </SelectTrigger>
-              <SelectContent>
-                {orgOptions.map((o) => (
-                  <SelectItem key={o.uuid} value={o.uuid}>
-                    {o.name}
-                  </SelectItem>
-                ))}
-                <SelectItem value="__other__">{t("requests.edit.otherNotListed")}</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="space-y-2">
+              <Label>{t("requests.edit.issuingOrg")}</Label>
+              <Select value={orgUuid} onValueChange={setOrgUuid}>
+                <SelectTrigger>
+                  <SelectValue placeholder={t("requests.edit.selectOrg")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {orgOptions.map((o) => (
+                    <SelectItem key={o.uuid} value={o.uuid}>
+                      {o.name}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value="__other__">{t("requests.edit.otherNotListed")}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           {isOther ? (
@@ -951,6 +955,28 @@ function EditRequestDialog({
               </div>
             </>
           ) : null}
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label>{t("requests.create.documentOwnerName")}</Label>
+              <Input
+                value={documentOwnerName}
+                onChange={(e) => setDocumentOwnerName(e.target.value)}
+                placeholder={t("requests.create.documentOwnerNamePlaceholder")}
+                maxLength={200}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>{t("requests.edit.remarksOptional")}</Label>
+              <Textarea
+                rows={3}
+                value={remarks}
+                onChange={(e) => setRemarks(e.target.value)}
+                placeholder={t("requests.edit.remarksPlaceholder")}
+              />
+            </div>
+          </div>
 
           <div className="space-y-2">
             <Label>{file ? "" : t("requests.edit.documentOptional")}</Label>
@@ -994,29 +1020,9 @@ function EditRequestDialog({
               />
             </label>
           </div>
-
-          <div className="space-y-2">
-            <Label>{t("requests.create.documentOwnerName")}</Label>
-            <Input
-              value={documentOwnerName}
-              onChange={(e) => setDocumentOwnerName(e.target.value)}
-              placeholder={t("requests.create.documentOwnerNamePlaceholder")}
-              maxLength={200}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>{t("requests.edit.remarksOptional")}</Label>
-            <Textarea
-              rows={3}
-              value={remarks}
-              onChange={(e) => setRemarks(e.target.value)}
-              placeholder={t("requests.edit.remarksPlaceholder")}
-            />
-          </div>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="mt-4">
           <Button variant="outline" onClick={onOpenChange} disabled={submitting}>
             {t("requests.edit.cancel")}
           </Button>

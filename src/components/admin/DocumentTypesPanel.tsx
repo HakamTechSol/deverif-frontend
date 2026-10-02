@@ -33,13 +33,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { adminService, type DocumentType } from "@/services";
 import { apiErrorMessage } from "@/lib/utils";
@@ -52,71 +45,19 @@ import { apiErrorMessage } from "@/lib/utils";
  * two repositories and redeploying both. It is now a database table, and the
  * backend pushes it to the OCR service after every change.
  *
- * The `schema` column is the part worth understanding: a type is not just a
+ * The `schema_key` column is the part worth understanding: a type is not just a
  * label. The schema decides which fields get extracted from the document, so a
- * type added with the default `generic` will only ever surface a name and a
- * CNIC. Picking the schema that matches the document is what makes auto-matching
- * work well.
+ * type using `generic` will only ever surface a name and a CNIC. The right key is
+ * what makes auto-matching work well.
+ *
+ * That key is TYPED, not picked from a dropdown, and the list of valid keys is
+ * read from the OCR service at runtime. This file deliberately contains no list
+ * of schemas: it used to carry a 40-entry literal, the Node controller carried a
+ * second copy, and the Python registry the third, so a new schema meant three
+ * coordinated edits and any of them going unnoticed would offer a key the
+ * extractor had never heard of. There is now exactly one definition of what the
+ * service can extract, and this panel asks for it.
  */
-
-/** Human labels for the canonical schemas, so the dropdown is not a wall of snake_case. */
-const SCHEMA_LABELS: Record<string, string> = {
-  generic: "Generic — name + CNIC (safe default)",
-  cnic: "CNIC / National ID — name, CNIC, date of birth",
-  passport: "Passport — name, CNIC, passport no., DOB",
-  offer_letter: "Offer letter — name, CNIC, designation, joining date",
-  appointment_letter: "Appointment letter — name, CNIC, designation, joining date",
-  employment_contract: "Employment contract — name, CNIC, designation, joining date",
-  experience_letter: "Experience letter — name, CNIC, designation, duration",
-  reference_letter: "Reference letter — name, CNIC, recommendation date",
-  resume: "CV / Resume — name, CNIC, designation",
-  application_form: "Application form — name, CNIC, date of birth",
-  education_certificate: "Education certificate — name, CNIC, degree, session",
-  transcript: "Transcript / mark sheet — name, CNIC, degree, session",
-  relieving_letter: "Relieving letter — name, CNIC, designation, last working day",
-  resignation_letter: "Resignation letter — name, CNIC, designation, last working day",
-  promotion_letter: "Promotion letter — name, CNIC, designation, effective date",
-  increment_letter: "Increment letter — name, CNIC, designation, increment",
-  transfer_letter: "Transfer letter — name, CNIC, effective date",
-  bank_details: "Bank / salary details — name, CNIC, account number",
-  tax_document: "Tax document — name, CNIC, tax year",
-  background_check: "Background check — name, CNIC",
-  medical_certificate: "Medical certificate — name, CNIC",
-  character_certificate: "Character certificate — name, CNIC",
-  emergency_form: "Emergency contact form — name, CNIC",
-  leave_record: "Leave record — name, CNIC",
-  attendance_record: "Attendance record — name, CNIC",
-  performance_review: "Performance review — name, CNIC",
-  training_record: "Training record — name, CNIC",
-  disciplinary: "Disciplinary record — name, CNIC",
-  exit_form: "Exit interview form — name, CNIC",
-  clearance_form: "Clearance form — name, CNIC",
-  settlement: "Final settlement — name, CNIC",
-  photo: "Photograph — never auto-matched (no identity content)",
-  employee_id: "Employee ID card — never auto-matched",
-  policy_ack: "Policy acknowledgment — never auto-matched",
-  legal_agreement: "Agreement / NDA — never auto-matched",
-  onboarding: "Onboarding checklist — never auto-matched",
-  asset_handover: "Asset handover form — never auto-matched",
-  job_description: "Job description — never auto-matched",
-  closing_checklist: "Closing checklist — never auto-matched",
-};
-
-/** Schemas the OCR service refuses to auto-approve on, from GET /schemas. */
-const INELIGIBLE_SCHEMAS = new Set([
-  "photo",
-  "employee_id",
-  "policy_ack",
-  "legal_agreement",
-  "onboarding",
-  "asset_handover",
-  "job_description",
-  "closing_checklist",
-]);
-
-function schemaLabel(key: string) {
-  return SCHEMA_LABELS[key] ?? key;
-}
 
 export function DocumentTypesPanel() {
   const qc = useQueryClient();
@@ -187,8 +128,28 @@ export function DocumentTypesPanel() {
 
   const items = list.data ?? [];
   const activeCount = items.filter((t) => t.is_active).length;
-  const ineligibleCount = items.filter((t) => INELIGIBLE_SCHEMAS.has(t.schema_key)).length;
   const syncOk = sync.data?.reachable === true;
+
+  // The valid schema keys are read from the document service, never hardcoded
+  // here. This list used to be a 40-entry literal in this file (plus a second
+  // copy in the Node controller and a third in the Python registry), which is
+  // three places to update for one new schema and a guarantee that one of them
+  // goes stale. The service already reports what it can extract over
+  // GET /schemas; asking it is both shorter and impossible to desynchronize.
+  const schemaKeys = sync.data?.schema_keys ?? [];
+  const schemaDetail = sync.data?.schemas?.[schemaKey.trim()];
+  // Which schemas the service refuses to auto-approve on, also from the service
+  // rather than a local copy of the list.
+  const autoMatchIneligible = new Set(sync.data?.auto_match_ineligible ?? []);
+  const ineligibleCount = items.filter((t) => autoMatchIneligible.has(t.schema_key)).length;
+
+  // A typed key is only rejected once the service has confirmed what it
+  // supports. While unreachable the input is left alone: blocking every save
+  // because the OCR service is down would make the catalogue un-editable.
+  const trimmedSchemaKey = schemaKey.trim();
+  const schemaKeyUnknown =
+    syncOk && trimmedSchemaKey !== "" && !schemaKeys.includes(trimmedSchemaKey);
+  const schemaKeyInvalid = !trimmedSchemaKey || schemaKeyUnknown;
 
   return (
     <div className="space-y-4">
@@ -216,8 +177,9 @@ export function DocumentTypesPanel() {
                 <DialogHeader>
                   <DialogTitle>Add document type</DialogTitle>
                   <DialogDescription>
-                    Pick the schema that matches the document. It decides which fields get read out
-                    of it when the document is compared against an employee's reference copy.
+                    The schema key decides which fields get read out of the document when it is
+                    compared against an employee's reference copy. Type the key the OCR service
+                    uses — the valid ones are listed below.
                   </DialogDescription>
                 </DialogHeader>
 
@@ -234,26 +196,48 @@ export function DocumentTypesPanel() {
                   </div>
 
                   <div className="space-y-1.5">
-                    <Label htmlFor="dt-schema">Schema</Label>
-                    <Select value={schemaKey} onValueChange={setSchemaKey}>
-                      <SelectTrigger id="dt-schema">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="max-h-72">
-                        {Object.keys(SCHEMA_LABELS).map((key) => (
-                          <SelectItem key={key} value={key}>
-                            {schemaLabel(key)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
-                      Unsure? <span className="font-medium">Generic</span> is always safe — it reads
-                      the name and CNIC and nothing else. You can change this later.
-                    </p>
+                    <Label htmlFor="dt-schema">Schema key</Label>
+                    <Input
+                      id="dt-schema"
+                      value={schemaKey}
+                      onChange={(e) => setSchemaKey(e.target.value)}
+                      placeholder="e.g. resume"
+                      list="dt-schema-keys"
+                      spellCheck={false}
+                      autoComplete="off"
+                      className="font-mono"
+                      aria-invalid={schemaKeyUnknown}
+                    />
+                    {/* Completions come from the document service, so this is
+                        never out of date with what it will actually accept. */}
+                    <datalist id="dt-schema-keys">
+                      {schemaKeys.map((key) => (
+                        <option key={key} value={key} />
+                      ))}
+                    </datalist>
+
+                    {schemaKeyUnknown ? (
+                      <p className="text-xs text-destructive">
+                        The document service does not know{" "}
+                        <span className="font-mono font-medium">{trimmedSchemaKey}</span>. Valid keys:{" "}
+                        {schemaKeys.join(", ") || "—"}
+                      </p>
+                    ) : schemaDetail ? (
+                      <p className="text-xs text-muted-foreground">
+                        Reads: {schemaDetail.fields.join(", ")}
+                        {schemaDetail.required.length > 0
+                          ? ` (required: ${schemaDetail.required.join(", ")})`
+                          : ""}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        Unsure? <span className="font-medium">generic</span> is always safe — it reads
+                        the name and CNIC and nothing else. You can change this later.
+                      </p>
+                    )}
                   </div>
 
-                  {INELIGIBLE_SCHEMAS.has(schemaKey) && (
+                  {autoMatchIneligible.has(trimmedSchemaKey) && (
                     <div className="flex gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-400">
                       <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                       <span>
@@ -274,13 +258,13 @@ export function DocumentTypesPanel() {
                   </div>
                 </div>
 
-                <DialogFooter>
+                <DialogFooter className="mt-2">
                   <Button variant="outline" onClick={() => setAddOpen(false)}>
                     Cancel
                   </Button>
                   <Button
                     onClick={() => create.mutate()}
-                    disabled={create.isPending || !name.trim()}
+                    disabled={create.isPending || !name.trim() || schemaKeyInvalid}
                     loading={create.isPending}
                   >
                     Add
@@ -379,7 +363,7 @@ export function DocumentTypesPanel() {
                         <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
                           {t.schema_key}
                         </code>
-                        {INELIGIBLE_SCHEMAS.has(t.schema_key) && (
+                        {autoMatchIneligible.has(t.schema_key) && (
                           <Badge variant="secondary" className="text-[10px]">
                             never auto-matched
                           </Badge>

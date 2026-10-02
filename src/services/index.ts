@@ -23,13 +23,24 @@ export type DocumentType = {
   updated_at?: string;
 };
 
-/** What the OCR service reports about itself, for the "is it in step?" indicator. */
+/**
+ * What the OCR service reports about itself, for the "is it in step?" indicator
+ * and for the schema key input.
+ *
+ * `schema_keys` is the flat list of keys the service will actually accept. It is
+ * read from the service at runtime rather than kept in this file: the registry
+ * lives in the document service, and a copy here would have to be updated by
+ * hand in a second repository and would silently offer keys that no longer
+ * exist. The `schemas` map is the detail behind each key.
+ */
 export type DocumentTypeSyncStatus = {
   reachable: boolean;
   error?: string;
   kind?: string;
   catalogue_count?: number;
   auto_match_ineligible?: string[];
+  /** Flat, sorted list of valid `schema_key` values. Empty when unreachable. */
+  schema_keys?: string[];
   schemas?: Record<string, { fields: string[]; required: string[]; auto_match_eligible: boolean }>;
   generic?: { fields: string[]; required: string[]; auto_match_eligible: boolean };
 };
