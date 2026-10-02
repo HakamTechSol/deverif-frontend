@@ -2,7 +2,7 @@ import { createFileRoute, Link, useParams, useSearch } from "@tanstack/react-rou
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect, type ReactNode } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, Calculator, Download, Eye, FileUp, Lock, Mail, Phone, Pencil, Plus, Save, Trash2, Upload, UserRound, X, BriefcaseBusiness, Building2, CalendarDays, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Calculator, Download, Eye, FileUp, Lock, Mail, Phone, Pencil, Plus, Save, Trash2, Upload, UserRound, X, BriefcaseBusiness, Building2, CalendarDays } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { EmployeeDocPicker, type StagedDoc } from "@/components/employees/EmployeeDocPicker";
 
@@ -43,7 +43,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { orgService, orgEmployeeSalaryService, salaryComponentService, type EmployeeDocument, type EmployeeRecord, type EmployeeSalaryComponent, type SalaryComponent, type SalaryHistoryEntry, type UUID } from "@/services";
+import { isCurrentEmployee, orgService, orgEmployeeSalaryService, salaryComponentService, type EmployeeDocument, type EmployeeRecord, type EmployeeSalaryComponent, type SalaryComponent, type SalaryHistoryEntry, type UUID } from "@/services";
 import { digitsOnly, formatCNIC, formatDate, formatDateTime, formatFileSize, resolveAssetUrl } from "@/lib/utils";
 import { DverifLoader } from "@/components/common/DvarifLoader";
 
@@ -56,23 +56,37 @@ export const Route = createFileRoute("/_app/org/team/$uuid")({
   component: EmployeeDetailPage,
 });
 
+/** Every status an employee can hold, including 'inactive' — which is settable
+ *  here because this page only ever edits an EXISTING employee. Kept in step with
+ *  EmployeeManager's option lists; 'resigned'/'terminated' are gone, folded into
+ *  'ex_employee' when record_type was merged into status. */
 const STATUS_OPTIONS: { value: EmployeeRecord["status"]; label: string }[] = [
+  { value: "current_employee", label: "Current Employee" },
   { value: "active", label: "Active" },
-  { value: "inactive", label: "Inactive (invite pending)" },
-  { value: "resigned", label: "Resigned" },
-  { value: "terminated", label: "Terminated" },
+  { value: "ex_employee", label: "Ex-Employee" },
+  { value: "inactive", label: "Inactive (deactivated)" },
 ];
+
+const STATUS_LABELS: Record<string, string> = {
+  current_employee: "Current Employee",
+  ex_employee: "Ex-Employee",
+  active: "Active",
+  inactive: "Inactive",
+};
+
+function statusLabel(status: EmployeeRecord["status"]) {
+  return STATUS_LABELS[status] ?? status;
+}
 
 function statusBadgeClass(status: EmployeeRecord["status"]) {
   switch (status) {
+    case "current_employee":
     case "active":
       return "rounded-full border-success/30 bg-success/10 text-success";
     case "inactive":
       return "rounded-full border-amber-500/30 bg-amber-500/10 text-amber-600";
-    case "resigned":
+    case "ex_employee":
       return "rounded-full border-blue-500/30 bg-blue-500/10 text-blue-600";
-    case "terminated":
-      return "rounded-full border-destructive/30 bg-destructive/10 text-destructive";
     default:
       return "rounded-full border-border text-muted-foreground";
   }
@@ -266,7 +280,10 @@ function EmployeeDetailPage() {
         />
       )}
 
-      {emp && emp.record_type !== "learned_reference" && (
+      {/* Payroll cards are hidden for ex-employees: they have no current salary to
+          manage. 'inactive' (deactivated) still gets them — they remain on the
+          roster. This is why isCurrentEmployee, not a bare status check. */}
+      {emp && isCurrentEmployee(emp.status) && (
         isModuleFlagOff("payroll_management") ? (
           <ModuleFeatureLockedCard feature="payroll_management" />
         ) : (
@@ -304,28 +321,23 @@ function DetailRow({
 }
 
 function StatusBadge({ status }: { status: EmployeeRecord["status"] }) {
-  const label =
-    status === "inactive"
-      ? "Inactive"
-      : status.charAt(0).toUpperCase() + status.slice(1);
   return (
     <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium text-foreground">
       <span className={`h-1.5 w-1.5 rounded-full ${statusDotClass(status)}`} />
-      {label}
+      {statusLabel(status)}
     </span>
   );
 }
 
 function statusDotClass(status: EmployeeRecord["status"]) {
   switch (status) {
+    case "current_employee":
     case "active":
       return "bg-success";
     case "inactive":
       return "bg-amber-500";
-    case "resigned":
+    case "ex_employee":
       return "bg-blue-500";
-    case "terminated":
-      return "bg-destructive";
     default:
       return "bg-muted-foreground";
   }
@@ -342,10 +354,7 @@ function DisplayContent(props: { emp: EmployeeRecord; editing: boolean; form: an
     .map((n) => n.charAt(0).toUpperCase())
     .join("") ?? "?";
 
-  const lifecycleLabel =
-    emp.status === "inactive"
-      ? "Inactive"
-      : emp.status.charAt(0).toUpperCase() + emp.status.slice(1);
+  const lifecycleLabel = statusLabel(emp.status);
 
   return (
     <div className="space-y-6">
@@ -383,12 +392,9 @@ function DisplayContent(props: { emp: EmployeeRecord; editing: boolean; form: an
               )}
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
+              {/* The status badge already reads "Ex-Employee" for that value, so the old
+                  second Ex-Employee badge beside it was pure duplication. */}
               <StatusBadge status={emp.status} />
-              {emp.record_type === "learned_reference" && (
-                <Badge variant="outline" className="rounded-full border-blue-500/30 bg-blue-500/10 text-blue-600">
-                  Ex-Employee
-                </Badge>
-              )}
               <Badge variant="outline" className="rounded-full border-border text-muted-foreground">
                 {emp.is_platform_user === "yes" ? "Platform User" : "Local Contact"}
               </Badge>
@@ -560,47 +566,6 @@ function DisplayContent(props: { emp: EmployeeRecord; editing: boolean; form: an
               <DetailRow label="Added By" value={emp.added_by_name ?? "—"} />
             </div>
           </section>
-
-          {/* Platform access — only meaningful once this employee actually has a
-              platform account. Before that every row would read "No" / "—",
-              which is just noise on the detail page. "Added By" lives in the
-              Personal Information section above so that audit detail is never
-              lost for non-platform employees. */}
-          {emp.is_platform_user === "yes" ? (
-            <>
-              <Separator />
-
-              <section className="p-6">
-                <div className="flex items-center gap-2.5">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                    <ShieldCheck className="h-4 w-4" />
-                  </div>
-                  <CardTitle className="text-sm font-semibold">Platform Access</CardTitle>
-                </div>
-                <Separator className="my-3" />
-                <div className="divide-y divide-border/70">
-                  <DetailRow label="Platform User" value="Yes" />
-                  <DetailRow
-                    label="Account Status"
-                    value={
-                      emp.linked_user_status
-                        ? emp.linked_user_status === "inactive"
-                          ? "Invite pending"
-                          : "Active"
-                        : "—"
-                    }
-                  />
-                  <DetailRow
-                    label="Role"
-                    value={
-                      emp.linked_user_role === "org_admin" ? "Org Admin" : "Member"
-                    }
-                  />
-                  <DetailRow label="Linked Email" value={emp.linked_user_email ?? "—"} />
-                </div>
-              </section>
-            </>
-          ) : null}
         </CardContent>
       </Card>
     </div>

@@ -102,6 +102,37 @@ export type MatchStatus =
   | "no_reference_found"
   | string;
 
+/**
+ * Lifecycle of a verification request.
+ *
+ * `auto_verified` is deliberately its own value rather than a flag folded into
+ * `verified`: the requester needs to know that nobody reviewed their document,
+ * and that is a statement about the outcome, not about the request. The backend
+ * counterpart is `verification_requests.status`.
+ */
+export type RequestStatus =
+  | "under_review"
+  | "verified"
+  | "auto_verified"
+  | "unverified"
+  | string;
+
+/** The statuses that mean "successfully verified". Mirrors the backend constant. */
+export const VERIFIED_REQUEST_STATUSES: RequestStatus[] = ["verified", "auto_verified"];
+
+/**
+ * Whether a request reached a successful verification.
+ *
+ * Use this instead of `status === "verified"`. An auto-verified request has a
+ * certificate, a QR that resolves publicly and a document the viewer will open,
+ * so any check that treats only `verified` as success silently hides all of
+ * that — which is how an auto-approved request ends up looking unverifiable on
+ * the very page that reports the approval.
+ */
+export function isVerifiedRequestStatus(status?: string | null): boolean {
+  return !!status && VERIFIED_REQUEST_STATUSES.includes(status);
+}
+
 export type VerificationRequest = {
   uuid: UUID;
   document_type: string;
@@ -115,7 +146,13 @@ export type VerificationRequest = {
   has_prior_verification?: boolean;
   prior_verified_at?: string | null;
   verification_remarks?: string | null;
-  status: "under_review" | "verified" | "unverified";
+  /**
+   * `auto_verified` is a terminal success like `verified` — it has a certificate
+   * and a working QR — but the system approved it and no human ever saw the
+   * document. Anything asking "did this verify?" must accept both; see
+   * `isVerifiedRequestStatus` below.
+   */
+  status: RequestStatus;
   document_path?: string;
   document_format?: string;
   submitted_at: string;
@@ -225,7 +262,7 @@ export type UnmatchedOrgDetail = {
     document_type: string;
     document_format?: string;
     document_path?: string;
-status: "under_review" | "verified" | "unverified";
+    status: RequestStatus;
     submitted_at: string;
     verified_at?: string | null;
     submission_remarks?: string | null;
@@ -242,6 +279,32 @@ status: "under_review" | "verified" | "unverified";
 
 export type AdminUserRecord = UserRecord;
 
+/**
+ * Employee lifecycle state.
+ *
+ * `record_type` used to be a second column saying roster-vs-ex-employee; it was
+ * merged into this one, so `status` now answers both questions at once:
+ *
+ *   current_employee — on staff, normal case
+ *   ex_employee      — left, kept only as a verification reference
+ *   active           — deactivated: still on the roster, but refused login by
+ *                      the API's auth guards. Only settable when EDITING; there
+ *                      is nothing to deactivate at creation time.
+ */
+export type EmployeeStatus =
+  | "current_employee"
+  | "ex_employee"
+  | "active"
+  | "inactive";
+
+/** The statuses that mean "on the current roster", for client-side filtering. */
+export const CURRENT_EMPLOYEE_STATUSES: EmployeeStatus[] = ["current_employee", "active"];
+
+/** Whether this employee is still on the current roster (not an ex-employee). */
+export function isCurrentEmployee(status?: string | null): boolean {
+  return !!status && CURRENT_EMPLOYEE_STATUSES.includes(status as EmployeeStatus);
+}
+
 export type EmployeeRecord = {
   uuid: UUID;
   organization_id: number;
@@ -253,8 +316,7 @@ export type EmployeeRecord = {
   cnic: string;
   designation: string | null;
   department: string | null;
-  status: "active" | "inactive" | "resigned" | "terminated";
-  record_type?: "roster" | "learned_reference";
+  status: EmployeeStatus;
   is_platform_user: "yes" | "no";
   joining_date?: string | null;
   emergency_contact?: string | null;

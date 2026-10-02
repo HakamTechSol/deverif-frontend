@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { BadgeCheck, Check, Copy, Download, QrCode } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { requestsService, type VerificationRequest } from "@/services";
+import { requestsService, isVerifiedRequestStatus, type VerificationRequest } from "@/services";
 
 /**
  * The on-screen verification certificate.
@@ -23,7 +23,11 @@ export function VerificationCertificate({ request }: { request: VerificationRequ
   const [copied, setCopied] = useState(false);
 
   const verifyUrl = request.verify_url;
-  const isVerified = request.status === "verified";
+  // Both terminal-success statuses. An auto-verified request carries a token and
+// a signature exactly like a manually verified one, so gating on 'verified'
+// alone would hide the QR code and the certificate download from the very
+// requester whose result it exists to prove.
+const isVerified = isVerifiedRequestStatus(request.status);
 
   useEffect(() => {
     let cancelled = false;

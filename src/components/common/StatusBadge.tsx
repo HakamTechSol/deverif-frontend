@@ -6,6 +6,12 @@ type Status = "pending" | "verified" | "unverified" | "under_review" | "rejected
 
 const styles: Record<string, string> = {
   verified: "bg-success/12 text-success border-success/25 dark:bg-success/15",
+  // Green, like `verified` — it IS a success, and the document is just as
+  // authentic. Distinguished by the primary ring so it reads as "the system did
+  // this" rather than "a person approved this", which is the entire point of
+  // giving auto-approval its own status.
+  auto_verified:
+    "bg-success/12 text-success border-success/50 ring-1 ring-success/30 dark:bg-success/15",
   unverified: "bg-destructive/12 text-destructive border-destructive/25 dark:bg-destructive/15",
   rejected: "bg-destructive/12 text-destructive border-destructive/25 dark:bg-destructive/15",
   approved: "bg-success/12 text-success border-success/25 dark:bg-success/15",

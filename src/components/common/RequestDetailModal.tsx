@@ -13,7 +13,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { formatDateTime, resolveAssetUrl } from "@/lib/utils";
-import type { VerificationRequest } from "@/services";
+import { isVerifiedRequestStatus, type VerificationRequest } from "@/services";
 
 function OrgLogo({ logo, name }: { logo?: string | null; name?: string | null }) {
   const src = logo ? (resolveAssetUrl(logo) ?? logo) : null;
@@ -38,7 +38,16 @@ export function RequestDetailModal({
 
   const isFinalized = request.status !== "under_review";
   const org = request.issuing_org_name ?? request.unmatched_org_name;
-  const isAutoVerified = request.match_status === "auto_matched" || request.verification_method === "automatic_match";
+
+  // The status now carries this on its own. The method/match_status checks are
+  // kept only as a fallback for a row written before the status existed and not
+  // yet touched by the backfill — without them such a row would render as a
+  // plain human review of a request the system actually approved.
+  const isAutoVerified =
+    request.status === "auto_verified" ||
+    request.match_status === "auto_matched" ||
+    request.verification_method === "automatic_match" ||
+    request.verification_method === "auto";
 
   const requesterLabel = request.requester_name ?? "—";
   const requesterOrg = request.requester_organization;
@@ -55,17 +64,23 @@ export function RequestDetailModal({
           {/* Status banner */}
           {isFinalized && (
             <div className={`flex items-center gap-2 rounded-lg border px-3.5 py-2.5 text-sm font-medium ${
-              request.status === "verified"
+              isVerifiedRequestStatus(request.status)
                 ? "border-success/30 bg-success/10 text-success"
                 : "border-destructive/30 bg-destructive/10 text-destructive"
             }`}
             >
-              {request.status === "verified" ? (
+              {isVerifiedRequestStatus(request.status) ? (
                 <CheckCircle2 className="h-4 w-4 shrink-0" />
               ) : (
                 <XCircle className="h-4 w-4 shrink-0" />
               )}
-              <span>{request.status === "verified" ? "Verified" : "Unverified"}</span>
+              <span>
+                {isAutoVerified
+                  ? "Auto Verified — approved by the system, no reviewer was involved"
+                  : isVerifiedRequestStatus(request.status)
+                    ? "Verified"
+                    : "Unverified"}
+              </span>
               {request.verified_at && (
                 <span className="ml-auto text-xs font-normal opacity-70">
                   {formatDateTime(request.verified_at)}
@@ -74,8 +89,10 @@ export function RequestDetailModal({
             </div>
           )}
 
-          {/* Flow: Requester → Organization */}
-          {!isAutoVerified && (
+          {/* Flow: Requester → Organization. Shown for auto-verified requests too:
+              where a document went and who asked is exactly what the submitter
+              needs when the approval came from the engine rather than a person. */}
+          {(
             <div className="rounded-lg border border-border bg-muted/30 p-4">
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Request flow
@@ -126,9 +143,13 @@ export function RequestDetailModal({
                   {request.document_type}
                 </p>
               </div>
-              <div className="flex flex-row flex-wrap items-center gap-1.5 sm:flex-col sm:items-end">
-                <StatusBadge status={request.status} />
-                {!isAutoVerified && (
+<div className="flex flex-row flex-wrap items-center gap-1.5 sm:flex-col sm:items-end">
+                  <StatusBadge status={request.status} />
+                  {/* The match badge and the reference document are the evidence
+                      for WHY an auto-approval happened, so they are now shown to
+                      the submitter rather than suppressed. Hiding them left an
+                      auto-approved request displaying as an unexplained green
+                      banner. */}
                   <MatchStatusBadge
                     status={request.match_status}
                     confidence={request.match_confidence}
@@ -136,14 +157,13 @@ export function RequestDetailModal({
                     // finding about this document, and it is the state of almost
                     // every request until someone uploads a reference. Showing it
                     // reads as a failed check on the document and adds nothing the
-                    // reviewer can act on, so it is suppressed here.
+                    // requester can act on, so it is suppressed here.
                     hideNoReference
                   />
-                )}
-              </div>
+                </div>
             </div>
 
-            {!isAutoVerified && (request.match_status === "auto_matched" || request.matched_document_path) && (
+            {(request.match_status === "auto_matched" || request.matched_document_path) && (
               <div className="mt-3 flex items-center gap-2 rounded-lg border border-border bg-background px-3.5 py-2.5 text-sm">
                 <FileSearch className="h-4 w-4 shrink-0 text-primary" />
                 <span className="text-muted-foreground">Reference</span>

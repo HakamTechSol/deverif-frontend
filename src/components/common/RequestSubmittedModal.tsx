@@ -12,7 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { formatDateTime } from "@/lib/utils";
-import type { VerificationRequest } from "@/services";
+import { isVerifiedRequestStatus, type VerificationRequest } from "@/services";
 
 /** Animated paper-plane confirmation icon. */
 function SuccessMark({ verified }: { verified: boolean }) {
@@ -67,9 +67,19 @@ export function RequestSubmittedModal({
 
   if (!request) return null;
 
-  // A certificate token is minted only by the instant exact-document match.
-  // Verified status alone can be the result of the normal review flow.
-  const isInstantlyVerified = request.status === "verified" && Boolean(request.qr_token);
+// Both automatic paths mint a QR token, so both are "closed on submission"
+  // rather than "sent for review". The two need DIFFERENT explanations: 'auto'
+  // means this exact file was verified here before, while 'automatic_match'
+  // means it was matched against a verified reference. The old single string
+  // claimed the former for both, which was simply untrue on the match path.
+  const isAutoVerified = isVerifiedRequestStatus(request.status) && Boolean(request.qr_token);
+  const isRepeatOfVerifiedFile = request.verification_method === "auto";
+  const autoVerifiedDescription =
+    request.verification_method === "automatic_match"
+      ? t("requests.submitted.autoVerifiedByMatchDesc")
+      : isRepeatOfVerifiedFile
+        ? t("requests.submitted.instantlyVerifiedDesc")
+        : t("requests.submitted.autoVerifiedUnknownDesc");
   const targetOrg =
     request.issuing_org_name ?? request.unmatched_org_name ?? t("requests.submitted.unknownOrg");
 
@@ -83,17 +93,17 @@ export function RequestSubmittedModal({
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="w-[calc(100vw-1.5rem)] max-w-lg overflow-x-hidden sm:w-full">
         <DialogHeader>
-          <div className="flex justify-center pt-2 pb-1">
-            <SuccessMark verified={isInstantlyVerified} />
+<div className="flex justify-center pt-2 pb-1">
+            <SuccessMark verified={isAutoVerified} />
           </div>
           <DialogTitle className="text-center text-xl">
-            {isInstantlyVerified
-              ? t("requests.submitted.instantlyVerified")
+            {isAutoVerified
+              ? t("requests.submitted.autoVerified")
               : t("requests.submitted.title")}
           </DialogTitle>
           <DialogDescription className="text-center">
-            {isInstantlyVerified
-              ? t("requests.submitted.instantlyVerifiedDesc")
+            {isAutoVerified
+              ? autoVerifiedDescription
               : t("requests.submitted.sentTo", { org: targetOrg })}
           </DialogDescription>
         </DialogHeader>

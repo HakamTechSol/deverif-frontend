@@ -62,6 +62,7 @@ import {
 import {
   requestsService,
   orgSubscriptionService,
+  isVerifiedRequestStatus,
   type VerificationRequest,
   type UUID,
 } from "@/services";
@@ -313,7 +314,7 @@ function RequestsPage() {
                           {/*
                             TODO: re-enable delete for org admins when allowed.
                             Currently org admins cannot delete requests.
-                          {r.status !== "verified" && !r.locked_by && (
+                          {!isVerifiedRequestStatus(r.status) && !r.locked_by && (
                             <Button
                               size="icon"
                               variant="ghost"

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Archive, Contact, Download, Eye, FileUp, Lock, Mail, Plus, RefreshCw, Send, Trash2, Users } from "lucide-react";
 
@@ -41,7 +42,7 @@ import {
 } from "@/components/ui/table";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { TableSkeleton } from "@/routes/_app.requests";
-import { adminService, orgService, type EmployeeDocument, type EmployeeRecord, type ManagedOption, type Organization, type UUID } from "@/services";
+import { adminService, isCurrentEmployee, orgService, type EmployeeDocument, type EmployeeRecord, type ManagedOption, type Organization, type UUID } from "@/services";
 import { digitsOnly, formatCNIC, formatDate, formatFileSize } from "@/lib/utils";
 
 type EmployeeApi = {
@@ -61,30 +62,62 @@ function apiErrorMessage(e: unknown, fallback: string) {
   return err?.response?.data?.message ?? fallback;
 }
 
-const STATUS_OPTIONS: { value: EmployeeRecord["status"]; label: string }[] = [
+/**
+ * Status options offered when CREATING an employee.
+ *
+ * 'inactive' (deactivated) is deliberately absent. It is not a lifecycle stage
+ * a new record can be in — it is the kill-switch the API's auth guards read to
+ * refuse an account — so there is nothing to deactivate at creation time. It
+ * appears only when editing, in EDIT_STATUS_OPTIONS below.
+ *
+ * 'active' is kept as an offered value because it is a real, distinct server
+ * state (a deactivated account being carried forward); 'current_employee' is the
+ * default a new record lands on.
+ */
+const CREATE_STATUS_OPTIONS: { value: EmployeeRecord["status"]; label: string }[] = [
+  { value: "current_employee", label: "Current Employee" },
   { value: "active", label: "Active" },
-  { value: "inactive", label: "Inactive (invite pending)" },
-  { value: "resigned", label: "Resigned" },
-  { value: "terminated", label: "Terminated" },
+  { value: "ex_employee", label: "Ex-Employee" },
+];
+
+/**
+ * Status options offered when EDITING — CREATE_STATUS_OPTIONS plus 'inactive'.
+ *
+ * This is the only place deactivation can be set, which is the point: an admin
+ * switches a colleague off from their existing record rather than at creation.
+ */
+const EDIT_STATUS_OPTIONS: { value: EmployeeRecord["status"]; label: string }[] = [
+  ...CREATE_STATUS_OPTIONS,
+  { value: "inactive", label: "Inactive (deactivated)" },
 ];
 
 function statusBadgeClass(status: EmployeeRecord["status"]) {
   switch (status) {
+    case "current_employee":
+      return "rounded-full border-success/30 bg-success/10 text-success";
     case "active":
       return "rounded-full border-success/30 bg-success/10 text-success";
     case "inactive":
       return "rounded-full border-amber-500/30 bg-amber-500/10 text-amber-600";
-    case "resigned":
+    case "ex_employee":
       return "rounded-full border-blue-500/30 bg-blue-500/10 text-blue-600";
-    case "terminated":
-      return "rounded-full border-destructive/30 bg-destructive/10 text-destructive";
     default:
       return "rounded-full border-border text-muted-foreground";
   }
 }
 
+/** Display labels. Kept separate from the option lists because the badge must
+ *  also render values the form can no longer set (an employee deactivated before
+ *  this change, say) without falling back to a raw enum value. */
+const STATUS_LABELS: Record<string, string> = {
+  current_employee: "Current Employee",
+  ex_employee: "Ex-Employee",
+  active: "Active",
+  inactive: "Inactive",
+};
+
 function statusLabel(status: EmployeeRecord["status"]) {
-  return status === "inactive" ? "Inactive" : status.charAt(0).toUpperCase() + status.slice(1);
+  return STATUS_LABELS[status] ?? status;
 }
 
 type InviteStatus =
@@ -132,6 +165,7 @@ export function EmployeeManager({
   userManagementLocked?: boolean;
 }) {
   const { user } = useAuth();
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [listMode, setListMode] = useState<"roster" | "reference">("roster");
@@ -140,7 +174,6 @@ export function EmployeeManager({
   const [openForm, setOpenForm] = useState(false);
   const [editing, setEditing] = useState<EmployeeRecord | null>(null);
   const [toDelete, setToDelete] = useState<UUID | null>(null);
-  const [toArchive, setToArchive] = useState<EmployeeRecord | null>(null);
 
   const isReferenceMode = listMode === "reference";
 
@@ -167,19 +200,6 @@ export function EmployeeManager({
       invalidate();
     },
     onError: (e) => toast.error(apiErrorMessage(e, "Resend failed")),
-  });
-
-  const archiveMut = useMutation({
-    mutationFn: (uuid: UUID) => api.archiveReference?.(uuid) ?? Promise.reject(new Error("Not supported")),
-    onSuccess: () => {
-      toast.success("Employee moved to ex-employee records");
-      setToArchive(null);
-      invalidate();
-    },
-    onError: (e) => {
-      toast.error(apiErrorMessage(e, "Archive failed"));
-      setToArchive(null);
-    },
   });
 
   const items = list.data?.items ?? [];
@@ -219,11 +239,11 @@ export function EmployeeManager({
         >
           <ToggleGroupItem value="roster" className="text-sm">
             <Users className="mr-1.5 h-4 w-4" />
-            Roster
+            {t("team.roster")}
           </ToggleGroupItem>
           <ToggleGroupItem value="reference" className="text-sm">
             <Archive className="mr-1.5 h-4 w-4" />
-            Ex-Employees
+            {t("team.exEmployees")}
           </ToggleGroupItem>
         </ToggleGroup>
       </div>
@@ -280,8 +300,12 @@ export function EmployeeManager({
                 </TableHeader>
                 <TableBody>
                   {items.map((emp, i) => {
-                    const isRef = emp.record_type === "learned_reference";
-                    const isActive = emp.status === "active";
+                    // record_type is gone; status carries roster membership now.
+                    // 'inactive' (deactivated) is still a CURRENT employee — it is
+                    // on the roster and cannot log in — so isCurrentEmployee, not a
+                    // bare status check, is what decides membership.
+                    const isRef = !isCurrentEmployee(emp.status);
+                    const isCurrent = isCurrentEmployee(emp.status);
                     return (
                     <TableRow key={emp.uuid}>
                       <TableCell data-label="S.No" className="w-10 text-muted-foreground">
@@ -394,18 +418,11 @@ export function EmployeeManager({
                             }
                             return null;
                           })()}
-                          {!isRef && isActive && api.archiveReference && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-7 whitespace-nowrap px-2 text-xs text-blue-600 hover:bg-blue-50 hover:text-blue-700"
-                              onClick={() => setToArchive(emp)}
-                              disabled={locked}
-                            >
-                              <Archive className="mr-1 h-3 w-3" />
-                              Archive
-                            </Button>
-                          )}
+                          {/* The Archive button was removed: turning someone into an
+                              ex-employee is now just setting their status to
+                              "Ex-Employee" in the edit form, which is where every
+                              other status change happens. A second control for the
+                              same field is how the two drifted apart before. */}
                           <Button
                             type="button"
                             size="icon"
@@ -462,18 +479,7 @@ export function EmployeeManager({
         }}
       />
 
-      <ConfirmDialog
-        open={!!toArchive}
-        onOpenChange={(o) => !o && setToArchive(null)}
-        title="Archive as Reference?"
-        description={`Move "${toArchive?.full_name ?? ""}" to ex-employee records? They will no longer appear in the active roster, but their documents and history will be preserved for future reference lookups.`}
-        confirmLabel="Archive"
-        destructive={false}
-        onConfirm={() => {
-          if (toArchive) archiveMut.mutate(toArchive.uuid);
-        }}
-      />
-    </div>
+      </div>
   );
 }
 
@@ -505,7 +511,10 @@ function EmployeeFormDialog({
     phone: editing?.phone ?? "",
     designation: editing?.designation ?? "",
     department: editing?.department ?? "",
-    status: (editing?.status ?? "active") as EmployeeRecord["status"],
+    // Defaults to 'current_employee', matching the column default and the create
+    // payload's own fallback. Defaulting to 'active' would create an employee
+    // that reads as deactivated.
+    status: (editing?.status ?? "current_employee") as EmployeeRecord["status"],
     joining_date: editing?.joining_date ?? "",
     emergency_contact: editing?.emergency_contact ?? "",
     current_salary: editing ? String(editing?.current_salary ?? "0") : "",
@@ -804,13 +813,15 @@ function EmployeeFormDialog({
               </div>
             )}
             <div className="space-y-1.5">
-              <Label>Status (Lifecycle)</Label>
+              <Label>Status</Label>
               <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v as EmployeeRecord["status"] })}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {STATUS_OPTIONS.map((s) => (
+                  {/* Editing offers the extra "Inactive" state; creating does not.
+                      A brand-new employee has no access to deactivate yet. */}
+                  {(isEdit ? EDIT_STATUS_OPTIONS : CREATE_STATUS_OPTIONS).map((s) => (
                     <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
                   ))}
                 </SelectContent>
