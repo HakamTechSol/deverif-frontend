@@ -1,6 +1,6 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
-import { useFormContext } from "react-hook-form";
+﻿import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { useForm, type UseFormReturn } from "react-hook-form";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { FileText, Plus, Pencil, Trash2 } from "lucide-react";
@@ -64,7 +64,7 @@ function LetterTemplatesPage() {
       header: t("letters.mergeTags"),
       render: (r) => {
         const tags = r.merge_fields ?? [];
-        if (!tags.length) return <span className="text-xs text-muted-foreground">—</span>;
+        if (!tags.length) return <span className="text-xs text-muted-foreground">â€”</span>;
         return (
           <div className="flex flex-wrap gap-1">
             {tags.slice(0, 4).map((tag) => (
@@ -179,6 +179,29 @@ function LetterTemplatesPage() {
   );
 }
 
+type TemplateFormValues = {
+  name: string;
+  letterType: string;
+  body: string;
+};
+
+function defaultsFor(template: LetterTemplate | null): TemplateFormValues {
+  return {
+    name: template?.name ?? "",
+    letterType: template?.letter_type ?? "increment",
+    body: template?.body ?? "Dear $employee_name,\n\n\n\nReference: $reference_no",
+  };
+}
+
+/**
+ * Owns the form and hands the SAME instance to FormDialog and to the fields.
+ *
+ * Deliberately NOT useFormContext(). The context provider lives inside
+ * FormDialog's children, so anything that calls useFormContext() while rendering
+ * ABOVE FormDialog — which is where this component sits — gets null and crashes
+ * with "Cannot destructure property 'register' of 'useFormContext(...)'". Passing
+ * the instance explicitly is scope-independent and cannot break that way again.
+ */
 function TemplateDialog({
   open,
   template,
@@ -191,14 +214,17 @@ function TemplateDialog({
   onDone: () => void;
 }) {
   const { t } = useTranslation();
-  // The dialog's own form instance, reached through the FormProvider that
-  // FormDialog renders. Every field below MUST be registered or handleSubmit
-  // sends nothing.
-  const { register } = useFormContext<{
-    name: string;
-    letterType: string;
-    body: string;
-  }>();
+  const form = useForm<TemplateFormValues>({ defaultValues: defaultsFor(template) });
+
+  // This component stays mounted across edits, and useForm only reads
+  // defaultValues once. Without the reset, opening template A then template B
+  // would keep showing A's text in B's dialog.
+  useEffect(() => {
+    if (open) form.reset(defaultsFor(template));
+    // `form` is the stable instance useForm returns, so listing it costs nothing
+    // and keeps the reset correct if it is ever replaced.
+  }, [open, template, form]);
+
   const tagsQuery = useQuery({
     queryKey: ["letter-merge-tags"],
     enabled: open,
@@ -206,7 +232,7 @@ function TemplateDialog({
   });
 
   const save = useMutation({
-    mutationFn: (values: { letterType: string; name: string; body: string }) =>
+    mutationFn: (values: TemplateFormValues) =>
       template
         ? letterTemplatesService.update(template.uuid, values as never)
         : letterTemplatesService.create(values as never),
@@ -216,26 +242,19 @@ function TemplateDialog({
     },
   });
 
-  const manualTags = tagsQuery.data?.manual_tags ?? [];
-  const allTags = tagsQuery.data?.merge_tags ?? [];
-
   return (
     <FormDialog
       open={open}
       onOpenChange={onOpenChange}
+      form={form}
       // xl, not lg: the body editor plus the tag palette need the width, and the
-      // dialog already scrolls, so a narrow frame just added a second axis of
-      // scrolling on top of it.
+      // dialog already scrolls vertically, so a narrow frame just added a second
+      // axis of scrolling on top of it.
       size="xl"
       title={template ? t("letters.editTemplate") : t("letters.newTemplate")}
       description={t("letters.templateFormDescription")}
       submitLabel={t("common.save")}
       cancelLabel={t("common.cancel")}
-      defaultValues={{
-        name: template?.name ?? "",
-        letterType: template?.letter_type ?? "increment",
-        body: template?.body ?? "Dear $employee_name,\n\n\n\nReference: $reference_no",
-      }}
       onSubmit={(values) =>
         save.mutateAsync({
           name: String(values.name ?? "").trim(),
@@ -244,18 +263,57 @@ function TemplateDialog({
         })
       }
     >
+      <TemplateFields
+        form={form}
+        mergeTags={tagsQuery.data?.merge_tags ?? []}
+        error={save.isError ? apiErrorMessage(save.error, "") : null}
+        nameLabel={t("letters.templateName")}
+        typeLabel={t("letters.type")}
+        bodyLabel={t("letters.body")}
+        insertTagLabel={t("letters.insertTag")}
+        tagHint={t("letters.tagHint")}
+        saveFailed={t("letters.saveFailed")}
+      />
+    </FormDialog>
+  );
+}
+
+/** Rendered INSIDE FormDialog, so it receives the form as a plain prop. */
+function TemplateFields({
+  form,
+  mergeTags,
+  error,
+  nameLabel,
+  typeLabel,
+  bodyLabel,
+  insertTagLabel,
+  tagHint,
+  saveFailed,
+}: {
+  form: UseFormReturn<TemplateFormValues>;
+  mergeTags: { tag: string; source: string }[];
+  error: string | null;
+  nameLabel: string;
+  typeLabel: string;
+  bodyLabel: string;
+  insertTagLabel: string;
+  tagHint: string;
+  saveFailed: string;
+}) {
+  return (
+    <>
       <label className="block space-y-1 text-sm">
-        <span className="font-medium">{t("letters.templateName")}</span>
+        <span className="font-medium">{nameLabel}</span>
         <input
-          {...register("name", { required: t("letters.templateName") })}
+          {...form.register("name", { required: nameLabel })}
           className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
         />
       </label>
 
       <label className="block space-y-1 text-sm">
-        <span className="font-medium">{t("letters.type")}</span>
+        <span className="font-medium">{typeLabel}</span>
         <select
-          {...register("letterType")}
+          {...form.register("letterType")}
           className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
         >
           {HR_LETTER_TYPES.map((lt) => (
@@ -267,21 +325,22 @@ function TemplateDialog({
       </label>
 
       <label className="block space-y-1 text-sm">
-        <span className="font-medium">{t("letters.body")}</span>
+        <span className="font-medium">{bodyLabel}</span>
         <Textarea
-          {...register("body", { required: t("letters.body") })}
+          {...form.register("body", { required: bodyLabel })}
           rows={16}
           className="font-mono text-xs"
         />
       </label>
 
-      {allTags.length ? (
+      {mergeTags.length ? (
         <div className="rounded-md bg-muted/60 p-3">
-          <p className="mb-2 text-xs font-medium">{t("letters.insertTag")}</p>
-          {/* Split into "filled automatically" vs "must supply a value", because
-              that distinction is the whole reason the issue form exists. */}
+          <p className="mb-2 text-xs font-medium">{insertTagLabel}</p>
+          {/* Manual tags are highlighted because the distinction is the entire
+              reason the issue form exists: a user cannot plan what they will
+              have to supply if they cannot see what the system fills in. */}
           <div className="flex flex-wrap gap-1">
-            {allTags.map((tag) => (
+            {mergeTags.map((tag) => (
               <Badge
                 key={tag.tag}
                 variant={tag.source === "manual" ? "default" : "outline"}
@@ -291,19 +350,17 @@ function TemplateDialog({
               </Badge>
             ))}
           </div>
-          <p className="mt-2 text-[11px] text-muted-foreground">{t("letters.tagHint")}</p>
+          <p className="mt-2 text-[11px] text-muted-foreground">{tagHint}</p>
         </div>
       ) : null}
 
-      {/* Surface the SERVER's message, not axios's "Request failed with status
-          code 400". The backend validates the body against the merge-tag
-          vocabulary and says exactly which tag is wrong; throwing that away in
-          favour of a status line is what made this look like a broken form. */}
-      {save.isError ? (
+      {/* The server names the offending merge tag; axios's "Request failed with
+          status code 400" throws that away. */}
+      {error ? (
         <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {apiErrorMessage(save.error, t("letters.saveFailed"))}
+          {error || saveFailed}
         </p>
       ) : null}
-    </FormDialog>
+    </>
   );
 }

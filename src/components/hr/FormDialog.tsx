@@ -96,13 +96,19 @@ export function FormDialog<TFieldValues extends FieldValues = FieldValues>({
           {description ? <DialogDescription>{description}</DialogDescription> : null}
         </DialogHeader>
 
-        {/* FormProvider is REQUIRED here, not decoration.
-            handleSubmit() only collects fields that are REGISTERED with the form
-            — a raw `<input name="x">` contributes nothing. Without this
-            provider children have no way to call register(), so every submit
-            arrived with an empty payload and the server rejected it with a
-            baffling 400 ("body is required" for a body that is visibly filled
-            in). Children reach the form with useFormContext(). */}
+        {/* FormProvider, for child COMPONENTS that want useFormContext().
+
+            Two things this does and does not solve. It does not make
+            handleSubmit() work — that only collects REGISTERED fields, so a raw
+            <input name="x"> contributes nothing and the submit arrives empty.
+            And it is not readable from inline JSX written in the PARENT of this
+            component: context is resolved during render, and the parent's render
+            happens above this provider, so useFormContext() there returns null.
+
+            The reliable pattern, used by both HR letter dialogs: create the form
+            in the parent, pass it to this component via `form`, and pass the same
+            instance to the fields. This provider is here so that a nested
+            component using FormField/FormItem from ui/form works if one is added. */}
         <Form {...form}>
           <form id="form-dialog-body" onSubmit={handleSubmit} className="space-y-4">
             {children}

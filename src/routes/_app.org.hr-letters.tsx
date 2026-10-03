@@ -1,6 +1,6 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
-import { useFormContext } from "react-hook-form";
+﻿import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { useForm, type UseFormReturn } from "react-hook-form";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { FileSignature, Plus, Download, ShieldCheck, Ban } from "lucide-react";
@@ -113,7 +113,7 @@ function HrLettersPage() {
       header: t("letters.issuedAt"),
       render: (r) => (
         <span className="text-xs text-muted-foreground">
-          {r.issued_at ? new Date(r.issued_at).toLocaleDateString("en-PK") : "—"}
+          {r.issued_at ? new Date(r.issued_at).toLocaleDateString("en-PK") : "â€”"}
         </span>
       ),
     },
@@ -223,6 +223,19 @@ function HrLettersPage() {
   );
 }
 
+type CreateLetterFormValues = {
+  employee_uuid: string;
+  template_uuid: string;
+  letter_type: string;
+};
+
+/**
+ * Owns the form and passes the instance down explicitly.
+ *
+ * Deliberately NOT useFormContext(): this component renders ABOVE FormDialog, and
+ * the provider lives inside FormDialog's children, so a context read here is null
+ * and crashes with "Cannot destructure property 'register' of 'useFormContext()'".
+ */
 function CreateLetterDialog({
   open,
   onOpenChange,
@@ -233,13 +246,14 @@ function CreateLetterDialog({
   onDone: () => void;
 }) {
   const { t } = useTranslation();
-  // Registered through the FormProvider FormDialog renders. Without register()
-  // the submit sends an empty payload — see the comment in FormDialog.tsx.
-  const { register } = useFormContext<{
-    employee_uuid: string;
-    template_uuid: string;
-    letter_type: string;
-  }>();
+  const form = useForm<CreateLetterFormValues>({
+    defaultValues: { employee_uuid: "", template_uuid: "", letter_type: "increment" },
+  });
+
+  // Reset on open so the previous draft's selections do not linger.
+  useEffect(() => {
+    if (open) form.reset({ employee_uuid: "", template_uuid: "", letter_type: "increment" });
+  }, [open, form]);
 
   // Loaded on open rather than on mount: these lists only exist to fill the
   // dialog, and an org can have hundreds of employees.
@@ -252,8 +266,7 @@ function CreateLetterDialog({
         letterTemplatesService.list(),
       ]);
       return {
-        // employees() returns the standard { items, total, ... } envelope, not a
-        // bare array.
+        // employees() returns the standard { items, total, ... } envelope.
         employees: employees.items.map((e) => ({ uuid: e.uuid, full_name: e.full_name })),
         templates: templates.items,
       };
@@ -272,6 +285,7 @@ function CreateLetterDialog({
     <FormDialog
       open={open}
       onOpenChange={onOpenChange}
+      form={form}
       title={t("letters.newLetter")}
       description={t("letters.newLetterDescription")}
       submitLabel={t("letters.createDraft")}
@@ -284,17 +298,55 @@ function CreateLetterDialog({
         })
       }
     >
+      <CreateLetterFields
+        form={form}
+        employees={options.data?.employees ?? []}
+        templates={options.data?.templates ?? []}
+        error={create.isError ? apiErrorMessage(create.error, t("letters.saveFailed")) : null}
+        employeeLabel={t("letters.employee")}
+        selectEmployee={t("letters.selectEmployee")}
+        templateLabel={t("letters.template")}
+        noTemplate={t("letters.noTemplate")}
+        typeLabel={t("letters.type")}
+      />
+    </FormDialog>
+  );
+}
+
+/** Rendered INSIDE FormDialog, so it receives the form as a plain prop. */
+function CreateLetterFields({
+  form,
+  employees,
+  templates,
+  error,
+  employeeLabel,
+  selectEmployee,
+  templateLabel,
+  noTemplate,
+  typeLabel,
+}: {
+  form: UseFormReturn<CreateLetterFormValues>;
+  employees: { uuid: string; full_name: string }[];
+  templates: { uuid: string; name: string }[];
+  error: string | null;
+  employeeLabel: string;
+  selectEmployee: string;
+  templateLabel: string;
+  noTemplate: string;
+  typeLabel: string;
+}) {
+  return (
+    <>
       <label className="block space-y-1 text-sm">
-        <span className="font-medium">{t("letters.employee")}</span>
+        <span className="font-medium">{employeeLabel}</span>
         <select
-          {...register("employee_uuid", { required: t("letters.selectEmployee") })}
+          {...form.register("employee_uuid", { required: selectEmployee })}
           className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-          defaultValue=""
         >
           <option value="" disabled>
-            {t("letters.selectEmployee")}
+            {selectEmployee}
           </option>
-          {(options.data?.employees ?? []).map((e) => (
+          {employees.map((e) => (
             <option key={e.uuid} value={e.uuid}>
               {e.full_name}
             </option>
@@ -303,14 +355,13 @@ function CreateLetterDialog({
       </label>
 
       <label className="block space-y-1 text-sm">
-        <span className="font-medium">{t("letters.template")}</span>
+        <span className="font-medium">{templateLabel}</span>
         <select
-          {...register("template_uuid")}
+          {...form.register("template_uuid")}
           className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-          defaultValue=""
         >
-          <option value="">{t("letters.noTemplate")}</option>
-          {(options.data?.templates ?? []).map((tpl) => (
+          <option value="">{noTemplate}</option>
+          {templates.map((tpl) => (
             <option key={tpl.uuid} value={tpl.uuid}>
               {tpl.name}
             </option>
@@ -319,11 +370,10 @@ function CreateLetterDialog({
       </label>
 
       <label className="block space-y-1 text-sm">
-        <span className="font-medium">{t("letters.type")}</span>
+        <span className="font-medium">{typeLabel}</span>
         <select
-          {...register("letter_type")}
+          {...form.register("letter_type")}
           className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-          defaultValue="increment"
         >
           {HR_LETTER_TYPES.map((lt) => (
             <option key={lt.key} value={lt.key}>
@@ -333,13 +383,10 @@ function CreateLetterDialog({
         </select>
       </label>
 
-      {/* Show the server's validation message rather than axios's generic
-          "Request failed with status code 400". */}
-      {create.isError ? (
-        <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {apiErrorMessage(create.error, t("letters.saveFailed"))}
-        </p>
+      {/* The server's message, not axios's generic status line. */}
+      {error ? (
+        <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>
       ) : null}
-    </FormDialog>
+    </>
   );
 }
