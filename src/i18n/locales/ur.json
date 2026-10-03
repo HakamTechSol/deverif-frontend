@@ -34,7 +34,8 @@
     "signOut": "لاگ آؤٹ",
     "closeMenu": "مینو بند کریں",
     "letterTemplates": "خطوط کے ٹیمپلیٹ",
-    "hrLetters": "ایچ آر خطوط"
+    "hrLetters": "ایچ آر خطوط",
+    "myLetters": "میرے خطوط"
   },
   "common": {
     "search": "تلاش کریں…",
@@ -1029,7 +1030,11 @@
     "noTemplatesDescription": "تجربہ یا اضافہ کا خط ایسا ٹیمپلیٹ شامل کریں۔",
     "loadFailed": "خطوط لوڈ نہیں ہو سکے",
     "saveFailed": "ٹیمپلیٹ محفوظ نہیں ہو سکا",
-    "templateFormDescription": "خط ایک بار لکھیں اور دوبارہ استعمال کریں۔ جہاں متن بدلنا ہو وہاں $employee_name جیسے ملگ ٹیگ شامل کریں۔"
+    "templateFormDescription": "خط ایک بار لکھیں اور دوبارہ استعمال کریں۔ جہاں متن بدلنا ہو وہاں $employee_name جیسے ملگ ٹیگ شامل کریں۔",
+    "myTitle": "میرے خطوط",
+    "myDescription": "آپ کے جاری کردہ خطوط۔ انہیں ڈاؤن لوڈ کریں یا تصدیقی لنک شیئر کریں۔",
+    "myEmptyTitle": "ابھی کوئی خط نہیں",
+    "myEmptyDescription": "آپ کے ادارے کی طرف سے جاری کردہ خطوط یہاں نظر آئیں گے۔"
   },
   "actions": {
     "cancel": "منسوخ کریں"

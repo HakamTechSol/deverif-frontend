@@ -1,4 +1,4 @@
-import type { AuthUser } from "@/lib/auth";
+﻿import type { AuthUser } from "@/lib/auth";
 import { parseFeatureAccess } from "@/lib/utils";
 
 /**
@@ -82,6 +82,11 @@ export const ROUTE_ACCESS: Readonly<Record<string, RouteRule>> = {
   "/leaves": { roles: ["employee"], feature: "leave" },
   "/attendance": { roles: ["employee"], feature: "attendance" },
   "/payroll": { roles: ["employee"], feature: "payroll" },
+  // Employee self-service. No feature_access key: letters are not delegable to
+  // sub-admins via feature_access (see the /org/hr-letters note), and the
+  // employee who receives a letter is not a delegated approver of anything.
+  // Plan-level access is handled by ModuleGate via module_flags.
+  "/my-letters": { roles: ["employee"] },
 
   // --- Org operations: staff only ------------------------------------------
   "/org/support": { roles: STAFF_ROLES },
@@ -98,7 +103,7 @@ export const ROUTE_ACCESS: Readonly<Record<string, RouteRule>> = {
   // is an act of the organization, and sub-admin delegation for it would mean
   // granting a sub-admin the power to attest to someone's employment to a third
   // party. Plan-level access is the separate axis handled by ModuleGate via
-  // module_flags (hr_letters_management) — deliberately not a column here, for
+  // module_flags (hr_letters_management) â€” deliberately not a column here, for
   // the same reason the other plan modules are not.
   "/org/letter-templates": { roles: ["org_admin"] },
   "/org/hr-letters": { roles: ["org_admin"] },

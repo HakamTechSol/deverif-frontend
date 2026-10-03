@@ -1,6 +1,6 @@
-import { describe, it, expect, vi } from "vitest";
+﻿import { describe, it, expect, vi } from "vitest";
 import { useState } from "react";
-import { useForm, type UseFormReturn } from "react-hook-form";
+import { useForm, useFormContext, type UseFormReturn } from "react-hook-form";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { FormDialog } from "@/components/hr/FormDialog";
@@ -17,7 +17,7 @@ import { FormDialog } from "@/components/hr/FormDialog";
  *      provider FormDialog renders, so the read returned null and the page threw
  *      "Cannot destructure property 'register' of 'useFormContext(...)'".
  *
- * Both are invisible to TypeScript — the code type-checks perfectly. Both are
+ * Both are invisible to TypeScript â€” the code type-checks perfectly. Both are
  * caught instantly by rendering.
  */
 
@@ -67,7 +67,7 @@ function Fields({ form }: { form: UseFormReturn<Values> }) {
   );
 }
 
-describe("FormDialog — submits REGISTERED values", () => {
+describe("FormDialog â€” submits REGISTERED values", () => {
   it("passes the field values through, not an empty object", async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn().mockResolvedValue(undefined);
@@ -122,13 +122,11 @@ describe("FormDialog — submits REGISTERED values", () => {
  * pattern cannot be reintroduced. If this test starts throwing, the fix in this
  * file's header comment is being undone.
  */
-describe("FormDialog — the anti-pattern stays broken", () => {
+describe("FormDialog â€” the anti-pattern stays broken", () => {
   it("useFormContext() in the PARENT is null, which is why we do not use it", () => {
     let seen: unknown = "not-called";
     function AntiPattern() {
       // Deliberately reads the context from above the provider.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { useFormContext } = require("react-hook-form") as any;
       seen = useFormContext();
       return <div />;
     }

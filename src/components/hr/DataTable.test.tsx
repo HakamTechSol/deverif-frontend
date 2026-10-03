@@ -64,7 +64,11 @@ describe("DataTable with API-shaped rows", () => {
     // This assertion documents the failure mode deliberately: it is NOT a bug in
     // DataTable. It exists so that if this test ever starts failing at a DIFFERENT
     // line, someone knows the API shape regressed again rather than the component.
-    const rawFromMysql = { uuid: "t1", name: "Increment letter", merge_fields: '["employee_name"]' };
+    const rawFromMysql = {
+      uuid: "t1",
+      name: "Increment letter",
+      merge_fields: '["employee_name"]',
+    };
     expect(() => columns[1].render(rawFromMysql as never, 0)).toThrow(
       /map is not a function|not a function/,
     );

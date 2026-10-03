@@ -1,5 +1,5 @@
 ﻿import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm, type UseFormReturn } from "react-hook-form";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -12,6 +12,8 @@ import { EmptyState } from "@/components/common/EmptyState";
 import { PageHeader } from "@/components/common/PageHeader";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { apiErrorMessage } from "@/lib/utils";
+import { cn } from "@/lib/utils";
+import { insertAtCaret, mergeRefs } from "@/lib/insertAtCaret";
 import { ModuleGate } from "@/components/hr/ModuleGate";
 import { DataTable, DataTableToolbar, type DataTableColumn } from "@/components/hr/DataTable";
 import { FormDialog } from "@/components/hr/FormDialog";
@@ -63,7 +65,10 @@ function LetterTemplatesPage() {
       key: "merge_fields",
       header: t("letters.mergeTags"),
       render: (r) => {
-        const tags = r.merge_fields ?? [];
+        // Second line of defence behind toStringArray() in the service layer.
+        // Cheap, and it means a stale cache entry or an older backend cannot
+        // crash this page the way a raw JSON string did.
+        const tags = Array.isArray(r.merge_fields) ? r.merge_fields : [];
         if (!tags.length) return <span className="text-xs text-muted-foreground">â€”</span>;
         return (
           <div className="flex flex-wrap gap-1">
@@ -300,6 +305,17 @@ function TemplateFields({
   tagHint: string;
   saveFailed: string;
 }) {
+  // Ref to the body editor so a chip can insert at the caret. insertAtCaret
+  // mutates the DOM and returns the new text; form.setValue is what actually
+  // commits it, because dispatching a synthetic input event does not reach a
+  // controlled React input's onChange.
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
+
+  const insertTag = (tag: string) => {
+    const next = insertAtCaret(bodyRef.current, `$${tag}`);
+    form.setValue("body", next, { shouldDirty: true, shouldTouch: true });
+  };
+
   return (
     <>
       <label className="block space-y-1 text-sm">
@@ -326,28 +342,35 @@ function TemplateFields({
 
       <label className="block space-y-1 text-sm">
         <span className="font-medium">{bodyLabel}</span>
-        <Textarea
-          {...form.register("body", { required: bodyLabel })}
-          rows={16}
-          className="font-mono text-xs"
-        />
+        <BodyEditor form={form} bodyRef={bodyRef} label={bodyLabel} />
       </label>
 
       {mergeTags.length ? (
         <div className="rounded-md bg-muted/60 p-3">
           <p className="mb-2 text-xs font-medium">{insertTagLabel}</p>
-          {/* Manual tags are highlighted because the distinction is the entire
-              reason the issue form exists: a user cannot plan what they will
-              have to supply if they cannot see what the system fills in. */}
+          {/* Click to insert at the caret, not append at the end. Manual tags
+              are highlighted because the distinction is the entire reason the
+              issue form exists: a user cannot plan what they will have to supply
+              if they cannot see what the system fills in. */}
           <div className="flex flex-wrap gap-1">
             {mergeTags.map((tag) => (
-              <Badge
+              <button
                 key={tag.tag}
-                variant={tag.source === "manual" ? "default" : "outline"}
-                className="font-mono text-[10px]"
+                type="button"
+                onClick={() => insertTag(tag.tag)}
+                title={insertAt(tag.tag)}
+                className={cn(
+                  "inline-flex items-center rounded-md border px-2 py-0.5 font-mono text-[10px]",
+                  "transition-colors hover:bg-primary hover:text-primary-foreground",
+                  "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                  "cursor-pointer",
+                  tag.source === "manual"
+                    ? "border-transparent bg-primary text-primary-foreground"
+                    : "border-border bg-transparent text-foreground",
+                )}
               >
                 ${tag.tag}
-              </Badge>
+              </button>
             ))}
           </div>
           <p className="mt-2 text-[11px] text-muted-foreground">{tagHint}</p>
@@ -362,5 +385,38 @@ function TemplateFields({
         </p>
       ) : null}
     </>
+  );
+}
+
+/** Screen-reader / tooltip text explaining what a chip click does. */
+function insertAt(tag: string) {
+  return `Insert $${tag} at the cursor`;
+}
+
+/**
+ * The body textarea, registered AND holding a local ref.
+ *
+ * mergeRefs is essential: `<Textarea {...form.register("body")} ref={bodyRef} />`
+ * would let the later ref prop DISCARD the one register() installed, so
+ * react-hook-form would never read the DOM, believe the field was empty, and
+ * re-render it back to "" — discarding typed text and every chip insert.
+ */
+function BodyEditor({
+  form,
+  bodyRef,
+  label,
+}: {
+  form: UseFormReturn<TemplateFormValues>;
+  bodyRef: React.RefObject<HTMLTextAreaElement | null>;
+  label: string;
+}) {
+  const field = form.register("body", { required: label });
+  return (
+    <Textarea
+      {...field}
+      ref={mergeRefs(field.ref, bodyRef)}
+      rows={16}
+      className="font-mono text-xs"
+    />
   );
 }

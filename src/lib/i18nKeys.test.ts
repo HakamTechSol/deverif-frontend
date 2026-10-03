@@ -44,17 +44,22 @@ function walk(dir: string, out: string[] = []): string[] {
 function flatten(obj: unknown, prefix = ""): string[] {
   if (!obj || typeof obj !== "object") return [prefix];
   return Object.entries(obj as Record<string, unknown>).flatMap(([k, v]) =>
-    v && typeof v === "object" && !Array.isArray(v) ? flatten(v, `${prefix}${k}.`) : [`${prefix}${k}`],
+    v && typeof v === "object" && !Array.isArray(v)
+      ? flatten(v, `${prefix}${k}.`)
+      : [`${prefix}${k}`],
   );
 }
 
-const files = SRC_DIRS.filter((d) => statSync(d, { throwIfNoEntry: false })?.isDirectory()).flatMap((d) =>
-  walk(d),
+const files = SRC_DIRS.filter((d) => statSync(d, { throwIfNoEntry: false })?.isDirectory()).flatMap(
+  (d) => walk(d),
 );
 
 // t("key") and t("key", { options }) — a second STRING argument is a fallback
 // value, not a key, so only these two shapes are matched.
-const KEY_PATTERNS = [/\bt\(\s*["'`]([a-zA-Z0-9_.-]+)["'`]/g, /\bt\(\s*["'`]([a-zA-Z0-9_.-]+)["'`]\s*,\s*\{/g];
+const KEY_PATTERNS = [
+  /\bt\(\s*["'`]([a-zA-Z0-9_.-]+)["'`]/g,
+  /\bt\(\s*["'`]([a-zA-Z0-9_.-]+)["'`]\s*,\s*\{/g,
+];
 
 const referenced = new Set<string>();
 for (const file of files) {
@@ -78,10 +83,7 @@ describe("i18n key coverage", () => {
   it("defines every referenced key in en.json", () => {
     const missing = [...referenced].filter((k) => !en.has(k)).sort();
     // A missing key renders as its own name on screen, so the message names them.
-    expect(
-      missing,
-      `These render as raw key text in the UI: ${missing.join(", ")}`,
-    ).toEqual([]);
+    expect(missing, `These render as raw key text in the UI: ${missing.join(", ")}`).toEqual([]);
   });
 
   it("defines every en.json key in ur.json", () => {

@@ -49,6 +49,7 @@ export const userNavItems: NavItem[] = [
 /** Employee self-service. Staff reach the org-scoped equivalents instead. */
 export const memberNavItems: NavItem[] = [
   { to: "/attendance", labelKey: "nav.attendance", icon: ClipboardCheck },
+  { to: "/my-letters", labelKey: "nav.myLetters", icon: FileSignature },
   { to: "/payroll", labelKey: "nav.payroll", icon: Wallet },
 ];
 

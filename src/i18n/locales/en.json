@@ -34,7 +34,8 @@
     "signOut": "Logout",
     "closeMenu": "Close menu",
     "letterTemplates": "Letter Templates",
-    "hrLetters": "HR Letters"
+    "hrLetters": "HR Letters",
+    "myLetters": "My Letters"
   },
   "common": {
     "search": "Search…",
@@ -1029,7 +1030,11 @@
     "noTemplatesDescription": "Add a template such as an experience or increment letter.",
     "loadFailed": "Could not load letters",
     "saveFailed": "Could not save the template",
-    "templateFormDescription": "Write the letter once and reuse it. Insert merge tags like $employee_name wherever the text should change."
+    "templateFormDescription": "Write the letter once and reuse it. Insert merge tags like $employee_name wherever the text should change.",
+    "myTitle": "My Letters",
+    "myDescription": "Your issued letters. Download them or share the verification link.",
+    "myEmptyTitle": "No letters yet",
+    "myEmptyDescription": "Letters issued to you by your organization will appear here."
   },
   "actions": {
     "cancel": "Cancel"

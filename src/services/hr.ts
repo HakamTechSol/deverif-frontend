@@ -1,4 +1,4 @@
-/**
+﻿/**
  * HR operations: leave, attendance, salary components, payroll.
  *
  *  * The cluster the module expansion grows out of, so it is organised per module
@@ -248,7 +248,7 @@ export const orgEmployeeSalaryService = {
       .then((r) => r.data.assignments),
 };
 
-/* ═══════════════════════════ HR LETTERS ═══════════════════════════ */
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• HR LETTERS â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
 export type HrLetterType =
   | "offer"
@@ -312,11 +312,42 @@ export type TemplatePreview = {
   text: string;
   /** Tags referenced but with no value; issuance refuses while any remain. */
   unresolved: string[];
-  /** Tags with no known source at all — a template bug, not a missing value. */
+  /** Tags with no known source at all â€” a template bug, not a missing value. */
   unknown: string[];
   /** The subset of `unresolved` the issue form can collect. */
   missing_manual: string[];
 };
+
+/**
+ * Coerce a JSON-ish value into a real array.
+ *
+ * MySQL JSON columns arrive from the API as STRINGS, so `merge_fields` can be
+ * '["employee_name","new_salary"]'. A stale cache from an older backend build can
+ * carry the same shape even after the server-side fix ships. Either way, calling
+ * .slice().map() on it throws "tags.slice(...).map is not a function".
+ *
+ * Normalising HERE, at the boundary, means no component ever has to defend
+ * against it — the declared `string[]` type is finally true everywhere. The
+ * backend now parses these columns too (services/hrLetters.service.js); this is
+ * the second line of defence for anything that bypasses it.
+ */
+export function toStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) return value.filter((v): v is string => typeof v === "string");
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === "string") : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+/** Apply toStringArray to every template's merge_fields. */
+function normalizeTemplates(items: LetterTemplate[]): LetterTemplate[] {
+  return items.map((t) => ({ ...t, merge_fields: toStringArray(t.merge_fields) }));
+}
 
 export const letterTemplatesService = {
   list: (params: { letter_type?: HrLetterType; include_inactive?: boolean } = {}) =>
@@ -325,26 +356,36 @@ export const letterTemplatesService = {
         "/org/letter-templates",
         { params },
       )
-      .then((r) => r.data),
+      .then((r) => ({
+        ...r.data,
+        items: normalizeTemplates(r.data.items ?? []),
+        merge_tags: Array.isArray(r.data.merge_tags) ? r.data.merge_tags : [],
+        manual_tags: toStringArray(r.data.manual_tags),
+      })),
   get: (uuid: UUID) =>
     api
       .get<{ template: LetterTemplate }>(`/org/letter-templates/${uuid}`)
-      .then((r) => r.data.template),
+      .then((r) => normalizeTemplates([r.data.template])[0]),
   create: (data: { letterType: HrLetterType; name: string; body: string }) =>
     api
       .post<{ template: LetterTemplate }>("/org/letter-templates", data)
-      .then((r) => r.data.template),
+      .then((r) => normalizeTemplates([r.data.template])[0]),
   update: (
     uuid: UUID,
     data: Partial<{ letterType: HrLetterType; name: string; body: string; isActive: boolean }>,
   ) =>
     api
       .put<{ template: LetterTemplate }>(`/org/letter-templates/${uuid}`, data)
-      .then((r) => r.data.template),
+      .then((r) => normalizeTemplates([r.data.template])[0]),
   remove: (uuid: UUID) => api.delete(`/org/letter-templates/${uuid}`).then((r) => r.data),
   /** Render a template against an employee WITHOUT creating anything. */
   preview: (uuid: UUID, data: { employee_uuid: string; values?: Record<string, string> }) =>
-    api.post<TemplatePreview>(`/org/letter-templates/${uuid}/preview`, data).then((r) => r.data),
+    api.post<TemplatePreview>(`/org/letter-templates/${uuid}/preview`, data).then((r) => ({
+      ...r.data,
+      unresolved: toStringArray(r.data.unresolved),
+      unknown: toStringArray(r.data.unknown),
+      missing_manual: toStringArray(r.data.missing_manual),
+    })),
 };
 
 export const hrLettersService = {
@@ -383,4 +424,16 @@ export const hrLettersService = {
   remove: (uuid: UUID) => api.delete(`/org/hr-letters/${uuid}`).then((r) => r.data),
   downloadPdf: (uuid: UUID) =>
     api.get(`/org/hr-letters/${uuid}/pdf`, { responseType: "blob" }).then((r) => r.data as Blob),
+};
+
+/** Employee self-service: the signed-in employee's OWN issued letters. */
+export const myLettersService = {
+  list: (params: { page?: number; limit?: number; letter_type?: HrLetterType } = {}) =>
+    api.get<Paginated<HrLetterListItem>>("/my-letters", { params }).then((r) => ({
+      ...r.data,
+      items: (r.data.items ?? []).map((l) => ({ ...l, payload: l.payload ?? {} })),
+    })),
+  downloadPdf: (uuid: UUID) =>
+    api.get(`/my-letters/${uuid}/pdf`, { responseType: "blob" }).then((r) => r.data as Blob),
+  verifyUrl: (token: string) => `/verify/letter/${token}`,
 };
