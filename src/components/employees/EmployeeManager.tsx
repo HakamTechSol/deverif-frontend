@@ -15,7 +15,8 @@ import { ProtectedDocumentLink } from "@/components/common/ProtectedDocumentLink
 import { EmployeeDocPicker, type StagedDoc } from "@/components/employees/EmployeeDocPicker";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@/components/ui/badge";
+
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -284,8 +285,6 @@ export function EmployeeManager({
                         <TableHead>Designation</TableHead>
                         <TableHead>Department</TableHead>
                         <TableHead>Status</TableHead>
-                        <TableHead>Platform User</TableHead>
-                        <TableHead>Org Role</TableHead>
                         <TableHead>Added By</TableHead>
                       </>
                     )}
@@ -354,38 +353,8 @@ export function EmployeeManager({
                               {statusLabel(emp.status)}
                             </Badge>
                           </TableCell>
-                          <TableCell data-label="Platform User">
-                            <Badge
-                              variant="outline"
-                              className={
-                                emp.is_platform_user === "yes"
-                                  ? "rounded-full border-primary/30 bg-primary/10 text-primary"
-                                  : "rounded-full border-border text-muted-foreground"
-                              }
-                            >
-                              {emp.is_platform_user === "yes" ? "Yes" : "No"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell data-label="Org Role">
-                            {emp.is_platform_user === "yes" && emp.linked_user_role ? (
-                              <Badge
-                                variant="outline"
-                                className={
-                                  emp.linked_user_role === "org_admin" || emp.linked_user_role === "sub_admin"
-                                    ? "rounded-full border-primary/30 bg-primary/10 text-primary"
-                                    : "rounded-full border-border text-muted-foreground"
-                                }
-                              >
-                                {emp.linked_user_role === "org_admin"
-                                  ? "Org Admin"
-                                  : emp.linked_user_role === "sub_admin"
-                                    ? "Sub Admin"
-                                    : "Member"}
-                              </Badge>
-                            ) : (
-                              <span className="text-muted-foreground">—</span>
-                            )}
-                          </TableCell>
+                    
+                       
                         </>
                       )}
                       {isReferenceMode && (
