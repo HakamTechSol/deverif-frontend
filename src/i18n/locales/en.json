@@ -443,8 +443,6 @@
     "selectDates": "Select start and end dates",
     "endDateBeforeStart": "End date cannot be before start date",
     "selectLeaveTypePlaceholder": "Select a leave type",
-    "startBeforeEnd": "Start date must be before end date",
-    "oneDayMinimum": "At least 1 day must be selected",
     "reasonPlaceholder": "Why do you need this leave?",
     "typeOption": "{{name}} — {{days}} days/yr",
     "startDate": "Start date",

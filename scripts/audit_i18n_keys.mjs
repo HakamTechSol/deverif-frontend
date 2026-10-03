@@ -23,6 +23,9 @@ function walk(dir, out = []) {
       if (entry === ".kilo" || entry === "node_modules") continue;
       walk(full, out);
     } else if (/\.(ts|tsx)$/.test(entry)) {
+      // Skip tests: they quote keys inside comments as documentation
+      // (`// t("key")`), which the regex cannot tell apart from real usage.
+      if (/\.test\.(ts|tsx)$/.test(entry)) continue;
       out.push(full);
     }
   }
