@@ -61,7 +61,9 @@
     "actions": "Actions",
     "status": "Status",
     "name": "Name",
-    "email": "Email"
+    "email": "Email",
+    "allStatuses": "All statuses",
+    "clear": "Clear"
   },
   "status": {
     "pending": "Pending",
@@ -417,7 +419,9 @@
       "remarksPlaceholder": "Any context that will help the reviewer…",
       "cancel": "Cancel",
       "saveChanges": "Save changes"
-    }
+    },
+    "freeTierDescription": "Your organization is on the Free plan.",
+    "freeTierEmptyDesc": "Upgrade your plan to send more verification requests."
   },
   "leaves": {
     "description": "Apply for leave and track your annual balance.",
@@ -457,7 +461,9 @@
     "reasonBold": "Bold",
     "reasonUnderline": "Underline",
     "reasonNewLine": "New line",
-    "reasonFormattingHint": "Bold / underline / new line"
+    "reasonFormattingHint": "Bold / underline / new line",
+    "fromDate": "From date",
+    "toDate": "To date"
   },
   "orgAttendance": {
     "title": "Attendance",
@@ -477,7 +483,9 @@
     "checkInSuccess": "Checked in successfully",
     "checkInFailed": "Check-in failed",
     "checkOutSuccess": "Checked out successfully",
-    "checkOutFailed": "Check-out failed"
+    "checkOutFailed": "Check-out failed",
+    "fromDate": "From date",
+    "toDate": "To date"
   },
   "orgPayroll": {
     "title": "Payroll",
@@ -489,7 +497,8 @@
     "deductions": "Deductions",
     "net": "Net Salary",
     "payslip": "Payslip",
-    "downloadFailed": "Download failed"
+    "downloadFailed": "Download failed",
+    "filterPeriod": "Filter by period"
   },
   "payments": {
     "title": "Billing & payments",
@@ -975,7 +984,9 @@
     "fileDropzone": {
       "dropHere": "Drop the files here",
       "choose": "Drag files here, or click to choose",
-      "remove": "Remove file"
+      "remove": "Remove file",
+      "hint": "Up to {{maxFiles}} file(s), {{maxSizeMb}}MB each",
+      "overLimit": "{{count}} file(s) over the limit"
     },
     "formDialog": {
       "submit": "Save",
@@ -1019,6 +1030,10 @@
     "noTemplates": "No templates yet",
     "noTemplatesDescription": "Add a template such as an experience or increment letter.",
     "loadFailed": "Could not load letters",
-    "saveFailed": "Could not save the template"
+    "saveFailed": "Could not save the template",
+    "templateFormDescription": "Write the letter once and reuse it. Insert merge tags like $employee_name wherever the text should change."
+  },
+  "actions": {
+    "cancel": "Cancel"
   }
 }

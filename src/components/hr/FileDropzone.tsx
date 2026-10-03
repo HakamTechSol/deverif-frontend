@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Upload, X, FileText, ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -41,6 +42,7 @@ export function FileDropzone({
   className?: string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const { t } = useTranslation();
   const [dragging, setDragging] = useState(false);
   // One message for the whole batch: a user dropping eight receipts should be
   // told which ones failed, not see eight transient toasts.
@@ -94,14 +96,14 @@ export function FileDropzone({
       const dropped = merged.length - limited.length;
 
       const problems = [...rejected];
-      if (dropped > 0) problems.push(`${dropped} file(s) over the ${maxFiles} limit`);
+      if (dropped > 0) problems.push(t("hr.fileDropzone.overLimit", { count: dropped }));
 
       setError(problems.length ? problems.join(", ") : null);
       onChange(limited);
     },
     // `accepts` closes over `accept`; including it keeps the callback honest.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [value, onChange, accept, maxSizeMb, maxFiles],
+    [value, onChange, accept, maxSizeMb, maxFiles, t],
   );
 
   const removeAt = (index: number) => {
@@ -147,10 +149,10 @@ export function FileDropzone({
       >
         <Upload className="h-6 w-6 text-muted-foreground" />
         <span className="text-sm font-medium">
-          {dragging ? "Drop the files here" : "Drag files here, or click to choose"}
+          {dragging ? t("hr.fileDropzone.dropHere") : t("hr.fileDropzone.choose")}
         </span>
         <span className="text-xs text-muted-foreground">
-          {hint ?? `Up to ${maxFiles} file(s), ${maxSizeMb}MB each`}
+          {hint ?? t("hr.fileDropzone.hint", { maxFiles, maxSizeMb })}
         </span>
       </button>
 
@@ -190,7 +192,7 @@ export function FileDropzone({
                 variant="ghost"
                 size="icon"
                 className="h-7 w-7"
-                aria-label={`Remove ${file.name}`}
+                aria-label={t("hr.fileDropzone.remove", { name: file.name })}
                 onClick={() => removeAt(i)}
               >
                 <X className="h-4 w-4" />

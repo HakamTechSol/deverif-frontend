@@ -61,7 +61,9 @@
     "actions": "اعمال",
     "status": "حیثیت",
     "name": "نام",
-    "email": "ای میل"
+    "email": "ای میل",
+    "allStatuses": "تمام حالات",
+    "clear": "صاف کریں"
   },
   "status": {
     "pending": "زیر التواء",
@@ -418,7 +420,9 @@
       "remarksPlaceholder": "کوئی سیاقت جو جائزہ لینے والے کی مدد کرے…",
       "cancel": "منسوخ کریں",
       "saveChanges": "تبدیلیاں محفوظ کریں"
-    }
+    },
+    "freeTierDescription": "آپ کا ادارہ مفت پلان پر ہے۔",
+    "freeTierEmptyDesc": "مزید تصدیقی درخواستیں بھیجنے کے لیے اپنا پلان بہتر کریں۔"
   },
   "leaves": {
     "description": "چھٹی کی درخواست دیں اور اپنے سالانہ بیلنس کا رکھ رکھیں۔",
@@ -456,7 +460,9 @@
     "reasonBold": "موٹا",
     "reasonUnderline": "لکیر کھینچیں",
     "reasonNewLine": "نیا سطر",
-    "reasonFormattingHint": "Bold / underline / new line"
+    "reasonFormattingHint": "Bold / underline / new line",
+    "fromDate": "تاریخ سے",
+    "toDate": "تاریخ تک"
   },
   "orgAttendance": {
     "title": "حاضری",
@@ -476,7 +482,9 @@
     "checkInSuccess": "چیک ان کامیابی سے ہو گیا",
     "checkInFailed": "چیک ان ناکام",
     "checkOutSuccess": "چیک آؤٹ کامیابی سے ہو گیا",
-    "checkOutFailed": "چیک آؤٹ ناکام"
+    "checkOutFailed": "چیک آؤٹ ناکام",
+    "fromDate": "تاریخ سے",
+    "toDate": "تاریخ تک"
   },
   "orgPayroll": {
     "title": "تنخواہ",
@@ -488,7 +496,8 @@
     "deductions": "کٹوتیاں",
     "net": "خالص تنخواہ",
     "payslip": "پے سلپ",
-    "downloadFailed": "ڈاؤن لوڈ ناکام"
+    "downloadFailed": "ڈاؤن لوڈ ناکام",
+    "filterPeriod": "مدت کے مطابق فلٹر کریں"
   },
   "payments": {
     "title": "بلنگ اور ادائیگیاں",
@@ -974,7 +983,9 @@
     "fileDropzone": {
       "dropHere": "فائلیں یہاں چھوڑیں",
       "choose": "فائلیں یہاں ڈریگ کریں، یا منتخب کرنے کے لیے کلک کریں",
-      "remove": "فائل ہٹائیں"
+      "remove": "فائل ہٹائیں",
+      "hint": "زیادہ سے زیادہ {{maxFiles}} فائل، ہر ایک {{maxSizeMb}} ایم بی",
+      "overLimit": "{{count}} فائل حد سے زیادہ"
     },
     "formDialog": {
       "submit": "محفوظ کریں",
@@ -1018,6 +1029,10 @@
     "noTemplates": "ابھی کوئی ٹیمپلیٹ نہیں",
     "noTemplatesDescription": "تجربہ یا اضافہ کا خط ایسا ٹیمپلیٹ شامل کریں۔",
     "loadFailed": "خطوط لوڈ نہیں ہو سکے",
-    "saveFailed": "ٹیمپلیٹ محفوظ نہیں ہو سکا"
+    "saveFailed": "ٹیمپلیٹ محفوظ نہیں ہو سکا",
+    "templateFormDescription": "خط ایک بار لکھیں اور دوبارہ استعمال کریں۔ جہاں متن بدلنا ہو وہاں $employee_name جیسے ملگ ٹیگ شامل کریں۔"
+  },
+  "actions": {
+    "cancel": "منسوخ کریں"
   }
 }
