@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
+import { useFormContext } from "react-hook-form";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { FileSignature, Plus, Download, ShieldCheck, Ban } from "lucide-react";
@@ -9,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { SearchInput } from "@/components/common/SearchInput";
 import { EmptyState } from "@/components/common/EmptyState";
 import { PageHeader } from "@/components/common/PageHeader";
+import { apiErrorMessage } from "@/lib/utils";
 import { ModuleGate } from "@/components/hr/ModuleGate";
 import { DataTable, DataTableToolbar, type DataTableColumn } from "@/components/hr/DataTable";
 import { FormDialog } from "@/components/hr/FormDialog";
@@ -231,6 +233,13 @@ function CreateLetterDialog({
   onDone: () => void;
 }) {
   const { t } = useTranslation();
+  // Registered through the FormProvider FormDialog renders. Without register()
+  // the submit sends an empty payload — see the comment in FormDialog.tsx.
+  const { register } = useFormContext<{
+    employee_uuid: string;
+    template_uuid: string;
+    letter_type: string;
+  }>();
 
   // Loaded on open rather than on mount: these lists only exist to fill the
   // dialog, and an org can have hundreds of employees.
@@ -275,14 +284,10 @@ function CreateLetterDialog({
         })
       }
     >
-      {/* Plain inputs for now: FormDialog supplies the form shell, submission
-          and dirty-state handling, and the field set is still growing. Migrate
-          to FormField/FormItem once validation rules land. */}
       <label className="block space-y-1 text-sm">
         <span className="font-medium">{t("letters.employee")}</span>
         <select
-          name="employee_uuid"
-          required
+          {...register("employee_uuid", { required: t("letters.selectEmployee") })}
           className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
           defaultValue=""
         >
@@ -300,7 +305,7 @@ function CreateLetterDialog({
       <label className="block space-y-1 text-sm">
         <span className="font-medium">{t("letters.template")}</span>
         <select
-          name="template_uuid"
+          {...register("template_uuid")}
           className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
           defaultValue=""
         >
@@ -316,7 +321,7 @@ function CreateLetterDialog({
       <label className="block space-y-1 text-sm">
         <span className="font-medium">{t("letters.type")}</span>
         <select
-          name="letter_type"
+          {...register("letter_type")}
           className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
           defaultValue="increment"
         >
@@ -328,8 +333,12 @@ function CreateLetterDialog({
         </select>
       </label>
 
+      {/* Show the server's validation message rather than axios's generic
+          "Request failed with status code 400". */}
       {create.isError ? (
-        <p className="text-sm text-destructive">{(create.error as Error)?.message}</p>
+        <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {apiErrorMessage(create.error, t("letters.saveFailed"))}
+        </p>
       ) : null}
     </FormDialog>
   );

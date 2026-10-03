@@ -15,6 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Form } from "@/components/ui/form";
 
 /**
  * Dialog shell wired to react-hook-form.
@@ -95,10 +96,18 @@ export function FormDialog<TFieldValues extends FieldValues = FieldValues>({
           {description ? <DialogDescription>{description}</DialogDescription> : null}
         </DialogHeader>
 
-        {/* `id` links the form element to Radix's description/label wiring. */}
-        <form id="form-dialog-body" onSubmit={handleSubmit} className="space-y-4">
-          {children}
-        </form>
+        {/* FormProvider is REQUIRED here, not decoration.
+            handleSubmit() only collects fields that are REGISTERED with the form
+            — a raw `<input name="x">` contributes nothing. Without this
+            provider children have no way to call register(), so every submit
+            arrived with an empty payload and the server rejected it with a
+            baffling 400 ("body is required" for a body that is visibly filled
+            in). Children reach the form with useFormContext(). */}
+        <Form {...form}>
+          <form id="form-dialog-body" onSubmit={handleSubmit} className="space-y-4">
+            {children}
+          </form>
+        </Form>
 
         {hideFooter ? null : (
           <DialogFooter>

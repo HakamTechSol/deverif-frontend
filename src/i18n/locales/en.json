@@ -1018,6 +1018,7 @@
     "emptyDescription": "Create a letter from a template to get started.",
     "noTemplates": "No templates yet",
     "noTemplatesDescription": "Add a template such as an experience or increment letter.",
-    "loadFailed": "Could not load letters"
+    "loadFailed": "Could not load letters",
+    "saveFailed": "Could not save the template"
   }
 }

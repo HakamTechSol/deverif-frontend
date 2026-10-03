@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
+import { useFormContext } from "react-hook-form";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { FileText, Plus, Pencil, Trash2 } from "lucide-react";
@@ -10,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "@/components/common/EmptyState";
 import { PageHeader } from "@/components/common/PageHeader";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
+import { apiErrorMessage } from "@/lib/utils";
 import { ModuleGate } from "@/components/hr/ModuleGate";
 import { DataTable, DataTableToolbar, type DataTableColumn } from "@/components/hr/DataTable";
 import { FormDialog } from "@/components/hr/FormDialog";
@@ -189,6 +191,14 @@ function TemplateDialog({
   onDone: () => void;
 }) {
   const { t } = useTranslation();
+  // The dialog's own form instance, reached through the FormProvider that
+  // FormDialog renders. Every field below MUST be registered or handleSubmit
+  // sends nothing.
+  const { register } = useFormContext<{
+    name: string;
+    letterType: string;
+    body: string;
+  }>();
   const tagsQuery = useQuery({
     queryKey: ["letter-merge-tags"],
     enabled: open,
@@ -207,12 +217,16 @@ function TemplateDialog({
   });
 
   const manualTags = tagsQuery.data?.manual_tags ?? [];
+  const allTags = tagsQuery.data?.merge_tags ?? [];
 
   return (
     <FormDialog
       open={open}
       onOpenChange={onOpenChange}
-      size="lg"
+      // xl, not lg: the body editor plus the tag palette need the width, and the
+      // dialog already scrolls, so a narrow frame just added a second axis of
+      // scrolling on top of it.
+      size="xl"
       title={template ? t("letters.editTemplate") : t("letters.newTemplate")}
       description={t("letters.templateFormDescription")}
       submitLabel={t("common.save")}
@@ -224,7 +238,7 @@ function TemplateDialog({
       }}
       onSubmit={(values) =>
         save.mutateAsync({
-          name: String(values.name ?? ""),
+          name: String(values.name ?? "").trim(),
           letterType: String(values.letterType ?? "custom"),
           body: String(values.body ?? ""),
         })
@@ -233,9 +247,7 @@ function TemplateDialog({
       <label className="block space-y-1 text-sm">
         <span className="font-medium">{t("letters.templateName")}</span>
         <input
-          name="name"
-          required
-          defaultValue={template?.name ?? ""}
+          {...register("name", { required: t("letters.templateName") })}
           className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
         />
       </label>
@@ -243,8 +255,7 @@ function TemplateDialog({
       <label className="block space-y-1 text-sm">
         <span className="font-medium">{t("letters.type")}</span>
         <select
-          name="letterType"
-          defaultValue={template?.letter_type ?? "increment"}
+          {...register("letterType")}
           className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
         >
           {HR_LETTER_TYPES.map((lt) => (
@@ -258,21 +269,25 @@ function TemplateDialog({
       <label className="block space-y-1 text-sm">
         <span className="font-medium">{t("letters.body")}</span>
         <Textarea
-          name="body"
-          required
-          rows={12}
-          defaultValue={template?.body ?? ""}
+          {...register("body", { required: t("letters.body") })}
+          rows={16}
           className="font-mono text-xs"
         />
       </label>
 
-      {manualTags.length ? (
+      {allTags.length ? (
         <div className="rounded-md bg-muted/60 p-3">
           <p className="mb-2 text-xs font-medium">{t("letters.insertTag")}</p>
+          {/* Split into "filled automatically" vs "must supply a value", because
+              that distinction is the whole reason the issue form exists. */}
           <div className="flex flex-wrap gap-1">
-            {manualTags.map((tag) => (
-              <Badge key={tag} variant="outline" className="cursor-default font-mono text-[10px]">
-                ${tag}
+            {allTags.map((tag) => (
+              <Badge
+                key={tag.tag}
+                variant={tag.source === "manual" ? "default" : "outline"}
+                className="font-mono text-[10px]"
+              >
+                ${tag.tag}
               </Badge>
             ))}
           </div>
@@ -280,8 +295,14 @@ function TemplateDialog({
         </div>
       ) : null}
 
+      {/* Surface the SERVER's message, not axios's "Request failed with status
+          code 400". The backend validates the body against the merge-tag
+          vocabulary and says exactly which tag is wrong; throwing that away in
+          favour of a status line is what made this look like a broken form. */}
       {save.isError ? (
-        <p className="text-sm text-destructive">{(save.error as Error)?.message}</p>
+        <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {apiErrorMessage(save.error, t("letters.saveFailed"))}
+        </p>
       ) : null}
     </FormDialog>
   );
