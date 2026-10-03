@@ -32,7 +32,9 @@
     "support": "Support",
     "supportTickets": "Support Tickets",
     "signOut": "Logout",
-    "closeMenu": "Close menu"
+    "closeMenu": "Close menu",
+    "letterTemplates": "Letter Templates",
+    "hrLetters": "HR Letters"
   },
   "common": {
     "search": "Search…",
@@ -979,5 +981,43 @@
       "submit": "Save",
       "cancel": "Cancel"
     }
+  },
+  "letters": {
+    "title": "HR Letters",
+    "description": "Issue offer, increment, experience and confirmation letters that anyone can verify.",
+    "templatesTitle": "Letter Templates",
+    "templatesDescription": "Reusable letter bodies with merge tags.",
+    "templatesHint": "Templates are shared across the organization. Editing one never changes letters already issued.",
+    "newLetter": "New letter",
+    "newLetterDescription": "Create a draft, preview it, then issue it to generate a verifiable PDF.",
+    "createDraft": "Create draft",
+    "newTemplate": "New template",
+    "editTemplate": "Edit template",
+    "templateName": "Template name",
+    "template": "Template",
+    "noTemplate": "No template",
+    "selectEmployee": "Select an employee",
+    "type": "Type",
+    "status": "Status",
+    "employee": "Employee",
+    "issuedAt": "Issued",
+    "referenceNo": "Reference",
+    "body": "Letter body",
+    "mergeTags": "Merge tags",
+    "insertTag": "Insert a merge tag",
+    "tagHint": "Tags marked as manual must be given a value when the letter is issued.",
+    "viewVerification": "View verification page",
+    "downloadPdf": "Download PDF",
+    "revoke": "Revoke letter",
+    "deleteTemplate": "Delete template",
+    "deleteTemplateDescription": "Issued letters keep their own saved text and stay verifiable. Only the template is removed.",
+    "all": "All",
+    "active": "Active",
+    "inactive": "Inactive",
+    "emptyTitle": "No letters yet",
+    "emptyDescription": "Create a letter from a template to get started.",
+    "noTemplates": "No templates yet",
+    "noTemplatesDescription": "Add a template such as an experience or increment letter.",
+    "loadFailed": "Could not load letters"
   }
 }

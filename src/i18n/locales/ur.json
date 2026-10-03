@@ -32,7 +32,9 @@
     "support": "سپورٹ",
     "supportTickets": "سپورٹ ٹکٹس",
     "signOut": "لاگ آؤٹ",
-    "closeMenu": "مینو بند کریں"
+    "closeMenu": "مینو بند کریں",
+    "letterTemplates": "خطوط کے ٹیمپلیٹ",
+    "hrLetters": "ایچ آر خطوط"
   },
   "common": {
     "search": "تلاش کریں…",
@@ -978,5 +980,43 @@
       "submit": "محفوظ کریں",
       "cancel": "منسوخ کریں"
     }
+  },
+  "letters": {
+    "title": "ایچ آر خطوط",
+    "description": "پیشکش، اضافہ، تجربہ اور تصدیقی خطوط جاری کریں جن کی تصدیق کوئی بھی کر سکتا ہے۔",
+    "templatesTitle": "خطوط کے ٹیمپلیٹ",
+    "templatesDescription": "ملگ اب آئے ٹیگز کے ساتھ قابلِ استعمال خطہ متن۔",
+    "templatesHint": "ٹیمپلیٹس ادارے کے لیے مشترکہ ہیں۔ کوئی بھی تبدیلی پہلے جاری کردہ خطوط کو متاثر نہیں کرتی۔",
+    "newLetter": "نیا خط",
+    "newLetterDescription": "ڈرافٹ بنائیں، پیش منظر دیکھیں، پھر قابلِ تصدیق PDF جاری کریں۔",
+    "createDraft": "ڈرافٹ بنائیں",
+    "newTemplate": "نیا ٹیمپلیٹ",
+    "editTemplate": "ٹیمپلیٹ میں ترمیم",
+    "templateName": "ٹیمپلیٹ کا نام",
+    "template": "ٹیمپلیٹ",
+    "noTemplate": "کوئی ٹیمپلیٹ نہیں",
+    "selectEmployee": "ملازم منتخب کریں",
+    "type": "قسم",
+    "status": "حالت",
+    "employee": "ملازم",
+    "issuedAt": "تاریخِ جاری",
+    "referenceNo": "حوالہ نمبر",
+    "body": "خط کا متن",
+    "mergeTags": "ملگ ٹیگز",
+    "insertTag": "ملگ ٹیگ شامل کریں",
+    "tagHint": "جو ٹیگ دستی ہیں ان کی قدر خط جاری کرتے وقت دینی ہوگی۔",
+    "viewVerification": "تصدیقی صفحہ دیکھیں",
+    "downloadPdf": "PDF ڈاؤن لوڈ کریں",
+    "revoke": "خط مسترد کریں",
+    "deleteTemplate": "ٹیمپلیٹ حذف کریں",
+    "deleteTemplateDescription": "جاری کردہ خطوط اپنا محفوظ متن رکھتے ہیں اور قابلِ تصدیق رہتے ہیں۔ صرف ٹیمپلیٹ حذف ہوگا۔",
+    "all": "تمام",
+    "active": "فعال",
+    "inactive": "غیر فعال",
+    "emptyTitle": "ابھی کوئی خط نہیں",
+    "emptyDescription": "شروع کرنے کے لیے ٹیمپلیٹ سے خط بنائیں۔",
+    "noTemplates": "ابھی کوئی ٹیمپلیٹ نہیں",
+    "noTemplatesDescription": "تجربہ یا اضافہ کا خط ایسا ٹیمپلیٹ شامل کریں۔",
+    "loadFailed": "خطوط لوڈ نہیں ہو سکے"
   }
 }

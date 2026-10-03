@@ -8,6 +8,8 @@ import {
   ClipboardCheck,
   CreditCard,
   FileCheck2,
+  FileSignature,
+  FileText,
   Headset,
   History,
   Hourglass,
@@ -58,6 +60,8 @@ export const orgAdminNavItems: NavItem[] = [
   { to: "/org/attendance", labelKey: "nav.attendance", icon: ClipboardCheck },
   { to: "/org/salary-components", labelKey: "nav.payrollComponents", icon: Wallet },
   { to: "/org/payroll", labelKey: "nav.payroll", icon: Wallet },
+  { to: "/org/letter-templates", labelKey: "nav.letterTemplates", icon: FileText },
+  { to: "/org/hr-letters", labelKey: "nav.hrLetters", icon: FileSignature },
   { to: "/org/support", labelKey: "nav.support", icon: Headset },
   { to: "/payments", labelKey: "nav.payments", icon: CreditCard },
 ];
@@ -84,4 +88,3 @@ export const allNavPaths: string[] = [
     [...userNavItems, ...memberNavItems, ...orgAdminNavItems, ...adminNav].map((it) => it.to),
   ),
 ];
-

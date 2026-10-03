@@ -29,12 +29,7 @@ export type OrgRole = "org_admin" | "sub_admin" | "employee";
 
 /** The feature_access keys, as persisted per user. Mirrors the backend's PERMISSION_KEYS. */
 export type FeatureKey =
-  | "attendance"
-  | "leave"
-  | "payroll"
-  | "manage_employees"
-  | "generate_request"
-  | "approve_request";
+  "attendance" | "leave" | "payroll" | "manage_employees" | "generate_request" | "approve_request";
 
 const ALL_ORG_ROLES: readonly OrgRole[] = ["org_admin", "sub_admin", "employee"];
 const STAFF_ROLES: readonly OrgRole[] = ["org_admin", "sub_admin"];
@@ -97,6 +92,17 @@ export const ROUTE_ACCESS: Readonly<Record<string, RouteRule>> = {
   "/org/salary-components": { roles: STAFF_ROLES, feature: "payroll", always: ["org_admin"] },
   "/org/payroll": { roles: STAFF_ROLES, feature: "payroll", always: ["org_admin"] },
 
+  // --- HR letters ------------------------------------------------------------
+  // Gated on ROLE only, not on a feature_access key. Letters are not delegated
+  // to sub-admins via feature_access: issuing an experience or increment letter
+  // is an act of the organization, and sub-admin delegation for it would mean
+  // granting a sub-admin the power to attest to someone's employment to a third
+  // party. Plan-level access is the separate axis handled by ModuleGate via
+  // module_flags (hr_letters_management) — deliberately not a column here, for
+  // the same reason the other plan modules are not.
+  "/org/letter-templates": { roles: ["org_admin"] },
+  "/org/hr-letters": { roles: ["org_admin"] },
+
   // --- Billing --------------------------------------------------------------
   // The org can *read* subscription status as any role, but every mutating
   // action on this page (checkout, self-subscribe, cancel downgrade) is
@@ -146,17 +152,17 @@ function ruleForPath(path: string): RouteRule | null {
  * ROUTE_ACCESS is denied, so adding a page without deciding who may see it
  * fails visibly rather than defaulting to open.
  */
-export function canAccessRoute(
-  user: AuthUser | null | undefined,
-  path: string,
-): boolean {
+export function canAccessRoute(user: AuthUser | null | undefined, path: string): boolean {
   if (!user) return false;
 
   const p = normalize(path);
 
   if (user.role === "admin") {
-    return p === PLATFORM_ADMIN_PREFIX || p.startsWith(`${PLATFORM_ADMIN_PREFIX}/`) ||
-      PLATFORM_ADMIN_EXACT.has(p);
+    return (
+      p === PLATFORM_ADMIN_PREFIX ||
+      p.startsWith(`${PLATFORM_ADMIN_PREFIX}/`) ||
+      PLATFORM_ADMIN_EXACT.has(p)
+    );
   }
 
   // An org user must have a resolved org_role; anything else cannot be

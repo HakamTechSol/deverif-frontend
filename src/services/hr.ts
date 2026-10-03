@@ -247,3 +247,140 @@ export const orgEmployeeSalaryService = {
       )
       .then((r) => r.data.assignments),
 };
+
+/* ═══════════════════════════ HR LETTERS ═══════════════════════════ */
+
+export type HrLetterType =
+  | "offer"
+  | "increment"
+  | "experience"
+  | "employment_confirmation"
+  | "warning"
+  | "appreciation"
+  | "custom";
+
+export const HR_LETTER_TYPES: { key: HrLetterType; label: string }[] = [
+  { key: "offer", label: "Offer Letter" },
+  { key: "increment", label: "Salary Increment Letter" },
+  { key: "experience", label: "Experience Letter" },
+  { key: "employment_confirmation", label: "Employment Confirmation Letter" },
+  { key: "warning", label: "Warning Letter" },
+  { key: "appreciation", label: "Appreciation Letter" },
+  { key: "custom", label: "Custom Letter" },
+];
+
+export type LetterTemplate = {
+  uuid: UUID;
+  letter_type: HrLetterType;
+  name: string;
+  body: string;
+  merge_fields?: string[] | null;
+  is_active: number;
+  created_at: string;
+  updated_at: string;
+};
+
+/** A tag the system cannot fill by itself; the issue form must collect these. */
+export type MergeTag = { tag: string; label: string; source: string };
+
+export type HrLetterStatus = "draft" | "issued" | "revoked";
+
+export type HrLetter = {
+  uuid: UUID;
+  organization_id?: number;
+  employee_uuid: string;
+  employee_name?: string;
+  employee_designation?: string | null;
+  template_uuid?: string | null;
+  letter_type: HrLetterType;
+  reference_no: string;
+  title: string;
+  payload?: Record<string, string> | null;
+  body_snapshot?: string | null;
+  status: HrLetterStatus;
+  issued_at?: string | null;
+  revoked_at?: string | null;
+  revoked_reason?: string | null;
+  created_at: string;
+  qr_token?: string | null;
+  verify_url?: string | null;
+};
+
+export type HrLetterListItem = HrLetter & { employee_uuid: string };
+
+export type TemplatePreview = {
+  text: string;
+  /** Tags referenced but with no value; issuance refuses while any remain. */
+  unresolved: string[];
+  /** Tags with no known source at all — a template bug, not a missing value. */
+  unknown: string[];
+  /** The subset of `unresolved` the issue form can collect. */
+  missing_manual: string[];
+};
+
+export const letterTemplatesService = {
+  list: (params: { letter_type?: HrLetterType; include_inactive?: boolean } = {}) =>
+    api
+      .get<{ items: LetterTemplate[]; merge_tags: MergeTag[]; manual_tags: string[] }>(
+        "/org/letter-templates",
+        { params },
+      )
+      .then((r) => r.data),
+  get: (uuid: UUID) =>
+    api
+      .get<{ template: LetterTemplate }>(`/org/letter-templates/${uuid}`)
+      .then((r) => r.data.template),
+  create: (data: { letterType: HrLetterType; name: string; body: string }) =>
+    api
+      .post<{ template: LetterTemplate }>("/org/letter-templates", data)
+      .then((r) => r.data.template),
+  update: (
+    uuid: UUID,
+    data: Partial<{ letterType: HrLetterType; name: string; body: string; isActive: boolean }>,
+  ) =>
+    api
+      .put<{ template: LetterTemplate }>(`/org/letter-templates/${uuid}`, data)
+      .then((r) => r.data.template),
+  remove: (uuid: UUID) => api.delete(`/org/letter-templates/${uuid}`).then((r) => r.data),
+  /** Render a template against an employee WITHOUT creating anything. */
+  preview: (uuid: UUID, data: { employee_uuid: string; values?: Record<string, string> }) =>
+    api.post<TemplatePreview>(`/org/letter-templates/${uuid}/preview`, data).then((r) => r.data),
+};
+
+export const hrLettersService = {
+  list: (
+    params: {
+      page?: number;
+      limit?: number;
+      employee_uuid?: string;
+      letter_type?: HrLetterType;
+      status?: HrLetterStatus;
+      search?: string;
+    } = {},
+  ) => api.get<Paginated<HrLetterListItem>>("/org/hr-letters", { params }).then((r) => r.data),
+  get: (uuid: UUID) =>
+    api.get<{ letter: HrLetter }>(`/org/hr-letters/${uuid}`).then((r) => r.data.letter),
+  create: (data: {
+    employee_uuid: string;
+    template_uuid?: string;
+    letter_type: HrLetterType;
+    title?: string;
+    values?: Record<string, string>;
+  }) => api.post<{ letter: HrLetter }>("/org/hr-letters", data).then((r) => r.data.letter),
+  /**
+   * Issue mints the QR and FREEZES the merged text server-side. Re-supplying
+   * values here overrides what the draft stored, which is how a user fixes a
+   * draft after seeing the preview.
+   */
+  issue: (uuid: UUID, values: Record<string, string> = {}) =>
+    api
+      .post<{ letter: HrLetter }>(`/org/hr-letters/${uuid}/issue`, { values })
+      .then((r) => r.data.letter),
+  revoke: (uuid: UUID, reason: string) =>
+    api
+      .post<{ letter: HrLetter }>(`/org/hr-letters/${uuid}/revoke`, { reason })
+      .then((r) => r.data.letter),
+  remove: (uuid: UUID) => api.delete(`/org/hr-letters/${uuid}`).then((r) => r.data),
+  downloadPdf: (uuid: UUID) =>
+    api.get(`/org/hr-letters/${uuid}/pdf`, { responseType: "blob" }).then((r) => r.data as Blob),
+};
