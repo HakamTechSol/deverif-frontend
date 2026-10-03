@@ -952,5 +952,31 @@
     "closedNoReply": "یہ ٹکٹ بند ہے اور مزید جواب نہیں لے سکتا۔",
     "you": "آپ",
     "supportTeam": "سپورٹ ٹیم"
+  },
+  "hr": {
+    "approval": {
+      "approved": "منظور شدہ",
+      "rejected": "مسترد شدہ",
+      "pending": "زیر التوا",
+      "skipped": "چھوڑ دیا گیا",
+      "cancelled": "منسوخ شدہ",
+      "forwarded": "آگے بھیجا گیا",
+      "currentStep": "موجودہ مرحلہ",
+      "noHistory": "ابھی کوئی منظوری کی تاریخ نہیں۔",
+      "system": "سسٹم"
+    },
+    "dataTable": {
+      "emptyTitle": "ابھی کوئی ریکارڈ نہیں",
+      "emptyDescription": "ریکارڈ شامل کیے جانے کے بعد یہاں نظر آئیں گے۔"
+    },
+    "fileDropzone": {
+      "dropHere": "فائلیں یہاں چھوڑیں",
+      "choose": "فائلیں یہاں ڈریگ کریں، یا منتخب کرنے کے لیے کلک کریں",
+      "remove": "فائل ہٹائیں"
+    },
+    "formDialog": {
+      "submit": "محفوظ کریں",
+      "cancel": "منسوخ کریں"
+    }
   }
 }

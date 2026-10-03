@@ -774,7 +774,8 @@
     "year": "Year",
     "allocated": "Allocated",
     "used": "Used",
-    "remaining": "Remaining"
+    "remaining": "Remaining",
+    "dialogDescription": "For example Annual, Sick, Casual. Employees' annual balances are set separately in the Allocations tab."
   },
   "attendance": {
     "description": "Review employee check-ins/check-outs and manage the office-network IPs allowed to mark attendance.",
@@ -952,5 +953,31 @@
     "closedNoReply": "This ticket is closed and can no longer receive replies.",
     "you": "You",
     "supportTeam": "Support team"
+  },
+  "hr": {
+    "approval": {
+      "approved": "Approved",
+      "rejected": "Rejected",
+      "pending": "Pending",
+      "skipped": "Skipped",
+      "cancelled": "Cancelled",
+      "forwarded": "Forwarded",
+      "currentStep": "Current step",
+      "noHistory": "No approval history yet.",
+      "system": "System"
+    },
+    "dataTable": {
+      "emptyTitle": "No records yet",
+      "emptyDescription": "Records will appear here once they are added."
+    },
+    "fileDropzone": {
+      "dropHere": "Drop the files here",
+      "choose": "Drag files here, or click to choose",
+      "remove": "Remove file"
+    },
+    "formDialog": {
+      "submit": "Save",
+      "cancel": "Cancel"
+    }
   }
 }
