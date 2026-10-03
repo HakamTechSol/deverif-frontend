@@ -42,7 +42,9 @@ import { Route as AppAdminUsersRouteImport } from './routes/_app.admin.users'
 import { Route as AppAutoVerifiedUuidRouteImport } from './routes/_app.auto-verified_.$uuid'
 import { Route as AppOrgAdminsRouteImport } from './routes/_app.org.admins'
 import { Route as AppOrgAttendanceRouteImport } from './routes/_app.org.attendance'
+import { Route as AppOrgHrLettersRouteImport } from './routes/_app.org.hr-letters'
 import { Route as AppOrgLeavesRouteImport } from './routes/_app.org.leaves'
+import { Route as AppOrgLetterTemplatesRouteImport } from './routes/_app.org.letter-templates'
 import { Route as AppOrgPayrollRouteImport } from './routes/_app.org.payroll'
 import { Route as AppOrgSalaryComponentsRouteImport } from './routes/_app.org.salary-components'
 import { Route as AppOrgSupportRouteImport } from './routes/_app.org.support'
@@ -221,9 +223,19 @@ const AppOrgAttendanceRoute = AppOrgAttendanceRouteImport.update({
   path: '/org/attendance',
   getParentRoute: () => AppRoute,
 } as any)
+const AppOrgHrLettersRoute = AppOrgHrLettersRouteImport.update({
+  id: '/org/hr-letters',
+  path: '/org/hr-letters',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppOrgLeavesRoute = AppOrgLeavesRouteImport.update({
   id: '/org/leaves',
   path: '/org/leaves',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppOrgLetterTemplatesRoute = AppOrgLetterTemplatesRouteImport.update({
+  id: '/org/letter-templates',
+  path: '/org/letter-templates',
   getParentRoute: () => AppRoute,
 } as any)
 const AppOrgPayrollRoute = AppOrgPayrollRouteImport.update({
@@ -315,7 +327,9 @@ export interface FileRoutesByFullPath {
   '/auto-verified/$uuid': typeof AppAutoVerifiedUuidRoute
   '/org/admins': typeof AppOrgAdminsRoute
   '/org/attendance': typeof AppOrgAttendanceRoute
+  '/org/hr-letters': typeof AppOrgHrLettersRoute
   '/org/leaves': typeof AppOrgLeavesRoute
+  '/org/letter-templates': typeof AppOrgLetterTemplatesRoute
   '/org/payroll': typeof AppOrgPayrollRoute
   '/org/salary-components': typeof AppOrgSalaryComponentsRoute
   '/org/support': typeof AppOrgSupportRouteWithChildren
@@ -360,7 +374,9 @@ export interface FileRoutesByTo {
   '/auto-verified/$uuid': typeof AppAutoVerifiedUuidRoute
   '/org/admins': typeof AppOrgAdminsRoute
   '/org/attendance': typeof AppOrgAttendanceRoute
+  '/org/hr-letters': typeof AppOrgHrLettersRoute
   '/org/leaves': typeof AppOrgLeavesRoute
+  '/org/letter-templates': typeof AppOrgLetterTemplatesRoute
   '/org/payroll': typeof AppOrgPayrollRoute
   '/org/salary-components': typeof AppOrgSalaryComponentsRoute
   '/payment/callback': typeof AppPaymentCallbackRoute
@@ -406,7 +422,9 @@ export interface FileRoutesById {
   '/_app/auto-verified_/$uuid': typeof AppAutoVerifiedUuidRoute
   '/_app/org/admins': typeof AppOrgAdminsRoute
   '/_app/org/attendance': typeof AppOrgAttendanceRoute
+  '/_app/org/hr-letters': typeof AppOrgHrLettersRoute
   '/_app/org/leaves': typeof AppOrgLeavesRoute
+  '/_app/org/letter-templates': typeof AppOrgLetterTemplatesRoute
   '/_app/org/payroll': typeof AppOrgPayrollRoute
   '/_app/org/salary-components': typeof AppOrgSalaryComponentsRoute
   '/_app/org/support': typeof AppOrgSupportRouteWithChildren
@@ -454,7 +472,9 @@ export interface FileRouteTypes {
     | '/auto-verified/$uuid'
     | '/org/admins'
     | '/org/attendance'
+    | '/org/hr-letters'
     | '/org/leaves'
+    | '/org/letter-templates'
     | '/org/payroll'
     | '/org/salary-components'
     | '/org/support'
@@ -499,7 +519,9 @@ export interface FileRouteTypes {
     | '/auto-verified/$uuid'
     | '/org/admins'
     | '/org/attendance'
+    | '/org/hr-letters'
     | '/org/leaves'
+    | '/org/letter-templates'
     | '/org/payroll'
     | '/org/salary-components'
     | '/payment/callback'
@@ -544,7 +566,9 @@ export interface FileRouteTypes {
     | '/_app/auto-verified_/$uuid'
     | '/_app/org/admins'
     | '/_app/org/attendance'
+    | '/_app/org/hr-letters'
     | '/_app/org/leaves'
+    | '/_app/org/letter-templates'
     | '/_app/org/payroll'
     | '/_app/org/salary-components'
     | '/_app/org/support'
@@ -805,11 +829,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppOrgAttendanceRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/org/hr-letters': {
+      id: '/_app/org/hr-letters'
+      path: '/org/hr-letters'
+      fullPath: '/org/hr-letters'
+      preLoaderRoute: typeof AppOrgHrLettersRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/org/leaves': {
       id: '/_app/org/leaves'
       path: '/org/leaves'
       fullPath: '/org/leaves'
       preLoaderRoute: typeof AppOrgLeavesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/org/letter-templates': {
+      id: '/_app/org/letter-templates'
+      path: '/org/letter-templates'
+      fullPath: '/org/letter-templates'
+      preLoaderRoute: typeof AppOrgLetterTemplatesRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/org/payroll': {
@@ -957,7 +995,9 @@ interface AppRouteChildren {
   AppAutoVerifiedUuidRoute: typeof AppAutoVerifiedUuidRoute
   AppOrgAdminsRoute: typeof AppOrgAdminsRoute
   AppOrgAttendanceRoute: typeof AppOrgAttendanceRoute
+  AppOrgHrLettersRoute: typeof AppOrgHrLettersRoute
   AppOrgLeavesRoute: typeof AppOrgLeavesRoute
+  AppOrgLetterTemplatesRoute: typeof AppOrgLetterTemplatesRoute
   AppOrgPayrollRoute: typeof AppOrgPayrollRoute
   AppOrgSalaryComponentsRoute: typeof AppOrgSalaryComponentsRoute
   AppOrgSupportRoute: typeof AppOrgSupportRouteWithChildren
@@ -988,7 +1028,9 @@ const AppRouteChildren: AppRouteChildren = {
   AppAutoVerifiedUuidRoute: AppAutoVerifiedUuidRoute,
   AppOrgAdminsRoute: AppOrgAdminsRoute,
   AppOrgAttendanceRoute: AppOrgAttendanceRoute,
+  AppOrgHrLettersRoute: AppOrgHrLettersRoute,
   AppOrgLeavesRoute: AppOrgLeavesRoute,
+  AppOrgLetterTemplatesRoute: AppOrgLetterTemplatesRoute,
   AppOrgPayrollRoute: AppOrgPayrollRoute,
   AppOrgSalaryComponentsRoute: AppOrgSalaryComponentsRoute,
   AppOrgSupportRoute: AppOrgSupportRouteWithChildren,
