@@ -421,6 +421,15 @@ export const hrLettersService = {
     api
       .post<{ letter: HrLetter }>(`/org/hr-letters/${uuid}/revoke`, { reason })
       .then((r) => r.data.letter),
+  /**
+   * Return a revoked letter to draft so it can be corrected and issued again.
+   *
+   * This does NOT re-issue. The letter comes back as a draft with no QR and no
+   * issue date, so it must go through the normal issue flow (and its merge-tag
+   * values are collected again) before it is attestable.
+   */
+  revertToDraft: (uuid: UUID) =>
+    api.post<{ letter: HrLetter }>(`/org/hr-letters/${uuid}/re-draft`).then((r) => r.data.letter),
   remove: (uuid: UUID) => api.delete(`/org/hr-letters/${uuid}`).then((r) => r.data),
   downloadPdf: (uuid: UUID) =>
     api.get(`/org/hr-letters/${uuid}/pdf`, { responseType: "blob" }).then((r) => r.data as Blob),

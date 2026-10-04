@@ -12,6 +12,7 @@ import {
   MoreHorizontal,
   Send,
   Trash2,
+  RotateCcw,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -243,7 +244,7 @@ type CreateLetterFormValues = {
 export function RowActions({ row }: { row: HrLetterListItem }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
-  const [confirm, setConfirm] = useState<null | "delete" | "revoke">(null);
+  const [confirm, setConfirm] = useState<null | "delete" | "revoke" | "revert">(null);
   /**
    * Issue opens a dialog rather than firing straight at the API. The backend
    * refuses to issue while any merge tag is unresolved, so a bare POST returned
@@ -278,8 +279,16 @@ export function RowActions({ row }: { row: HrLetterListItem }) {
     },
   });
 
-  const busy = download.isPending || remove.isPending || revoke.isPending;
-  const error = remove.error ?? revoke.error ?? download.error;
+  const revert = useMutation({
+    mutationFn: () => hrLettersService.revertToDraft(row.uuid),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["hr-letters"] });
+      setConfirm(null);
+    },
+  });
+
+  const busy = download.isPending || remove.isPending || revoke.isPending || revert.isPending;
+  const error = remove.error ?? revoke.error ?? revert.error ?? download.error;
 
   return (
     <>
@@ -331,10 +340,21 @@ export function RowActions({ row }: { row: HrLetterListItem }) {
           ) : null}
 
           {row.status === "revoked" ? (
-            <DropdownMenuItem onSelect={() => download.mutate()}>
-              <Download className="mr-2 h-4 w-4" />
-              {t("letters.downloadRevokedPdf")}
-            </DropdownMenuItem>
+            <>
+              <DropdownMenuItem onSelect={() => download.mutate()}>
+                <Download className="mr-2 h-4 w-4" />
+                {t("letters.downloadRevokedPdf")}
+              </DropdownMenuItem>
+              {/* Revocation was one-way, which left HR unable to fix a letter
+                  revoked over a typo: a revoked letter could be neither edited
+                  into a correct draft nor issued. This is the way back. It only
+                  returns the letter to draft — issuing stays a separate,
+                  deliberate step with its own preview. */}
+              <DropdownMenuItem onSelect={() => setConfirm("revert")}>
+                <RotateCcw className="mr-2 h-4 w-4" />
+                {t("letters.revertToDraft")}
+              </DropdownMenuItem>
+            </>
           ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
@@ -344,6 +364,17 @@ export function RowActions({ row }: { row: HrLetterListItem }) {
         open={issuing}
         onOpenChange={setIssuing}
         onIssued={() => qc.invalidateQueries({ queryKey: ["hr-letters"] })}
+      />
+
+      <ConfirmDialog
+        open={confirm === "revert"}
+        title={t("letters.revertToDraft")}
+        description={t("letters.revertToDraftDescription")}
+        confirmLabel={t("letters.revertToDraft")}
+        onConfirm={async () => {
+          await revert.mutateAsync();
+        }}
+        onOpenChange={(v) => !v && setConfirm(null)}
       />
 
       <ConfirmDialog

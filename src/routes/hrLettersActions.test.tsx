@@ -22,6 +22,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 const issue = vi.fn(async () => ({}) as never);
 const revoke = vi.fn(async () => ({}) as never);
 const remove = vi.fn(async () => ({}) as never);
+const revertToDraft = vi.fn(async () => ({}) as never);
 const downloadPdf = vi.fn(async () => new Blob(["pdf"]));
 
 /**
@@ -49,7 +50,14 @@ vi.mock("@/services", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/services")>();
   return {
     ...actual,
-    hrLettersService: { ...actual.hrLettersService, issue, revoke, remove, downloadPdf },
+    hrLettersService: {
+      ...actual.hrLettersService,
+      issue,
+      revoke,
+      remove,
+      revertToDraft,
+      downloadPdf,
+    },
     letterTemplatesService: { ...actual.letterTemplatesService, preview },
   };
 });
@@ -160,6 +168,13 @@ describe("actions offered per status", () => {
     await waitFor(() => expect(screen.getByText("Download PDF (Revoked)")).toBeInTheDocument());
     expect(screen.queryByText("Revoke letter")).not.toBeInTheDocument();
     expect(screen.queryByText("Issue Letter")).not.toBeInTheDocument();
+  });
+
+  it("revoked offers a way back to draft, since revocation was one-way", async () => {
+    render(<Harness />);
+    await openRow(2);
+
+    await waitFor(() => expect(screen.getByText("Revert to Draft")).toBeInTheDocument());
   });
 });
 
