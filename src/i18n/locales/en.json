@@ -1053,7 +1053,9 @@
     "revertToDraft": "Revert to Draft",
     "revertToDraftDescription": "This brings the letter back as a draft so you can correct it and issue it again. The verification link and issue date are cleared, so any printed copy stops verifying. The letter must be issued again before it is valid.",
     "revertToDraftToast": "Letter reverted to draft",
-    "revertToDraftFailedToast": "Could not revert the letter"
+    "revertToDraftFailedToast": "Could not revert the letter",
+    "autoTags": "Filled automatically",
+    "manualTags": "You must supply these"
   },
   "actions": {
     "cancel": "Cancel"

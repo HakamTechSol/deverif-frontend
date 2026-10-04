@@ -55,6 +55,8 @@ export function FormDialog<TFieldValues extends FieldValues = FieldValues>({
   children,
   /** Disables the footer entirely for read-only or custom-action dialogs. */
   hideFooter = false,
+  bodyClassName,
+  dialogClassName,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -71,6 +73,19 @@ export function FormDialog<TFieldValues extends FieldValues = FieldValues>({
   footerExtra?: ReactNode;
   children: ReactNode;
   hideFooter?: boolean;
+  /**
+   * Extra classes for the <form> wrapper, for a dialog whose body must FILL the
+   * available height instead of growing the dialog and scrolling it.
+   *
+   * The default is `space-y-4` on an auto-height form, so a tall body pushes the
+   * panel to max-h-[85vh] and yields an outer scrollbar with a second one nested
+   * inside it. A caller wanting a fixed-height workspace passes
+   * `flex min-h-0 flex-1 flex-col overflow-hidden` here plus `dialogClassName`
+   * to stop the shell scrolling, and lets its own fields manage overflow.
+   */
+  bodyClassName?: string;
+  /** Extra classes for the dialog panel itself, e.g. a wider or taller shell. */
+  dialogClassName?: string;
 }) {
   const internalForm = useForm<TFieldValues>({ defaultValues });
   const form = externalForm ?? internalForm;
@@ -87,10 +102,13 @@ export function FormDialog<TFieldValues extends FieldValues = FieldValues>({
   const handleSubmit = form.handleSubmit(onSubmit);
 
   const widths = { sm: "sm:max-w-sm", md: "sm:max-w-lg", lg: "sm:max-w-2xl", xl: "sm:max-w-4xl" };
+  /** Append caller overrides after the size default, without clobbering either. */
+  const shell = (extra?: string) => (extra ? `${widths[size]} ${extra}` : widths[size]);
+  const body = (extra?: string) => (extra ? `space-y-4 ${extra}` : "space-y-4");
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className={widths[size]}>
+      <DialogContent className={shell(dialogClassName)}>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           {description ? <DialogDescription>{description}</DialogDescription> : null}
@@ -110,7 +128,7 @@ export function FormDialog<TFieldValues extends FieldValues = FieldValues>({
             instance to the fields. This provider is here so that a nested
             component using FormField/FormItem from ui/form works if one is added. */}
         <Form {...form}>
-          <form id="form-dialog-body" onSubmit={handleSubmit} className="space-y-4">
+          <form id="form-dialog-body" onSubmit={handleSubmit} className={body(bodyClassName)}>
             {children}
           </form>
         </Form>

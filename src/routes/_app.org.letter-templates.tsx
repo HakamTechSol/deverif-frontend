@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm, type UseFormReturn } from "react-hook-form";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -256,6 +256,13 @@ function TemplateDialog({
       // dialog already scrolls vertically, so a narrow frame just added a second
       // axis of scrolling on top of it.
       size="xl"
+      // A split workspace needs room, and it needs to STOP SCROLLING as a panel.
+      // The old shell was an auto-height form inside max-h-[85vh] overflow-y-auto,
+      // so a tall body produced an outer scrollbar AND an inner one on the
+      // textarea. Fixing the panel height and letting the two columns manage
+      // their own overflow is what removes the nesting.
+      dialogClassName="sm:max-w-5xl sm:max-h-[90vh] sm:overflow-hidden flex flex-col"
+      bodyClassName="flex min-h-0 flex-1 flex-col overflow-hidden"
       title={template ? t("letters.editTemplate") : t("letters.newTemplate")}
       description={t("letters.templateFormDescription")}
       submitLabel={t("common.save")}
@@ -278,13 +285,15 @@ function TemplateDialog({
         insertTagLabel={t("letters.insertTag")}
         tagHint={t("letters.tagHint")}
         saveFailed={t("letters.saveFailed")}
+        autoTagsLabel={t("letters.autoTags")}
+        manualTagsLabel={t("letters.manualTags")}
       />
     </FormDialog>
   );
 }
 
 /** Rendered INSIDE FormDialog, so it receives the form as a plain prop. */
-function TemplateFields({
+export function TemplateFields({
   form,
   mergeTags,
   error,
@@ -294,9 +303,11 @@ function TemplateFields({
   insertTagLabel,
   tagHint,
   saveFailed,
+  autoTagsLabel,
+  manualTagsLabel,
 }: {
   form: UseFormReturn<TemplateFormValues>;
-  mergeTags: { tag: string; source: string }[];
+  mergeTags: { tag: string; label?: string; source: string }[];
   error: string | null;
   nameLabel: string;
   typeLabel: string;
@@ -304,6 +315,8 @@ function TemplateFields({
   insertTagLabel: string;
   tagHint: string;
   saveFailed: string;
+  autoTagsLabel: string;
+  manualTagsLabel: string;
 }) {
   // Ref to the body editor so a chip can insert at the caret. insertAtCaret
   // mutates the DOM and returns the new text; form.setValue is what actually
@@ -313,79 +326,153 @@ function TemplateFields({
 
   const insertTag = (tag: string) => {
     const next = insertAtCaret(bodyRef.current, `$${tag}`);
+    // Keep the caret visible: the body is a tall scrolling box, so inserting at
+    // the very top while the view is scrolled to the bottom would look like the
+    // click did nothing.
+    bodyRef.current?.scrollTo?.({ top: bodyRef.current.scrollTop });
     form.setValue("body", next, { shouldDirty: true, shouldTouch: true });
   };
 
+  /**
+   * Split by SOURCE, because that is the distinction that changes what the
+   * author has to do. A `manual` tag is a value somebody has to supply at issue
+   * time; every other tag is filled from the employee, organization or system
+   * without anyone typing. An author who cannot tell them apart cannot tell
+   * which values the issue form will demand.
+   */
+  const { auto, manual } = useMemo(() => {
+    const a: typeof mergeTags = [];
+    const m: typeof mergeTags = [];
+    for (const tag of mergeTags) {
+      (tag.source === "manual" ? m : a).push(tag);
+    }
+    return { auto: a, manual: m };
+  }, [mergeTags]);
+
   return (
-    <>
-      <label className="block space-y-1 text-sm">
-        <span className="font-medium">{nameLabel}</span>
-        <input
-          {...form.register("name", { required: nameLabel })}
-          className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-        />
-      </label>
+    <div className="grid min-h-0 flex-1 gap-4 overflow-hidden md:grid-cols-[minmax(0,30%)_minmax(0,70%)]">
+      {/* ---- LEFT: the tag palette -------------------------------------- */}
+      <aside className="flex min-h-0 flex-col gap-3 md:overflow-y-auto md:pr-1">
+        <p className="text-xs font-medium text-muted-foreground">{insertTagLabel}</p>
 
-      <label className="block space-y-1 text-sm">
-        <span className="font-medium">{typeLabel}</span>
-        <select
-          {...form.register("letterType")}
-          className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-        >
-          {HR_LETTER_TYPES.map((lt) => (
-            <option key={lt.key} value={lt.key}>
-              {lt.label}
-            </option>
-          ))}
-        </select>
-      </label>
+        {mergeTags.length === 0 ? null : (
+          <>
+            {auto.length ? (
+              <TagGroup title={autoTagsLabel} tags={auto} onInsert={insertTag} hint={tagHint} />
+            ) : null}
+            {manual.length ? (
+              <TagGroup title={manualTagsLabel} tags={manual} onInsert={insertTag} />
+            ) : null}
+          </>
+        )}
+      </aside>
 
-      <label className="block space-y-1 text-sm">
-        <span className="font-medium">{bodyLabel}</span>
-        <BodyEditor form={form} bodyRef={bodyRef} label={bodyLabel} />
-      </label>
+      {/* ---- RIGHT: the form -------------------------------------------- */}
+      <div className="flex min-h-0 flex-col gap-3">
+        {/* Name and type sit side by side: both are short, and stacking them
+            spent vertical space the body editor needs. */}
+        <div className="grid shrink-0 gap-3 sm:grid-cols-2">
+          <label className="block space-y-1 text-sm">
+            <span className="font-medium">{nameLabel}</span>
+            <input
+              {...form.register("name", { required: nameLabel })}
+              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+            />
+          </label>
 
-      {mergeTags.length ? (
-        <div className="rounded-md bg-muted/60 p-3">
-          <p className="mb-2 text-xs font-medium">{insertTagLabel}</p>
-          {/* Click to insert at the caret, not append at the end. Manual tags
-              are highlighted because the distinction is the entire reason the
-              issue form exists: a user cannot plan what they will have to supply
-              if they cannot see what the system fills in. */}
-          <div className="flex flex-wrap gap-1">
-            {mergeTags.map((tag) => (
-              <button
-                key={tag.tag}
-                type="button"
-                onClick={() => insertTag(tag.tag)}
-                title={insertAt(tag.tag)}
-                className={cn(
-                  "inline-flex items-center rounded-md border px-2 py-0.5 font-mono text-[10px]",
-                  "transition-colors hover:bg-primary hover:text-primary-foreground",
-                  "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
-                  "cursor-pointer",
-                  tag.source === "manual"
-                    ? "border-transparent bg-primary text-primary-foreground"
-                    : "border-border bg-transparent text-foreground",
-                )}
-              >
-                ${tag.tag}
-              </button>
-            ))}
-          </div>
-          <p className="mt-2 text-[11px] text-muted-foreground">{tagHint}</p>
+          <label className="block space-y-1 text-sm">
+            <span className="font-medium">{typeLabel}</span>
+            <select
+              {...form.register("letterType")}
+              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+            >
+              {HR_LETTER_TYPES.map((lt) => (
+                <option key={lt.key} value={lt.key}>
+                  {lt.label}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
-      ) : null}
+
+        <label className="flex min-h-0 flex-1 flex-col gap-1 text-sm">
+          <span className="shrink-0 font-medium">{bodyLabel}</span>
+          <BodyEditor form={form} bodyRef={bodyRef} label={bodyLabel} />
+        </label>
+      </div>
 
       {/* The server names the offending merge tag; axios's "Request failed with
           status code 400" throws that away. */}
       {error ? (
-        <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+        <p className="shrink-0 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive md:col-span-2">
           {error || saveFailed}
         </p>
       ) : null}
-    </>
+    </div>
   );
+}
+
+/**
+ * One titled group of insertable tags.
+ *
+ * The friendly label leads and the raw $tag is kept on the same line in a muted
+ * mono font, because the author needs both: the label to know what it does, and
+ * the exact token to recognise it later in the body text. Showing only the label
+ * makes the body unreadable; showing only the token is what this replaced.
+ */
+function TagGroup({
+  title,
+  tags,
+  onInsert,
+  hint,
+}: {
+  title: string;
+  tags: { tag: string; label?: string; source: string }[];
+  onInsert: (tag: string) => void;
+  hint?: string;
+}) {
+  const isManual = tags[0]?.source === "manual";
+  return (
+    <section>
+      <h3 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        {title}
+      </h3>
+      <div className="flex flex-wrap gap-1">
+        {tags.map((tag) => (
+          <button
+            key={tag.tag}
+            type="button"
+            onClick={() => onInsert(tag.tag)}
+            title={insertAt(tag.tag)}
+            className={cn(
+              "inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs",
+              "transition-colors hover:bg-primary hover:text-primary-foreground",
+              "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+              "cursor-pointer",
+              isManual
+                ? "border-primary/30 bg-primary/10 text-primary hover:text-primary-foreground"
+                : "border-border bg-background text-foreground",
+            )}
+          >
+            <span>{tag.label ?? humaniseTag(tag.tag)}</span>
+            <span className="font-mono text-[10px] opacity-70">${tag.tag}</span>
+          </button>
+        ))}
+      </div>
+      {hint ? <p className="mt-2 text-[11px] text-muted-foreground">{hint}</p> : null}
+    </section>
+  );
+}
+
+/**
+ * Fall back to a readable name when the server sends no label, e.g.
+ * "new_salary" -> "New salary". Never return an empty string: a button with no
+ * accessible name is unusable with a screen reader.
+ */
+function humaniseTag(tag: string) {
+  const words = tag.replace(/^\$/, "").replace(/_/g, " ").trim();
+  if (!words) return tag;
+  return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
 /** Screen-reader / tooltip text explaining what a chip click does. */
@@ -415,8 +502,11 @@ function BodyEditor({
     <Textarea
       {...field}
       ref={mergeRefs(field.ref, bodyRef)}
-      rows={16}
-      className="font-mono text-xs"
+      // flex-1 + min-h-0 makes the editor FILL the space the panel has left over
+      // instead of claiming a fixed rows=16 that overflowed on short screens.
+      // min-h-0 is the part that matters: without it a flex child refuses to
+      // shrink below its content and pushes the dialog back into scrolling.
+      className="min-h-0 flex-1 resize-none font-mono text-xs"
     />
   );
 }
