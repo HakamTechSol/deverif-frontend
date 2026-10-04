@@ -1045,7 +1045,7 @@
     "issueFailedToast": "Could not issue the letter",
     "issueNoTemplate": "This draft has no template, so there is nothing to issue. Delete it and create a new letter instead.",
     "issueUnknownTags": "This template references tags that do not exist ({{tags}}). Fix the template before issuing — these cannot be filled in.",
-    "missingTagsHint": "This template needs these values before it can be issued.",
+    "missingTagsHint": "Fill in the values this template needs. Fields stay here once you start typing, so you can correct a value instead of retyping it.",
     "tagPlaceholder": "Enter value",
     "preview": "Preview",
     "previewFailed": "Could not build the preview."

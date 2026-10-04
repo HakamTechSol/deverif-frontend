@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { AlertTriangle, Loader2 } from "lucide-react";
@@ -17,6 +17,7 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { letterTemplatesService, hrLettersService, type HrLetterListItem } from "@/services";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 
 /**
  * Collects the merge-tag values a draft is still missing, then issues it.
@@ -49,31 +50,66 @@ export function IssueLetterDialog({
   const hasTemplate = Boolean(templateUuid);
 
   /**
-   * Preview the rendered letter for the values entered SO FAR. This is what
-   * reveals which tags remain, so the submit button can be gated on real server
-   * state rather than a client-side guess at which tags exist.
+   * Tags we render an input for. Kept SEPARATE from the server's
+   * `missing_manual`, and only ever grows.
+   *
+   * This is the bug that made the modal unusable: driving the inputs straight
+   * from `missing_manual` meant the first character of "85000" satisfied the
+   * tag, the preview refetched with `missing_manual: []`, and React unmounted
+   * the input that was being typed into. Focus was lost mid-word, so the user
+   * got one digit and an apparently closed dialog.
+   *
+   * The fields now persist for the life of the dialog, so a value can be
+   * corrected rather than re-typed, and the caret never vanishes.
    */
+  const [fields, setFields] = useState<string[]>([]);
+
+  /**
+   * Debounce the preview: without it every keystroke fired a POST, which both
+   * hammered the API and made the query flip between loading and loaded while
+   * the user was mid-word.
+   */
+  const debouncedValues = useDebouncedValue(values, 400);
+
   const {
     data: preview,
     isFetching,
     error,
   } = useQuery({
-    queryKey: ["hr-letter-preview", templateUuid, letter?.employee_uuid, values],
+    queryKey: ["hr-letter-preview", templateUuid, letter?.employee_uuid, debouncedValues],
     enabled: open && hasTemplate,
     queryFn: () =>
       letterTemplatesService.preview(templateUuid as string, {
         employee_uuid: letter!.employee_uuid,
-        values,
+        values: debouncedValues,
       }),
   });
 
-  // Re-seed from the draft's stored payload each time it opens, so a
-  // half-filled draft is not silently wiped. Keyed on uuid (not payload) on
-  // purpose: editing a field re-renders and must NOT reset what was typed.
+  // Grow the field set as the server reports new missing tags. Never shrink it:
+  // a field the user has already typed into must stay mounted and keep focus.
   useEffect(() => {
-    if (open) setValues({ ...(letter?.payload ?? {}) });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, letter?.uuid]);
+    const missingNow = preview?.missing_manual;
+    if (!missingNow?.length) return;
+    setFields((prev) => {
+      const next = new Set(prev);
+      for (const tag of missingNow) next.add(tag);
+      return next.size === prev.length ? prev : [...next];
+    });
+  }, [preview?.missing_manual]);
+
+  /**
+   * Re-seed from the draft's stored payload on the closed->open transition
+   * only. Seeding on every `open`/uuid change would wipe what the user is
+   * typing whenever the parent re-rendered.
+   */
+  const wasOpen = useRef(false);
+  useEffect(() => {
+    if (open && !wasOpen.current) {
+      setValues({ ...(letter?.payload ?? {}) });
+      setFields([]);
+    }
+    wasOpen.current = open;
+  }, [open, letter?.uuid, letter?.payload]);
 
   const issue = useMutation({
     mutationFn: () => hrLettersService.issue(letter!.uuid, values),
@@ -85,8 +121,6 @@ export function IssueLetterDialog({
     },
     onError: (e: Error) => toast.error(t("letters.issueFailedToast"), { description: e.message }),
   });
-
-  const missing = useMemo(() => preview?.missing_manual ?? [], [preview]);
 
   /** Tags referenced but with no source at all — a template bug, not user input. */
   const unknown = useMemo(() => preview?.unknown ?? [], [preview]);
@@ -134,10 +168,10 @@ export function IssueLetterDialog({
               </Alert>
             )}
 
-            {missing.length > 0 && (
+            {fields.length > 0 && (
               <div className="space-y-3">
                 <p className="text-sm text-muted-foreground">{t("letters.missingTagsHint")}</p>
-                {missing.map((tag) => (
+                {fields.map((tag) => (
                   <div key={tag} className="space-y-1.5">
                     <Label htmlFor={`tag-${tag}`}>{humanise(tag)}</Label>
                     <Input

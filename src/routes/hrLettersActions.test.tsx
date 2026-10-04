@@ -156,6 +156,50 @@ describe("actions offered per status", () => {
 });
 
 describe("actions call the service", () => {
+  it("keeps the input mounted while typing, so a full value can be entered", async () => {
+    render(<Harness />);
+    const user = await openRow(0);
+
+    await waitFor(() => expect(screen.getByText("Issue Letter")).toBeInTheDocument());
+    await user.click(screen.getByText("Issue Letter"));
+
+    const input = await screen.findByLabelText("New salary");
+
+    // Type one character at a time. Regression guard: the first character used
+    // to satisfy the tag, the preview refetched with missing_manual: [], and the
+    // input unmounted — so only one digit was ever accepted.
+    fireEvent.change(input, { target: { value: "8" } });
+    await waitFor(() => expect(preview).toHaveBeenCalledTimes(2));
+    expect(screen.getByLabelText("New salary")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("New salary"), { target: { value: "85" } });
+    expect(screen.getByLabelText("New salary")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("New salary"), { target: { value: "85000" } });
+    await waitFor(() => expect(screen.getByLabelText("New salary")).toHaveValue("85000"));
+
+    // Still the same element instance, not a remount that lost focus.
+    expect(screen.getByLabelText("New salary")).toBe(input);
+  });
+
+  it("does not fire one preview request per keystroke", async () => {
+    render(<Harness />);
+    const user = await openRow(0);
+
+    await waitFor(() => expect(screen.getByText("Issue Letter")).toBeInTheDocument());
+    await user.click(screen.getByText("Issue Letter"));
+
+    const input = await screen.findByLabelText("New salary");
+    preview.mockClear();
+
+    // Five keystrokes inside the debounce window must collapse to one request.
+    for (const v of ["1", "12", "123", "1234", "12345"]) {
+      fireEvent.change(input, { target: { value: v } });
+    }
+    await waitFor(() => expect(preview).toHaveBeenCalled(), { timeout: 2000 });
+    expect(preview.mock.calls.length).toBeLessThanOrEqual(2);
+  });
+
   it("Issue Letter opens a form to collect missing values, then issues with them", async () => {
     render(<Harness />);
     const user = await openRow(0);
