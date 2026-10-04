@@ -1048,7 +1048,8 @@
     "missingTagsHint": "Fill in the values this template needs. Fields stay here once you start typing, so you can correct a value instead of retyping it.",
     "tagPlaceholder": "Enter value",
     "preview": "Preview",
-    "previewFailed": "Could not build the preview."
+    "previewFailed": "Could not build the preview.",
+    "previewUpdating": "Updating..."
   },
   "actions": {
     "cancel": "Cancel"

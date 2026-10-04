@@ -74,10 +74,21 @@ export function IssueLetterDialog({
   const {
     data: preview,
     isFetching,
+    isPending,
     error,
   } = useQuery({
     queryKey: ["hr-letter-preview", templateUuid, letter?.employee_uuid, debouncedValues],
     enabled: open && hasTemplate,
+    /**
+     * Hold the PREVIOUS preview while the next one loads.
+     *
+     * This is what stopped the dialog blinking on every keystroke: the query key
+     * contains the values, so a new key meant `preview` was instantly undefined
+     * and the box swapped to its spinner, then back to text ~200ms later. The
+     * stale-but-valid preview staying put is both calmer and more useful — the
+     * user can read what they typed without watching it flash.
+     */
+    placeholderData: (previous) => previous,
     queryFn: () =>
       letterTemplatesService.preview(templateUuid as string, {
         employee_uuid: letter!.employee_uuid,
@@ -127,8 +138,19 @@ export function IssueLetterDialog({
 
   const unresolved = useMemo(() => preview?.unresolved ?? [], [preview]);
 
-  // An unknown tag can never be resolved by typing, so it must not be ignored.
-  const blocked = unresolved.length > 0 || unknown.length > 0 || isFetching;
+  /**
+   * Whether Issue is currently allowed.
+   *
+   * Deliberately NOT gated on `isFetching`. Tying the button to in-flight state
+   * made it flicker disabled/enabled on every keystroke, which reads as the
+   * dialog blinking. The preview it waits on is debounced and always the last
+   * settled one, so a stale `unresolved` list is the safe direction to err:
+   * the user can always wait a moment and submit.
+   *
+   * `isPending` is used instead: only the very first preview blocks, before
+   * there is any basis for a decision.
+   */
+  const blocked = unresolved.length > 0 || unknown.length > 0 || isPending;
 
   /**
    * Turn `$new_salary` into "New salary". Falls back to the raw tag so the
@@ -186,14 +208,27 @@ export function IssueLetterDialog({
             )}
 
             <div className="space-y-1.5">
-              <Label>{t("letters.preview")}</Label>
-              <div className="max-h-56 overflow-y-auto rounded-md border bg-muted/30 p-3">
+              <div className="flex items-center justify-between">
+                <Label>{t("letters.preview")}</Label>
+                {/* Dim the box rather than replacing it. Swapping content is
+                    what reads as a blink; a small opacity change does not. */}
+                {isFetching && preview ? (
+                  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    {t("letters.previewUpdating")}
+                  </span>
+                ) : null}
+              </div>
+              <div
+                className="max-h-56 overflow-y-auto rounded-md border bg-muted/30 p-3 transition-opacity"
+                style={{ opacity: isFetching && preview ? 0.6 : 1 }}
+              >
                 {error ? (
                   <p className="text-sm text-destructive">{t("letters.previewFailed")}</p>
-                ) : isFetching && !preview ? (
+                ) : !preview ? (
                   <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                 ) : (
-                  <pre className="whitespace-pre-wrap font-sans text-sm">{preview?.text ?? ""}</pre>
+                  <pre className="whitespace-pre-wrap font-sans text-sm">{preview.text}</pre>
                 )}
               </div>
             </div>

@@ -29,8 +29,11 @@ const downloadPdf = vi.fn(async () => new Blob(["pdf"]));
  * it. Modelling this is the point of the test: the dialog's submit button is
  * gated on the SERVER's `unresolved` list, so a stub that always reports the tag
  * missing would prove nothing.
+ *
+ * Named so beforeEach can re-install it: a test that swaps in a slower variant
+ * would otherwise leak into every test after it.
  */
-const preview = vi.fn(async (_uuid: string, data: { values?: Record<string, string> }) => {
+const previewImpl = async (_uuid: string, data: { values?: Record<string, string> }) => {
   const given = data.values?.new_salary?.trim();
   const unresolved = given ? [] : ["new_salary"];
   return {
@@ -39,7 +42,8 @@ const preview = vi.fn(async (_uuid: string, data: { values?: Record<string, stri
     unknown: [],
     missing_manual: unresolved,
   };
-});
+};
+const preview = vi.fn(previewImpl);
 
 vi.mock("@/services", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/services")>();
@@ -113,6 +117,10 @@ function Harness() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // mockReset, not just clearAllMocks: clear leaves the implementation intact,
+  // so a test that swapped in a slow preview would decide the tests after it.
+  preview.mockReset();
+  preview.mockImplementation(previewImpl);
 });
 
 /** Open one row's dropdown; returns the user so the caller can keep clicking. */
@@ -180,6 +188,46 @@ describe("actions call the service", () => {
 
     // Still the same element instance, not a remount that lost focus.
     expect(screen.getByLabelText("New salary")).toBe(input);
+  });
+
+  it("keeps the preview text on screen while a new preview loads", async () => {
+    render(<Harness />);
+    const user = await openRow(0);
+
+    await waitFor(() => expect(screen.getByText("Issue Letter")).toBeInTheDocument());
+    await user.click(screen.getByText("Issue Letter"));
+
+    await screen.findByLabelText("New salary");
+    // Text the user can already read; it must not be replaced by a spinner
+    // between keystrokes.
+    await waitFor(() => expect(screen.getByText(/Your new salary is/)).toBeInTheDocument());
+
+    // Slow the preview down so the in-flight window is observable.
+    preview.mockImplementation(
+      () =>
+        new Promise((resolve) =>
+          setTimeout(
+            () =>
+              resolve({
+                text: "Dear Asim Khan,\n\nYour new salary is 9.",
+                unresolved: [],
+                unknown: [],
+                missing_manual: [],
+              }),
+            150,
+          ),
+        ),
+    );
+
+    fireEvent.change(screen.getByLabelText("New salary"), { target: { value: "9" } });
+
+    // Wait for the debounce to elapse and the fetch to actually start, then
+    // assert mid-flight: previous text still present, no spinner in its place.
+    await waitFor(() => expect(screen.getByText("Updating...")).toBeInTheDocument());
+    expect(screen.getByText(/Your new salary is/)).toBeInTheDocument();
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+
+    await waitFor(() => expect(screen.getByText(/Your new salary is 9\./)).toBeInTheDocument());
   });
 
   it("does not fire one preview request per keystroke", async () => {
