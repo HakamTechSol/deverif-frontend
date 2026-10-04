@@ -314,8 +314,17 @@ export type TemplatePreview = {
   unresolved: string[];
   /** Tags with no known source at all === a template bug, not a missing value. */
   unknown: string[];
-  /** The subset of `unresolved` the issue form can collect. */
+  /**
+   * The subset of `unresolved` the issue form must collect from a person.
+   *
+   * Wider than "the manual tags": an auto tag that is merely EMPTY for this
+   * employee (no CNIC on file, no joining date recorded) belongs here too.
+   * Otherwise submit stays disabled with no input on screen to re-enable it,
+   * and the letter cannot be issued at all.
+   */
   missing_manual: string[];
+  /** Tag -> friendly label, e.g. cnic -> "CNIC". Presentation only. */
+  tag_labels?: Record<string, string>;
 };
 
 /**
@@ -342,6 +351,30 @@ export function toStringArray(value: unknown): string[] {
     }
   }
   return [];
+}
+
+/**
+ * Coerce a tag->label map into a plain object.
+ *
+ * Same JSON-column caveat as toStringArray: it can arrive as a string, and an
+ * older backend omits it entirely. Both must yield {} rather than throwing,
+ * because the dialog falls back to a humanised tag name.
+ */
+export function normaliseTagLabels(value: unknown): Record<string, string> {
+  let src = value;
+  if (typeof src === "string") {
+    try {
+      src = JSON.parse(src);
+    } catch {
+      return {};
+    }
+  }
+  if (!src || typeof src !== "object" || Array.isArray(src)) return {};
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(src as Record<string, unknown>)) {
+    if (typeof v === "string" && v) out[k] = v;
+  }
+  return out;
 }
 
 /** Apply toStringArray to every template's merge_fields. */
@@ -385,6 +418,9 @@ export const letterTemplatesService = {
       unresolved: toStringArray(r.data.unresolved),
       unknown: toStringArray(r.data.unknown),
       missing_manual: toStringArray(r.data.missing_manual),
+      // A JSON column, so it can arrive as a string. Normalise, and tolerate its
+      // absence so an older backend does not break the dialog.
+      tag_labels: normaliseTagLabels(r.data.tag_labels),
     })),
 };
 

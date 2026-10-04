@@ -153,10 +153,16 @@ export function IssueLetterDialog({
   const blocked = unresolved.length > 0 || unknown.length > 0 || isPending;
 
   /**
-   * Turn `$new_salary` into "New salary". Falls back to the raw tag so the
-   * field is still identifiable if the name does not humanise cleanly.
+   * Turn `$new_salary` into "New salary".
+   *
+   * Prefers the server's label so `cnic` renders as "CNIC" and not "Cnic" —
+   * humanising a short acronym produces nonsense. Falls back to the raw tag so
+   * the field is still identifiable if the label map is absent, which it is
+   * against an older backend.
    */
   const humanise = (tag: string) => {
+    const known = preview?.tag_labels?.[tag];
+    if (known) return known;
     const words = tag.replace(/^\$/, "").replace(/_/g, " ").trim();
     if (!words) return tag;
     return words.charAt(0).toUpperCase() + words.slice(1);
