@@ -98,8 +98,7 @@ let snapshotRaw: string | null = null;
 let snapshotToken: string | null = null;
 
 function getSnapshot(): AuthSnapshot {
-  const raw =
-    typeof window === "undefined" ? null : window.localStorage.getItem("Dverif_user");
+  const raw = typeof window === "undefined" ? null : window.localStorage.getItem("Dverif_user");
   if (cachedSnapshot && raw === snapshotRaw && snapshotToken === inMemoryToken) {
     return cachedSnapshot;
   }
@@ -121,8 +120,7 @@ export function useAuth() {
 // ---------------------------------------------------------------------------
 
 const API_BASE =
-  (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_API_BASE_URL) ||
-  "/api/v1";
+  (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_API_BASE_URL) || "/api/v1";
 
 let bootstrapPromise: Promise<void> | null = null;
 

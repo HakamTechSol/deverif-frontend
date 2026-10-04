@@ -1,11 +1,12 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
+import i18n from "@/i18n";
 
 /**
  * Global test setup.
  *
- * Two jobs, both of which exist because of bugs that reached production while
+ * Three jobs, each of which exists because of a bug that reached production while
  * the suite was "fully green":
  *
  * 1. jest-dom matchers, so a test can assert on what the USER sees
@@ -13,9 +14,13 @@ import { afterEach, vi } from "vitest";
  *    Asserting on rendered text is what catches a missing translation key — the
  *    UI renders the raw key string, and only the rendered output shows it.
  *
- * 2. Automatic unmount. Without it a test that renders a dialog leaves it
- *    mounted, and the next test's queryByText finds the previous test's nodes —
- *    which produces failures that pass on a re-run and fail on a clean one.
+ * 2. i18n initialisation. Without an explicit import, t() returns the KEY, so a
+ *    component test asserting on label text passes or fails depending on whether
+ *    another test file happened to import i18n first. That made
+ *    hrLettersActions.test.tsx pass alone and fail in the full run.
+ *
+ * 3. Automatic unmount, so a test that renders a dialog does not leave it mounted
+ *    for the next test to query.
  */
 afterEach(() => {
   cleanup();
@@ -53,3 +58,8 @@ if (typeof window !== "undefined") {
     } as unknown as typeof ResizeObserver;
   }
 }
+
+// Deterministic language, independent of whatever a previous test left in
+// localStorage. Without this a test can assert English text and fail because an
+// earlier test switched the app to Urdu.
+i18n.changeLanguage("en");

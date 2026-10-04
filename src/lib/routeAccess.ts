@@ -1,4 +1,4 @@
-﻿import type { AuthUser } from "@/lib/auth";
+import type { AuthUser } from "@/lib/auth";
 import { parseFeatureAccess } from "@/lib/utils";
 
 /**

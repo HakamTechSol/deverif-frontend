@@ -1,4 +1,4 @@
-﻿/**
+/**
  * HR operations: leave, attendance, salary components, payroll.
  *
  *  * The cluster the module expansion grows out of, so it is organised per module
@@ -248,7 +248,7 @@ export const orgEmployeeSalaryService = {
       .then((r) => r.data.assignments),
 };
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• HR LETTERS â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/* ======================== HR LETTERS ======================== */
 
 export type HrLetterType =
   | "offer"
@@ -312,7 +312,7 @@ export type TemplatePreview = {
   text: string;
   /** Tags referenced but with no value; issuance refuses while any remain. */
   unresolved: string[];
-  /** Tags with no known source at all â€” a template bug, not a missing value. */
+  /** Tags with no known source at all === a template bug, not a missing value. */
   unknown: string[];
   /** The subset of `unresolved` the issue form can collect. */
   missing_manual: string[];

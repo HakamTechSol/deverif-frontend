@@ -1,15 +1,32 @@
-﻿import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useForm, type UseFormReturn } from "react-hook-form";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { FileSignature, Plus, Download, ShieldCheck, Ban } from "lucide-react";
+import {
+  FileSignature,
+  Plus,
+  Download,
+  ShieldCheck,
+  Ban,
+  MoreHorizontal,
+  Send,
+  Trash2,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { SearchInput } from "@/components/common/SearchInput";
 import { EmptyState } from "@/components/common/EmptyState";
 import { PageHeader } from "@/components/common/PageHeader";
+import { ConfirmDialog } from "@/components/common/ConfirmDialog";
+import { IssueLetterDialog } from "@/components/hr/IssueLetterDialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { apiErrorMessage } from "@/lib/utils";
 import { ModuleGate } from "@/components/hr/ModuleGate";
 import { DataTable, DataTableToolbar, type DataTableColumn } from "@/components/hr/DataTable";
@@ -55,12 +72,8 @@ function HrLettersPage() {
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["hr-letters"] });
 
-  const revoke = useMutation({
-    mutationFn: ({ uuid, reason }: { uuid: UUID; reason: string }) =>
-      hrLettersService.revoke(uuid, reason),
-    onSuccess: invalidate,
-  });
-
+  // Revoke/issue/delete are owned by RowActions, which needs them per-row and
+  // routes the destructive ones through a confirm dialog.
   const columns: DataTableColumn<HrLetterListItem>[] = [
     {
       key: "reference_no",
@@ -113,7 +126,9 @@ function HrLettersPage() {
       header: t("letters.issuedAt"),
       render: (r) => (
         <span className="text-xs text-muted-foreground">
-          {r.issued_at ? new Date(r.issued_at).toLocaleDateString("en-PK") : "â€”"}
+          {/* ASCII hyphen, not an em-dash: this file has been through enough
+              encoding round trips that a typographic dash is a liability. */}
+          {r.issued_at ? new Date(r.issued_at).toLocaleDateString("en-PK") : "-"}
         </span>
       ),
     },
@@ -121,33 +136,7 @@ function HrLettersPage() {
       key: "actions",
       header: t("common.actions"),
       className: "text-right",
-      render: (r) => (
-        <div className="flex items-center justify-end gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            title={t("letters.downloadPdf")}
-            onClick={async () => {
-              const blob = await hrLettersService.downloadPdf(r.uuid);
-              const url = URL.createObjectURL(blob);
-              window.open(url, "_blank");
-              URL.revokeObjectURL(url);
-            }}
-          >
-            <Download className="h-4 w-4" />
-          </Button>
-          {r.status === "issued" ? (
-            <Button
-              variant="ghost"
-              size="icon"
-              title={t("letters.revoke")}
-              onClick={() => revoke.mutate({ uuid: r.uuid, reason: "" })}
-            >
-              <Ban className="h-4 w-4" />
-            </Button>
-          ) : null}
-        </div>
-      ),
+      render: (r) => <RowActions row={r} />,
     },
   ];
 
@@ -236,6 +225,158 @@ type CreateLetterFormValues = {
  * the provider lives inside FormDialog's children, so a context read here is null
  * and crashes with "Cannot destructure property 'register' of 'useFormContext()'".
  */
+/**
+ * Per-row actions, driven entirely by status.
+ *
+ * Declaring the menu as data rather than a chain of conditionals means a new
+ * status cannot accidentally leave a row with NO way to act on it — the
+ * fallback case below is the safety net.
+ *
+ *   draft   -> Issue, Delete Draft      (issuing mints the QR and freezes the body)
+ *   issued  -> Download PDF, View Verification, Revoke
+ *   revoked -> Download PDF only        (the PDF carries a REVOKED watermark)
+ *
+ * Destructive actions route through ConfirmDialog because revoke cannot be
+ * undone: it clears issued_at, which breaks the signature, so the printed QR stops
+ * verifying for good.
+ */
+export function RowActions({ row }: { row: HrLetterListItem }) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const [confirm, setConfirm] = useState<null | "delete" | "revoke">(null);
+  /**
+   * Issue opens a dialog rather than firing straight at the API. The backend
+   * refuses to issue while any merge tag is unresolved, so a bare POST returned
+   * 400 for any draft using a manual tag (e.g. $new_salary).
+   */
+  const [issuing, setIssuing] = useState(false);
+
+  const download = useMutation({
+    mutationFn: () => hrLettersService.downloadPdf(row.uuid),
+    onSuccess: (blob) => {
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+      // Revoke immediately: leaving the blob URL alive pins the PDF in memory for
+      // the life of the document.
+      URL.revokeObjectURL(url);
+    },
+  });
+
+  const remove = useMutation({
+    mutationFn: () => hrLettersService.remove(row.uuid),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["hr-letters"] });
+      setConfirm(null);
+    },
+  });
+
+  const revoke = useMutation({
+    mutationFn: (reason: string) => hrLettersService.revoke(row.uuid, reason),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["hr-letters"] });
+      setConfirm(null);
+    },
+  });
+
+  const busy = download.isPending || remove.isPending || revoke.isPending;
+  const error = remove.error ?? revoke.error ?? download.error;
+
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon" disabled={busy} title={t("common.actions")}>
+            <MoreHorizontal className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          {row.status === "draft" ? (
+            <>
+              <DropdownMenuItem onSelect={() => setIssuing(true)}>
+                <Send className="mr-2 h-4 w-4" />
+                {t("letters.issueLetter")}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                onSelect={() => setConfirm("delete")}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                {t("letters.deleteDraft")}
+              </DropdownMenuItem>
+            </>
+          ) : null}
+
+          {row.status === "issued" ? (
+            <>
+              <DropdownMenuItem onSelect={() => download.mutate()}>
+                <Download className="mr-2 h-4 w-4" />
+                {t("letters.downloadPdf")}
+              </DropdownMenuItem>
+              {row.verify_url ? (
+                <DropdownMenuItem asChild>
+                  <a href={row.verify_url} target="_blank" rel="noreferrer">
+                    <ShieldCheck className="mr-2 h-4 w-4" />
+                    {t("letters.viewVerification")}
+                  </a>
+                </DropdownMenuItem>
+              ) : null}
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                onSelect={() => setConfirm("revoke")}
+              >
+                <Ban className="mr-2 h-4 w-4" />
+                {t("letters.revoke")}
+              </DropdownMenuItem>
+            </>
+          ) : null}
+
+          {row.status === "revoked" ? (
+            <DropdownMenuItem onSelect={() => download.mutate()}>
+              <Download className="mr-2 h-4 w-4" />
+              {t("letters.downloadRevokedPdf")}
+            </DropdownMenuItem>
+          ) : null}
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <IssueLetterDialog
+        letter={row}
+        open={issuing}
+        onOpenChange={setIssuing}
+        onIssued={() => qc.invalidateQueries({ queryKey: ["hr-letters"] })}
+      />
+
+      <ConfirmDialog
+        open={confirm === "revoke"}
+        title={t("letters.revoke")}
+        description={t("letters.revokeDescription")}
+        confirmLabel={t("letters.revoke")}
+        onConfirm={async () => {
+          await revoke.mutateAsync("");
+        }}
+        onOpenChange={(v) => !v && setConfirm(null)}
+      />
+
+      <ConfirmDialog
+        open={confirm === "delete"}
+        title={t("letters.deleteDraft")}
+        description={t("letters.deleteDraftDescription")}
+        confirmLabel={t("common.delete")}
+        onConfirm={async () => {
+          await remove.mutateAsync();
+        }}
+        onOpenChange={(v) => !v && setConfirm(null)}
+      />
+
+      {error ? (
+        <p className="mt-1 text-right text-xs text-destructive">
+          {apiErrorMessage(error, t("letters.saveFailed"))}
+        </p>
+      ) : null}
+    </>
+  );
+}
+
 function CreateLetterDialog({
   open,
   onOpenChange,

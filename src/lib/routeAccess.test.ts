@@ -1,6 +1,12 @@
 import { describe, it, expect } from "vitest";
 
-import { canAccessRoute, ROUTE_ACCESS, allKnownRoutes, type FeatureKey, type OrgRole } from "@/lib/routeAccess";
+import {
+  canAccessRoute,
+  ROUTE_ACCESS,
+  allKnownRoutes,
+  type FeatureKey,
+  type OrgRole,
+} from "@/lib/routeAccess";
 import { allNavPaths } from "@/lib/navItems";
 import type { AuthUser } from "@/lib/auth";
 
@@ -59,9 +65,7 @@ const EMPLOYEE_ONLY_PATHS = allKnownRoutes().filter((p) => {
 });
 
 /** Everything a platform admin must never reach. */
-const ORG_SCOPED_PATHS = allKnownRoutes().filter(
-  (p) => p !== "/dashboard" && p !== "/settings",
-);
+const ORG_SCOPED_PATHS = allKnownRoutes().filter((p) => p !== "/dashboard" && p !== "/settings");
 
 // ---------------------------------------------------------------------------
 // The invariant the whole design rests on
@@ -92,7 +96,11 @@ describe("canAccessRoute — honours its own table exactly", () => {
   it.each(combos)("$name matches the table row for every route", ({ u }) => {
     for (const [path, rule] of Object.entries(ROUTE_ACCESS)) {
       const roleOk = rule.roles.includes(u.org_role as OrgRole);
-      const expected = roleOk && (!rule.feature || !!rule.always?.includes(u.org_role as OrgRole) || !!u.feature_access?.[rule.feature]);
+      const expected =
+        roleOk &&
+        (!rule.feature ||
+          !!rule.always?.includes(u.org_role as OrgRole) ||
+          !!u.feature_access?.[rule.feature]);
       expect(canAccessRoute(u, path), `path=${path} rule=${JSON.stringify(rule)}`).toBe(expected);
     }
   });
@@ -106,7 +114,14 @@ describe("canAccessRoute — platform admin", () => {
   const admin = user({ role: "admin", org_role: undefined, organization: null });
 
   it("reaches the /admin area", () => {
-    for (const p of ["/admin/users", "/admin/organizations", "/admin/requests", "/admin/support", "/admin/support/abc-123", "/admin/leads"]) {
+    for (const p of [
+      "/admin/users",
+      "/admin/organizations",
+      "/admin/requests",
+      "/admin/support",
+      "/admin/support/abc-123",
+      "/admin/leads",
+    ]) {
       expect(canAccessRoute(admin, p), p).toBe(true);
     }
   });
@@ -170,7 +185,16 @@ describe("canAccessRoute — sub_admin", () => {
 
   it("with no permissions is denied every permission-gated page", () => {
     const s = withFlags("sub_admin", everyFlagOff);
-    for (const p of ["/requests", "/inbox", "/auto-verified", "/org/team", "/org/leaves", "/org/attendance", "/org/salary-components", "/org/payroll"]) {
+    for (const p of [
+      "/requests",
+      "/inbox",
+      "/auto-verified",
+      "/org/team",
+      "/org/leaves",
+      "/org/attendance",
+      "/org/salary-components",
+      "/org/payroll",
+    ]) {
       expect(canAccessRoute(s, p), p).toBe(false);
     }
   });
@@ -204,14 +228,20 @@ describe("canAccessRoute — sub_admin", () => {
       const off = { ...everyFlagOff, [flag]: true } as Record<FeatureKey, boolean>;
       const on = { ...everyFlagOff, [flag]: true } as Record<FeatureKey, boolean>;
       expect(canAccessRoute(withFlags("sub_admin", on), path), `${flag} -> ${path}`).toBe(true);
-      expect(canAccessRoute(withFlags("sub_admin", everyFlagOff), path), `${flag} off -> ${path}`).toBe(false);
+      expect(
+        canAccessRoute(withFlags("sub_admin", everyFlagOff), path),
+        `${flag} off -> ${path}`,
+      ).toBe(false);
       // The permission must not leak into unrelated pages.
       for (const other of allKnownRoutes()) {
         const rule = ROUTE_ACCESS[other];
         if (rule.feature === flag || !rule.feature) continue;
         if (rule.always?.includes("sub_admin")) continue;
         if (!rule.roles.includes("sub_admin")) continue;
-        expect(canAccessRoute(withFlags("sub_admin", off), other), `leak: ${flag} -> ${other}`).toBe(false);
+        expect(
+          canAccessRoute(withFlags("sub_admin", off), other),
+          `leak: ${flag} -> ${other}`,
+        ).toBe(false);
       }
     }
   });
@@ -354,9 +384,7 @@ describe("sidebar and guards cannot drift apart", () => {
       user({ org_role: "sub_admin", feature_access: everyFlagOn }),
       user({ org_role: "employee", feature_access: everyFlagOn }),
     ];
-    const orphans = allNavPaths.filter(
-      (p) => !probes.some((u) => canAccessRoute(u, p)),
-    );
+    const orphans = allNavPaths.filter((p) => !probes.some((u) => canAccessRoute(u, p)));
     expect(orphans, `sidebar paths no role can open: ${orphans.join(", ")}`).toEqual([]);
   });
 
