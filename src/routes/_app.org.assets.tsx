@@ -1,0 +1,1072 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useForm } from "react-hook-form";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
+import {
+  Ban,
+  Download,
+  FileText,
+  MoreHorizontal,
+  Package,
+  Plus,
+  RotateCcw,
+  Send,
+  Trash2,
+  Undo2,
+  Wrench,
+} from "lucide-react";
+
+import { ModuleGate } from "@/components/hr/ModuleGate";
+import { DataTable, type DataTableColumn } from "@/components/hr/DataTable";
+import { FormDialog } from "@/components/hr/FormDialog";
+import { FileDropzone } from "@/components/hr/FileDropzone";
+import { ConfirmDialog } from "@/components/common/ConfirmDialog";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
+import { PageHeader } from "@/components/common/PageHeader";
+import { SearchInput } from "@/components/common/SearchInput";
+import {
+  ASSET_STATUS_VARIANT,
+  assetsService,
+  assetCategoriesService,
+  orgService,
+  type Asset,
+  type AssetDetail,
+  type AssetStatus,
+} from "@/services";
+import {
+  apiErrorMessage,
+  formatCurrency,
+  formatDate,
+  formatDateTime,
+  formatFileSize,
+} from "@/lib/utils";
+
+export const Route = createFileRoute("/_app/org/assets")({
+  head: () => ({ meta: [{ title: "Assets — Dverif" }] }),
+  component: AssetsPage,
+});
+
+const PAGE_SIZE = 20;
+
+/**
+ * Asset inventory.
+ *
+ * STATUS IS NEVER SENT FROM HERE. There is no status field on any create or
+ * update payload: the server derives it from the open assignment and maintenance
+ * rows, so offering one would produce a control whose value is silently ignored.
+ * The menu only offers the transitions the server actually implements.
+ *
+ * The action menu is driven by the SAME status map the backend enforces, because
+ * a menu that offers an action the server will refuse is worse than one that
+ * omits it — it teaches users that the page is unreliable.
+ */
+function AssetsPage() {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState<AssetStatus | "">("");
+  const [category, setCategory] = useState("");
+  const [detailUuid, setDetailUuid] = useState<string | null>(null);
+  const [dialog, setDialog] = useState<
+    null | "create" | "edit" | "assign" | "return" | "maintenance" | "retire"
+  >(null);
+  const [active, setActive] = useState<Asset | null>(null);
+
+  const list = useQuery({
+    queryKey: ["assets", page, search, status, category],
+    queryFn: () =>
+      assetsService.list({
+        page,
+        limit: PAGE_SIZE,
+        search: search || undefined,
+        status: status || undefined,
+        category_uuid: category || undefined,
+      }),
+  });
+
+  const categories = useQuery({
+    queryKey: ["asset-categories", false],
+    queryFn: () => assetCategoriesService.list(false),
+  });
+
+  const summary = useQuery({
+    queryKey: ["assets-summary"],
+    queryFn: () => assetsService.summary(),
+  });
+
+  const invalidate = () => {
+    void qc.invalidateQueries({ queryKey: ["assets"] });
+    void qc.invalidateQueries({ queryKey: ["assets-summary"] });
+  };
+
+  const rows = list.data?.items ?? [];
+
+  const columns: DataTableColumn<Asset>[] = [
+    {
+      key: "asset_tag",
+      header: t("assets.tag"),
+      render: (r) => <span className="font-mono text-xs">{r.asset_tag}</span>,
+    },
+    {
+      key: "name",
+      header: t("assets.assetName"),
+      render: (r) => (
+        <div className="min-w-0">
+          <p className="truncate font-medium">{r.name}</p>
+          {r.model_details ? (
+            <p className="truncate text-xs text-muted-foreground">{r.model_details}</p>
+          ) : null}
+        </div>
+      ),
+    },
+    {
+      key: "category_name",
+      header: t("assets.category"),
+      render: (r) => (
+        <span className="text-sm text-muted-foreground">{r.category_name ?? "—"}</span>
+      ),
+    },
+    {
+      key: "status",
+      header: t("common.status"),
+      render: (r) => (
+        <Badge variant={ASSET_STATUS_VARIANT[r.status]}>{t(`assets.status.${r.status}`)}</Badge>
+      ),
+    },
+    {
+      // Answers "who has this" without opening the drawer, which is the single
+      // most-asked question about an inventory and the reason the list query
+      // joins the open assignment server-side.
+      key: "holder_name",
+      header: t("assets.heldBy"),
+      render: (r) =>
+        r.holder_name ? (
+          <span className="text-sm">{r.holder_name}</span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+    },
+    {
+      key: "purchase_cost",
+      header: t("assets.cost"),
+      render: (r) => <span className="font-mono text-xs">{formatCurrency(r.purchase_cost)}</span>,
+    },
+    {
+      key: "actions",
+      header: "",
+      render: (r) => (
+        <RowActions
+          row={r}
+          onOpenDetails={() => setDetailUuid(r.uuid)}
+          onDialog={(kind) => {
+            setActive(r);
+            setDialog(kind);
+          }}
+        />
+      ),
+    },
+  ];
+
+  const s = summary.data?.by_status;
+
+  return (
+    <ModuleGate module="asset_management">
+      <div className="space-y-4">
+        <PageHeader
+          title={t("assets.title")}
+          description={t("assets.description")}
+          actions={
+            <Button
+              onClick={() => {
+                setActive(null);
+                setDialog("create");
+              }}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              {t("assets.newAsset")}
+            </Button>
+          }
+        />
+
+        {/* Counts, because "12 assigned" is the number an administrator is
+            actually asked for and it should not require a filter click. */}
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <Stat label={t("assets.status.available")} value={s?.available ?? 0} />
+          <Stat label={t("assets.status.assigned")} value={s?.assigned ?? 0} />
+          <Stat label={t("assets.status.maintenance")} value={s?.maintenance ?? 0} />
+          <Stat label={t("assets.status.retired")} value={s?.retired ?? 0} />
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <SearchInput value={search} onChange={setSearch} placeholder={t("assets.search")} />
+          <select
+            value={status}
+            onChange={(e) => setStatus(e.target.value as AssetStatus | "")}
+            className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
+          >
+            <option value="">{t("assets.allStatuses")}</option>
+            {(["available", "assigned", "maintenance", "retired"] as AssetStatus[]).map((v) => (
+              <option key={v} value={v}>
+                {t(`assets.status.${v}`)}
+              </option>
+            ))}
+          </select>
+          <select
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
+          >
+            <option value="">{t("assets.allCategories")}</option>
+            {(categories.data ?? []).map((c) => (
+              <option key={c.uuid} value={c.uuid}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <DataTable
+          columns={columns}
+          rows={rows}
+          total={list.data?.total ?? 0}
+          page={list.data?.page ?? 1}
+          totalPages={list.data?.totalPages ?? 1}
+          onPageChange={setPage}
+          loading={list.isLoading}
+          onRowClick={(r) => setDetailUuid(r.uuid)}
+          emptyIcon={Package}
+          emptyTitle={t("assets.noAssets")}
+          emptyDescription={t("assets.noAssetsDescription")}
+        />
+      </div>
+
+      <AssetDetailDrawer uuid={detailUuid} onChanged={invalidate} />
+
+      <AssetDialog
+        kind={dialog}
+        asset={active}
+        categories={categories.data ?? []}
+        onClose={() => {
+          setDialog(null);
+          setActive(null);
+        }}
+        onSaved={() => {
+          invalidate();
+          setDialog(null);
+          setActive(null);
+        }}
+      />
+    </ModuleGate>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-lg border bg-card px-3 py-2">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="text-lg font-semibold">{value}</p>
+    </div>
+  );
+}
+
+/**
+ * Actions per status, mirroring the transitions the backend accepts.
+ *
+ * Retired offers Reinstate because retirement is otherwise terminal: a laptop
+ * written off in error would be permanently stuck, and the ledger would keep a
+ * wrong entry with no way to correct it.
+ */
+function RowActions({
+  row,
+  onOpenDetails,
+  onDialog,
+}: {
+  row: Asset;
+  onOpenDetails: () => void;
+  onDialog: (kind: "edit" | "assign" | "return" | "maintenance" | "retire") => void;
+}) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState(false);
+
+  const run = async (fn: () => Promise<unknown>) => {
+    setBusy(true);
+    try {
+      await fn();
+      await qc.invalidateQueries({ queryKey: ["assets"] });
+      await qc.invalidateQueries({ queryKey: ["assets-summary"] });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        {/* stopPropagation: the row is clickable and opens the drawer, so the
+            menu trigger must not also fire that. */}
+        <Button
+          variant="ghost"
+          size="icon"
+          disabled={busy}
+          title={t("common.actions")}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <MoreHorizontal className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+        <DropdownMenuItem onSelect={onOpenDetails}>
+          <FileText className="mr-2 h-4 w-4" />
+          {t("assets.viewDetails")}
+        </DropdownMenuItem>
+
+        {row.status === "available" || row.status === "assigned" ? (
+          <DropdownMenuItem onSelect={() => onDialog("edit")}>
+            <FileText className="mr-2 h-4 w-4" />
+            {t("common.edit")}
+          </DropdownMenuItem>
+        ) : null}
+
+        {row.status === "available" ? (
+          <>
+            <DropdownMenuItem onSelect={() => onDialog("assign")}>
+              <Send className="mr-2 h-4 w-4" />
+              {t("assets.assign")}
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => onDialog("maintenance")}>
+              <Wrench className="mr-2 h-4 w-4" />
+              {t("assets.sendForMaintenance")}
+            </DropdownMenuItem>
+          </>
+        ) : null}
+
+        {row.status === "assigned" ? (
+          <DropdownMenuItem onSelect={() => onDialog("return")}>
+            <Undo2 className="mr-2 h-4 w-4" />
+            {t("assets.returnAsset")}
+          </DropdownMenuItem>
+        ) : null}
+
+        {row.status === "maintenance" ? (
+          <DropdownMenuItem disabled>
+            <Wrench className="mr-2 h-4 w-4" />
+            {t("assets.inMaintenance")}
+          </DropdownMenuItem>
+        ) : null}
+
+        {row.status !== "retired" ? (
+          <DropdownMenuItem onSelect={() => onDialog("retire")}>
+            <Trash2 className="mr-2 h-4 w-4" />
+            {t("assets.retire")}
+          </DropdownMenuItem>
+        ) : (
+          <DropdownMenuItem onSelect={() => void run(() => assetsService.reinstate(row.uuid))}>
+            <RotateCcw className="mr-2 h-4 w-4" />
+            {t("assets.reinstate")}
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Detail drawer: custody history, maintenance, receipts
+// ---------------------------------------------------------------------------
+
+function AssetDetailDrawer({ uuid, onChanged }: { uuid: string | null; onChanged: () => void }) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const open = Boolean(uuid);
+
+  const detail = useQuery({
+    queryKey: ["asset", uuid],
+    queryFn: () => assetsService.get(uuid!),
+    enabled: open,
+  });
+
+  const [receiptFiles, setReceiptFiles] = useState<File[]>([]);
+  const [jobFiles, setJobFiles] = useState<File[]>([]);
+  const [activeJob, setActiveJob] = useState<string | null>(null);
+
+  const uploadReceipt = useMutation({
+    mutationFn: () => assetsService.uploadReceipts(uuid!, receiptFiles),
+    onSuccess: () => {
+      setReceiptFiles([]);
+      void qc.invalidateQueries({ queryKey: ["asset", uuid] });
+      onChanged();
+    },
+  });
+
+  const uploadInvoice = useMutation({
+    mutationFn: () => assetsService.uploadInvoices(activeJob!, jobFiles),
+    onSuccess: () => {
+      setJobFiles([]);
+      void qc.invalidateQueries({ queryKey: ["asset", uuid] });
+      onChanged();
+    },
+  });
+
+  const closeJob = useMutation({
+    mutationFn: (jobUuid: string) => assetsService.completeMaintenance(jobUuid, {}),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["asset", uuid] });
+      onChanged();
+    },
+  });
+
+  const asset = detail.data;
+
+  return (
+    <Drawer open={open} onOpenChange={(v) => !v && (setActiveJob(null), onChanged())}>
+      <DrawerContent className="w-full max-w-xl overflow-y-auto">
+        <DrawerHeader>
+          <DrawerTitle>{asset ? `${asset.asset_tag} — ${asset.name}` : t("loading")}</DrawerTitle>
+          <DrawerDescription>
+            {asset ? t("assets.detailDescription", { category: asset.category_name ?? "—" }) : ""}
+          </DrawerDescription>
+        </DrawerHeader>
+
+        {detail.isLoading ? (
+          <p className="p-4 text-sm text-muted-foreground">{t("loading")}</p>
+        ) : !asset ? (
+          <p className="p-4 text-sm text-destructive">{t("assets.notFound")}</p>
+        ) : (
+          <div className="space-y-6 px-4 pb-6">
+            <dl className="grid grid-cols-2 gap-2 text-sm">
+              <Detail label={t("common.status")}>
+                <Badge variant={ASSET_STATUS_VARIANT[asset.status]}>
+                  {t(`assets.status.${asset.status}`)}
+                </Badge>
+              </Detail>
+              <Detail label={t("assets.serialNumber")}>{asset.serial_number ?? "—"}</Detail>
+              <Detail label={t("assets.purchaseDate")}>
+                {asset.purchase_date ? formatDate(asset.purchase_date) : "—"}
+              </Detail>
+              <Detail label={t("assets.cost")}>{formatCurrency(asset.purchase_cost)}</Detail>
+              <Detail label={t("assets.vendor")}>{asset.vendor ?? "—"}</Detail>
+              <Detail label={t("assets.warranty")}>
+                {asset.warranty_expires_at ? formatDate(asset.warranty_expires_at) : "—"}
+              </Detail>
+            </dl>
+
+            {/* ---- custody history ---- */}
+            <section>
+              <h3 className="mb-2 text-sm font-semibold">{t("assets.custodyHistory")}</h3>
+              {asset.assignments.length === 0 ? (
+                <p className="text-sm text-muted-foreground">{t("assets.neverAssigned")}</p>
+              ) : (
+                <ul className="space-y-1 text-sm">
+                  {asset.assignments.map((a) => (
+                    <li key={a.uuid} className="flex items-start justify-between gap-2">
+                      <span>
+                        {a.employee_name}
+                        <span className="block text-xs text-muted-foreground">
+                          {formatDateTime(a.assigned_at)}
+                          {a.returned_at
+                            ? ` — ${t("assets.returned")} ${formatDateTime(a.returned_at)}`
+                            : ""}
+                        </span>
+                      </span>
+                      {!a.returned_at ? (
+                        <Badge variant="secondary">{t("assets.currentHolder")}</Badge>
+                      ) : a.return_condition && a.return_condition !== "good" ? (
+                        <Badge variant="outline">
+                          {t(`assets.condition.${a.return_condition}`)}
+                        </Badge>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+
+            {/* ---- maintenance ---- */}
+            <section>
+              <h3 className="mb-2 text-sm font-semibold">{t("assets.maintenance")}</h3>
+              {asset.maintenance.length === 0 ? (
+                <p className="text-sm text-muted-foreground">{t("assets.noMaintenance")}</p>
+              ) : (
+                <ul className="space-y-3">
+                  {asset.maintenance.map((job) => (
+                    <li key={job.uuid} className="rounded-md border p-3 text-sm">
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="font-medium">{job.title}</span>
+                        <Badge variant={job.status === "open" ? "outline" : "secondary"}>
+                          {t(`assets.jobStatus.${job.status}`)}
+                        </Badge>
+                      </div>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {job.vendor ?? "—"}
+                        {job.cost != null ? ` · ${formatCurrency(job.cost)}` : ""} ·{" "}
+                        {formatDateTime(job.reported_at)}
+                      </p>
+
+                      {(job.invoices ?? []).map((inv) => (
+                        <AttachmentRow key={inv.uuid} file={inv} />
+                      ))}
+
+                      {activeJob === job.uuid ? (
+                        <div className="mt-2 space-y-2">
+                          <FileDropzone
+                            value={jobFiles}
+                            onChange={setJobFiles}
+                            label={t("assets.invoice")}
+                            accept=".pdf,.jpg,.jpeg,.png"
+                            maxFiles={3}
+                          />
+                          <Button
+                            size="sm"
+                            disabled={jobFiles.length === 0 || uploadInvoice.isPending}
+                            onClick={() => uploadInvoice.mutate()}
+                          >
+                            {t("assets.upload")}
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="mt-2 flex gap-2">
+                          {job.status === "open" ? (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => closeJob.mutate(job.uuid)}
+                                disabled={closeJob.isPending}
+                              >
+                                {t("assets.markRepaired")}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => setActiveJob(job.uuid)}
+                              >
+                                {t("assets.addInvoice")}
+                              </Button>
+                            </>
+                          ) : null}
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {closeJob.isError ? (
+                <p className="mt-2 text-sm text-destructive">
+                  {apiErrorMessage(closeJob.error, t("assets.actionFailed"))}
+                </p>
+              ) : null}
+            </section>
+
+            {/* ---- receipts ---- */}
+            <section>
+              <h3 className="mb-2 text-sm font-semibold">{t("assets.receipts")}</h3>
+              {asset.receipts.length === 0 ? (
+                <p className="text-sm text-muted-foreground">{t("assets.noReceipts")}</p>
+              ) : (
+                asset.receipts.map((r) => <AttachmentRow key={r.uuid} file={r} />)
+              )}
+
+              <FileDropzone
+                value={receiptFiles}
+                onChange={setReceiptFiles}
+                label={t("assets.purchaseReceipt")}
+                accept=".pdf,.jpg,.jpeg,.png"
+                maxFiles={3}
+              />
+              <Button
+                size="sm"
+                className="mt-2"
+                disabled={receiptFiles.length === 0 || uploadReceipt.isPending}
+                onClick={() => uploadReceipt.mutate()}
+              >
+                <Download className="mr-2 h-4 w-4" />
+                {t("assets.upload")}
+              </Button>
+              {uploadReceipt.isError ? (
+                <p className="mt-2 text-sm text-destructive">
+                  {apiErrorMessage(uploadReceipt.error, t("assets.uploadFailed"))}
+                </p>
+              ) : null}
+            </section>
+          </div>
+        )}
+      </DrawerContent>
+    </Drawer>
+  );
+}
+
+function AttachmentRow({ file }: { file: { uuid: string; file_name: string; file_size: number } }) {
+  const { t } = useTranslation();
+  return (
+    <div className="mt-1 flex items-center justify-between gap-2 text-xs">
+      <span className="truncate" title={file.file_name}>
+        {file.file_name}
+      </span>
+      {/* Shared formatter: a hand-rolled "/1024 + KB" here would show 0 KB for
+          anything under 512 bytes and disagree with the uploader's own copy. */}
+      <span className="shrink-0 text-muted-foreground">{formatFileSize(file.file_size)}</span>
+    </div>
+  );
+}
+
+function Detail({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="mt-0.5">{children}</dd>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Dialogs: create/edit, assign, return, maintenance, retire
+// ---------------------------------------------------------------------------
+
+type AssetForm = {
+  category_uuid: string;
+  name: string;
+  asset_tag: string;
+  model_details: string;
+  serial_number: string;
+  purchase_date: string;
+  purchase_cost: string;
+  vendor: string;
+  warranty_expires_at: string;
+  notes: string;
+};
+
+function AssetDialog({
+  kind,
+  asset,
+  categories,
+  onClose,
+  onSaved,
+}: {
+  kind: string | null;
+  asset: Asset | null;
+  categories: { uuid: string; name: string }[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const { t } = useTranslation();
+  const open = Boolean(kind);
+
+  const form = useForm<AssetForm>({
+    defaultValues: {
+      category_uuid: "",
+      name: "",
+      asset_tag: "",
+      model_details: "",
+      serial_number: "",
+      purchase_date: "",
+      purchase_cost: "",
+      vendor: "",
+      warranty_expires_at: "",
+      notes: "",
+    },
+  });
+  const { reset, setValue } = form;
+  const wasOpen = useRef(false);
+
+  // Seed on open only. Re-seeding on every render would discard whatever the
+  // user had typed the moment any unrelated query refreshed.
+  useEffect(() => {
+    if (open && !wasOpen.current) {
+      if (kind === "edit" && asset) {
+        reset({
+          category_uuid: asset.category_uuid,
+          name: asset.name,
+          asset_tag: asset.asset_tag,
+          model_details: asset.model_details ?? "",
+          serial_number: asset.serial_number ?? "",
+          purchase_date: asset.purchase_date ?? "",
+          purchase_cost: asset.purchase_cost == null ? "" : String(asset.purchase_cost),
+          vendor: asset.vendor ?? "",
+          warranty_expires_at: asset.warranty_expires_at ?? "",
+          notes: asset.notes ?? "",
+        });
+      } else if (kind === "create") {
+        reset({
+          category_uuid: categories[0]?.uuid ?? "",
+          name: "",
+          asset_tag: "",
+          model_details: "",
+          serial_number: "",
+          purchase_date: "",
+          purchase_cost: "",
+          vendor: "",
+          warranty_expires_at: "",
+          notes: "",
+        });
+      }
+    }
+    wasOpen.current = open;
+  }, [open, kind, asset, categories, reset]);
+
+  const save = useMutation({
+    mutationFn: async (values: AssetForm) => {
+      const payload = {
+        category_uuid: values.category_uuid,
+        name: values.name.trim(),
+        model_details: values.model_details || undefined,
+        serial_number: values.serial_number || undefined,
+        purchase_date: values.purchase_date || undefined,
+        purchase_cost: values.purchase_cost ? Number(values.purchase_cost) : undefined,
+        vendor: values.vendor || undefined,
+        warranty_expires_at: values.warranty_expires_at || undefined,
+        notes: values.notes || undefined,
+      };
+      return kind === "edit" && asset
+        ? assetsService.update(asset.uuid, { ...payload, asset_tag: values.asset_tag.trim() })
+        : assetsService.create({ ...payload, asset_tag: values.asset_tag.trim() || undefined });
+    },
+    onSuccess: onSaved,
+  });
+
+  // Default the category once the list arrives, but only while creating.
+  useEffect(() => {
+    if (kind === "create" && categories.length && !form.getValues("category_uuid")) {
+      setValue("category_uuid", categories[0].uuid);
+    }
+  }, [kind, categories, setValue, form]);
+
+  if (kind === "assign" || kind === "return" || kind === "maintenance" || kind === "retire") {
+    return (
+      <ActionDialog
+        kind={kind}
+        asset={asset}
+        onClose={onClose}
+        onDone={() => {
+          onSaved();
+        }}
+      />
+    );
+  }
+
+  const title =
+    kind === "edit" ? t("assets.editAsset") : kind === "create" ? t("assets.newAsset") : "";
+
+  return (
+    <FormDialog
+      open={open && (kind === "create" || kind === "edit")}
+      onOpenChange={(v) => !v && onClose()}
+      title={title}
+      description={t("assets.assetFormDescription")}
+      submitLabel={t("common.save")}
+      cancelLabel={t("common.cancel")}
+      onSubmit={(v) => save.mutateAsync(v)}
+      form={form}
+      size="lg"
+    >
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="block space-y-1 text-sm">
+          <span className="font-medium">{t("assets.category")}</span>
+          <select
+            {...form.register("category_uuid", { required: true })}
+            className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+          >
+            {categories.map((c) => (
+              <option key={c.uuid} value={c.uuid}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="block space-y-1 text-sm">
+          <span className="font-medium">{t("assets.assetName")}</span>
+          <input
+            {...form.register("name", { required: t("assets.assetName") })}
+            className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+          />
+        </label>
+
+        <label className="block space-y-1 text-sm">
+          <span className="font-medium">{t("assets.tag")}</span>
+          <input
+            {...form.register("asset_tag")}
+            placeholder={t("assets.tagAuto")}
+            className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+          />
+        </label>
+
+        <label className="block space-y-1 text-sm">
+          <span className="font-medium">{t("assets.modelDetails")}</span>
+          <input
+            {...form.register("model_details")}
+            className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+          />
+        </label>
+
+        <label className="block space-y-1 text-sm">
+          <span className="font-medium">{t("assets.serialNumber")}</span>
+          <input
+            {...form.register("serial_number")}
+            className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+          />
+        </label>
+
+        <label className="block space-y-1 text-sm">
+          <span className="font-medium">{t("assets.vendor")}</span>
+          <input
+            {...form.register("vendor")}
+            className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+          />
+        </label>
+
+        <label className="block space-y-1 text-sm">
+          <span className="font-medium">{t("assets.purchaseDate")}</span>
+          <input
+            type="date"
+            {...form.register("purchase_date")}
+            className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+          />
+        </label>
+
+        <label className="block space-y-1 text-sm">
+          <span className="font-medium">{t("assets.cost")}</span>
+          <input
+            type="number"
+            step="0.01"
+            min={0}
+            {...form.register("purchase_cost")}
+            className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+          />
+        </label>
+
+        <label className="block space-y-1 text-sm sm:col-span-2">
+          <span className="font-medium">{t("assets.warranty")}</span>
+          <input
+            type="date"
+            {...form.register("warranty_expires_at")}
+            className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+          />
+        </label>
+
+        <label className="block space-y-1 text-sm sm:col-span-2">
+          <span className="font-medium">{t("assets.notes")}</span>
+          <textarea
+            {...form.register("notes")}
+            rows={3}
+            className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm"
+          />
+        </label>
+      </div>
+
+      {save.isError ? (
+        <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {apiErrorMessage(save.error, t("assets.saveFailed"))}
+        </p>
+      ) : null}
+    </FormDialog>
+  );
+}
+
+/** The single-click lifecycle transitions: assign, return, maintenance, retire. */
+function ActionDialog({
+  kind,
+  asset,
+  onClose,
+  onDone,
+}: {
+  kind: string;
+  asset: Asset | null;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const { t } = useTranslation();
+  const [employee, setEmployee] = useState("");
+  const [condition, setCondition] = useState("good");
+  const [notes, setNotes] = useState("");
+  const [title, setTitle] = useState("");
+  const [vendor, setVendor] = useState("");
+  const [cost, setCost] = useState("");
+  const [reason, setReason] = useState("");
+  const wasOpen = useRef(false);
+
+  useEffect(() => {
+    if (!wasOpen.current) {
+      setEmployee("");
+      setCondition("good");
+      setNotes("");
+      setTitle("");
+      setVendor("");
+      setCost("");
+      setReason("");
+    }
+    wasOpen.current = true;
+  }, [kind]);
+
+  // Employees are only fetched when the assign dialog is actually open: the
+  // list is large and nobody else needs it.
+  const employees = useQuery({
+    queryKey: ["org-employees", "asset-assign"],
+    queryFn: () => orgService.employees({ page: 1, limit: 200 }),
+    enabled: kind === "assign" && Boolean(asset),
+  });
+
+  const act = useMutation({
+    mutationFn: async () => {
+      if (!asset) throw new Error("no asset");
+      if (kind === "assign") {
+        if (!employee) throw new Error(t("assets.pickEmployee"));
+        return assetsService.assign(asset.uuid, employee);
+      }
+      if (kind === "return") {
+        return assetsService.return(asset.uuid, condition as "good", notes || undefined);
+      }
+      if (kind === "maintenance") {
+        return assetsService.reportMaintenance(asset.uuid, {
+          title: title.trim(),
+          vendor: vendor || undefined,
+          cost: cost ? Number(cost) : undefined,
+        });
+      }
+      return assetsService.retire(asset.uuid, reason || undefined);
+    },
+    onSuccess: onDone,
+  });
+
+  const titles: Record<string, string> = {
+    assign: t("assets.assign"),
+    return: t("assets.returnAsset"),
+    maintenance: t("assets.sendForMaintenance"),
+    retire: t("assets.retire"),
+  };
+
+  return (
+    <FormDialog
+      open={Boolean(asset)}
+      onOpenChange={(v) => !v && onClose()}
+      title={titles[kind] ?? ""}
+      description={asset ? `${asset.asset_tag} — ${asset.name}` : ""}
+      submitLabel={t("common.save")}
+      cancelLabel={t("common.cancel")}
+      onSubmit={() => act.mutateAsync()}
+      hideFooter={false}
+    >
+      {kind === "assign" ? (
+        <label className="block space-y-1 text-sm">
+          <span className="font-medium">{t("assets.assignTo")}</span>
+          <select
+            value={employee}
+            onChange={(e) => setEmployee(e.target.value)}
+            className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+          >
+            <option value="">{t("assets.pickEmployee")}</option>
+            {(employees.data?.items ?? []).map((e) => (
+              <option key={e.uuid} value={e.uuid}>
+                {e.full_name}
+                {e.designation ? ` (${e.designation})` : ""}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
+
+      {kind === "return" ? (
+        <>
+          <label className="block space-y-1 text-sm">
+            <span className="font-medium">{t("assets.conditionOnReturn")}</span>
+            <select
+              value={condition}
+              onChange={(e) => setCondition(e.target.value)}
+              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+            >
+              <option value="good">{t("assets.condition.good")}</option>
+              <option value="damaged">{t("assets.condition.damaged")}</option>
+              <option value="needs_maintenance">{t("assets.condition.needs_maintenance")}</option>
+            </select>
+          </label>
+          {/* Explains the consequence: a damaged return opens a repair job, which
+              changes the asset's status. Doing that without warning is how a
+              returned item stays broken. */}
+          {condition !== "good" ? (
+            <p className="rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+              {t("assets.conditionOpensMaintenance")}
+            </p>
+          ) : null}
+          <label className="block space-y-1 text-sm">
+            <span className="font-medium">{t("assets.notes")}</span>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={3}
+              className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm"
+            />
+          </label>
+        </>
+      ) : null}
+
+      {kind === "maintenance" ? (
+        <>
+          <label className="block space-y-1 text-sm">
+            <span className="font-medium">{t("assets.jobTitle")}</span>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+            />
+          </label>
+          <label className="block space-y-1 text-sm">
+            <span className="font-medium">{t("assets.vendor")}</span>
+            <input
+              value={vendor}
+              onChange={(e) => setVendor(e.target.value)}
+              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+            />
+          </label>
+          <label className="block space-y-1 text-sm">
+            <span className="font-medium">{t("assets.cost")}</span>
+            <input
+              type="number"
+              step="0.01"
+              min={0}
+              value={cost}
+              onChange={(e) => setCost(e.target.value)}
+              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+            />
+          </label>
+        </>
+      ) : null}
+
+      {kind === "retire" ? (
+        <label className="block space-y-1 text-sm">
+          <span className="font-medium">{t("assets.retireReason")}</span>
+          <textarea
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            rows={3}
+            className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm"
+          />
+          {/* Retirement is terminal except via Reinstate, so the consequence is
+              stated before the click rather than discovered later. */}
+          <span className="text-xs text-muted-foreground">{t("assets.retireWarning")}</span>
+        </label>
+      ) : null}
+
+      {act.isError ? (
+        <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {apiErrorMessage(act.error, t("assets.actionFailed"))}
+        </p>
+      ) : null}
+    </FormDialog>
+  );
+}

@@ -85,6 +85,39 @@ export function formatFileSize(bytes?: number | null): string {
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
+/**
+ * Format a money amount for display.
+ *
+ * ADDED FOR ASSETS, and deliberately in one place. Money is the first thing a
+ * spreadsheet gets wrong by rendering ad-hoc: one page shows "1234.5", the next
+ * "PKR 1,234.50", and an auditor cannot add the column up. This is the only
+ * currency formatter in the app, so a second one appearing elsewhere is a bug.
+ *
+ * Nullish renders as an em dash rather than "0" or "NaN": an asset with no
+ * recorded cost is UNKNOWN, and printing 0 asserts a value nobody entered.
+ *
+ * Accepts a string because DECIMAL columns arrive from MySQL as strings.
+ * A value that will not parse renders as the dash too, rather than "NaN".
+ */
+export function formatCurrency(
+  value?: number | string | null,
+  locale: string = uiLocale(),
+): string {
+  if (value === null || value === undefined || value === "") return "—";
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return "—";
+  try {
+    return new Intl.NumberFormat(locale, {
+      style: "currency",
+      currency: "PKR",
+      maximumFractionDigits: 2,
+    }).format(n);
+  } catch {
+    // An unknown locale must not blank the cell; the bare number still reads.
+    return n.toFixed(2);
+  }
+}
+
 /** Normalize a feature_access value (object or JSON string) into booleans. */
 export function parseFeatureAccess(raw: unknown) {
   let obj: Record<string, unknown> = raw as Record<string, unknown>;

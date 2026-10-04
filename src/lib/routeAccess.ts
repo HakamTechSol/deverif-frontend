@@ -108,6 +108,25 @@ export const ROUTE_ACCESS: Readonly<Record<string, RouteRule>> = {
   "/org/letter-templates": { roles: ["org_admin"] },
   "/org/hr-letters": { roles: ["org_admin"] },
 
+  // --- Assets ------------------------------------------------------------------
+  // Two different gates on purpose, mirroring the backend's assetMgmt versus
+  // assetCategoryMgmt.
+  //
+  // Inventory is operational: handing a laptop to someone and taking it back is
+  // day-to-day work a sub-admin does, so /org/assets is STAFF_ROLES.
+  //
+  // Categories define what classes of asset EXIST, which changes what the
+  // register reports on and what the default lifespan is used for. That is
+  // org_admin only, same reasoning as letter templates above: it is a structural
+  // decision, not a stock movement.
+  //
+  // Neither carries a feature_access key. Plan entitlement is the separate axis,
+  // handled by ModuleGate via module_flags (asset_management), exactly as
+  // hr_letters_management is. Adding a per-user feature here would be a second
+  // source of truth that the backend does not consult.
+  "/org/assets": { roles: STAFF_ROLES },
+  "/org/asset-categories": { roles: ["org_admin"] },
+
   // --- Billing --------------------------------------------------------------
   // The org can *read* subscription status as any role, but every mutating
   // action on this page (checkout, self-subscribe, cancel downgrade) is

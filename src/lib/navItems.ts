@@ -10,12 +10,14 @@ import {
   FileCheck2,
   FileSignature,
   FileText,
+  FolderTree,
   Headset,
   History,
   Hourglass,
   Inbox,
   LayoutDashboard,
   MessageSquare,
+  Package,
   ScrollText,
   Send,
   Settings,
@@ -63,6 +65,10 @@ export const orgAdminNavItems: NavItem[] = [
   { to: "/org/payroll", labelKey: "nav.payroll", icon: Wallet },
   { to: "/org/letter-templates", labelKey: "nav.letterTemplates", icon: FileText },
   { to: "/org/hr-letters", labelKey: "nav.hrLetters", icon: FileSignature },
+  // Asset categories sit before inventory because they are the filter the
+  // inventory is read through, and because only an org_admin sees the first one.
+  { to: "/org/asset-categories", labelKey: "nav.assetCategories", icon: FolderTree },
+  { to: "/org/assets", labelKey: "nav.assets", icon: Package },
   { to: "/org/support", labelKey: "nav.support", icon: Headset },
   { to: "/payments", labelKey: "nav.payments", icon: CreditCard },
 ];

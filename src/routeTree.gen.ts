@@ -42,6 +42,8 @@ import { Route as AppAdminUnresponsiveRouteImport } from './routes/_app.admin.un
 import { Route as AppAdminUsersRouteImport } from './routes/_app.admin.users'
 import { Route as AppAutoVerifiedUuidRouteImport } from './routes/_app.auto-verified_.$uuid'
 import { Route as AppOrgAdminsRouteImport } from './routes/_app.org.admins'
+import { Route as AppOrgAssetCategoriesRouteImport } from './routes/_app.org.asset-categories'
+import { Route as AppOrgAssetsRouteImport } from './routes/_app.org.assets'
 import { Route as AppOrgAttendanceRouteImport } from './routes/_app.org.attendance'
 import { Route as AppOrgHrLettersRouteImport } from './routes/_app.org.hr-letters'
 import { Route as AppOrgLeavesRouteImport } from './routes/_app.org.leaves'
@@ -225,6 +227,16 @@ const AppOrgAdminsRoute = AppOrgAdminsRouteImport.update({
   path: '/org/admins',
   getParentRoute: () => AppRoute,
 } as any)
+const AppOrgAssetCategoriesRoute = AppOrgAssetCategoriesRouteImport.update({
+  id: '/org/asset-categories',
+  path: '/org/asset-categories',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppOrgAssetsRoute = AppOrgAssetsRouteImport.update({
+  id: '/org/assets',
+  path: '/org/assets',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppOrgAttendanceRoute = AppOrgAttendanceRouteImport.update({
   id: '/org/attendance',
   path: '/org/attendance',
@@ -339,6 +351,8 @@ export interface FileRoutesByFullPath {
   '/admin/users': typeof AppAdminUsersRoute
   '/auto-verified/$uuid': typeof AppAutoVerifiedUuidRoute
   '/org/admins': typeof AppOrgAdminsRoute
+  '/org/asset-categories': typeof AppOrgAssetCategoriesRoute
+  '/org/assets': typeof AppOrgAssetsRoute
   '/org/attendance': typeof AppOrgAttendanceRoute
   '/org/hr-letters': typeof AppOrgHrLettersRoute
   '/org/leaves': typeof AppOrgLeavesRoute
@@ -388,6 +402,8 @@ export interface FileRoutesByTo {
   '/admin/users': typeof AppAdminUsersRoute
   '/auto-verified/$uuid': typeof AppAutoVerifiedUuidRoute
   '/org/admins': typeof AppOrgAdminsRoute
+  '/org/asset-categories': typeof AppOrgAssetCategoriesRoute
+  '/org/assets': typeof AppOrgAssetsRoute
   '/org/attendance': typeof AppOrgAttendanceRoute
   '/org/hr-letters': typeof AppOrgHrLettersRoute
   '/org/leaves': typeof AppOrgLeavesRoute
@@ -438,6 +454,8 @@ export interface FileRoutesById {
   '/_app/admin/users': typeof AppAdminUsersRoute
   '/_app/auto-verified_/$uuid': typeof AppAutoVerifiedUuidRoute
   '/_app/org/admins': typeof AppOrgAdminsRoute
+  '/_app/org/asset-categories': typeof AppOrgAssetCategoriesRoute
+  '/_app/org/assets': typeof AppOrgAssetsRoute
   '/_app/org/attendance': typeof AppOrgAttendanceRoute
   '/_app/org/hr-letters': typeof AppOrgHrLettersRoute
   '/_app/org/leaves': typeof AppOrgLeavesRoute
@@ -490,6 +508,8 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/auto-verified/$uuid'
     | '/org/admins'
+    | '/org/asset-categories'
+    | '/org/assets'
     | '/org/attendance'
     | '/org/hr-letters'
     | '/org/leaves'
@@ -539,6 +559,8 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/auto-verified/$uuid'
     | '/org/admins'
+    | '/org/asset-categories'
+    | '/org/assets'
     | '/org/attendance'
     | '/org/hr-letters'
     | '/org/leaves'
@@ -588,6 +610,8 @@ export interface FileRouteTypes {
     | '/_app/admin/users'
     | '/_app/auto-verified_/$uuid'
     | '/_app/org/admins'
+    | '/_app/org/asset-categories'
+    | '/_app/org/assets'
     | '/_app/org/attendance'
     | '/_app/org/hr-letters'
     | '/_app/org/leaves'
@@ -854,6 +878,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppOrgAdminsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/org/asset-categories': {
+      id: '/_app/org/asset-categories'
+      path: '/org/asset-categories'
+      fullPath: '/org/asset-categories'
+      preLoaderRoute: typeof AppOrgAssetCategoriesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/org/assets': {
+      id: '/_app/org/assets'
+      path: '/org/assets'
+      fullPath: '/org/assets'
+      preLoaderRoute: typeof AppOrgAssetsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/org/attendance': {
       id: '/_app/org/attendance'
       path: '/org/attendance'
@@ -1034,6 +1072,8 @@ interface AppRouteChildren {
   AppAdminUsersRoute: typeof AppAdminUsersRoute
   AppAutoVerifiedUuidRoute: typeof AppAutoVerifiedUuidRoute
   AppOrgAdminsRoute: typeof AppOrgAdminsRoute
+  AppOrgAssetCategoriesRoute: typeof AppOrgAssetCategoriesRoute
+  AppOrgAssetsRoute: typeof AppOrgAssetsRoute
   AppOrgAttendanceRoute: typeof AppOrgAttendanceRoute
   AppOrgHrLettersRoute: typeof AppOrgHrLettersRoute
   AppOrgLeavesRoute: typeof AppOrgLeavesRoute
@@ -1068,6 +1108,8 @@ const AppRouteChildren: AppRouteChildren = {
   AppAdminUsersRoute: AppAdminUsersRoute,
   AppAutoVerifiedUuidRoute: AppAutoVerifiedUuidRoute,
   AppOrgAdminsRoute: AppOrgAdminsRoute,
+  AppOrgAssetCategoriesRoute: AppOrgAssetCategoriesRoute,
+  AppOrgAssetsRoute: AppOrgAssetsRoute,
   AppOrgAttendanceRoute: AppOrgAttendanceRoute,
   AppOrgHrLettersRoute: AppOrgHrLettersRoute,
   AppOrgLeavesRoute: AppOrgLeavesRoute,
