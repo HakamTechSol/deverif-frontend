@@ -10,14 +10,14 @@ import { toStringArray } from "@/services";
 /**
  * Covers the two bugs reported against the template editor:
  *
- *   1. "tags.slice(...).map is not a function" â€” a JSON column reaching the page
+ *   1. "tags.slice(...).map is not a function" —” a JSON column reaching the page
  *      as a STRING.
  *   2. Clicking a merge tag chip did nothing, and an append-at-the-end
  *      implementation would insert at the wrong place for a template author who
  *      writes "increases to |" and then clicks $new_salary.
  */
 
-describe("toStringArray â€” the JSON-column guard", () => {
+describe("toStringArray —” the JSON-column guard", () => {
   it("parses the JSON string MySQL actually returns", () => {
     expect(toStringArray('["employee_name","new_salary"]')).toEqual([
       "employee_name",

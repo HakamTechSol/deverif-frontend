@@ -69,7 +69,7 @@ function LetterTemplatesPage() {
         // Cheap, and it means a stale cache entry or an older backend cannot
         // crash this page the way a raw JSON string did.
         const tags = Array.isArray(r.merge_fields) ? r.merge_fields : [];
-        if (!tags.length) return <span className="text-xs text-muted-foreground">â€”</span>;
+        if (!tags.length) return <span className="text-xs text-muted-foreground">—”</span>;
         return (
           <div className="flex flex-wrap gap-1">
             {tags.slice(0, 4).map((tag) => (

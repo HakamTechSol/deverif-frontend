@@ -17,6 +17,7 @@ import type {
   VerificationRequest,
   AutoVerifiedHistory,
   PublicVerification,
+  PublicLetterVerification,
 } from "./core";
 export const requestsService = {
   organizations: () =>
@@ -113,6 +114,18 @@ const API_BASE =
 export const verifyService = {
   verify: (qrToken: string) =>
     api.get<PublicVerification>(`/verify/${qrToken}`).then((r) => r.data),
+
+  /**
+   * Public HR Letter verification.
+   *
+   * Its own `/verify/letter/` segment, matching the URL already printed in the
+   * QR code on every issued letter. The token is encoded because it reaches us
+   * from a QR scan.
+   */
+  verifyLetter: (qrToken: string) =>
+    api
+      .get<PublicLetterVerification>(`/verify/letter/${encodeURIComponent(qrToken)}`)
+      .then((r) => r.data),
 
   /**
    * Absolute URL of the public document stream. The browser fetches this

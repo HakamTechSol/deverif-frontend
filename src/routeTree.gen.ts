@@ -51,6 +51,7 @@ import { Route as AppOrgSalaryComponentsRouteImport } from './routes/_app.org.sa
 import { Route as AppOrgSupportRouteImport } from './routes/_app.org.support'
 import { Route as AppOrgTeamRouteImport } from './routes/_app.org.team'
 import { Route as AppPaymentCallbackRouteImport } from './routes/_app.payment.callback'
+import { Route as VerifyLetterQrTokenRouteImport } from './routes/verify.letter.$qrToken'
 import { Route as AppAdminSupportIndexRouteImport } from './routes/_app.admin.support.index'
 import { Route as AppAdminSupportUuidRouteImport } from './routes/_app.admin.support.$uuid'
 import { Route as AppOrgSupportIndexRouteImport } from './routes/_app.org.support.index'
@@ -269,6 +270,11 @@ const AppPaymentCallbackRoute = AppPaymentCallbackRouteImport.update({
   path: '/payment/callback',
   getParentRoute: () => AppRoute,
 } as any)
+const VerifyLetterQrTokenRoute = VerifyLetterQrTokenRouteImport.update({
+  id: '/verify/letter/$qrToken',
+  path: '/verify/letter/$qrToken',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppAdminSupportIndexRoute = AppAdminSupportIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -342,6 +348,7 @@ export interface FileRoutesByFullPath {
   '/org/support': typeof AppOrgSupportRouteWithChildren
   '/org/team': typeof AppOrgTeamRouteWithChildren
   '/payment/callback': typeof AppPaymentCallbackRoute
+  '/verify/letter/$qrToken': typeof VerifyLetterQrTokenRoute
   '/admin/support/$uuid': typeof AppAdminSupportUuidRoute
   '/org/support/$uuid': typeof AppOrgSupportUuidRoute
   '/org/team/$uuid': typeof AppOrgTeamUuidRoute
@@ -388,6 +395,7 @@ export interface FileRoutesByTo {
   '/org/payroll': typeof AppOrgPayrollRoute
   '/org/salary-components': typeof AppOrgSalaryComponentsRoute
   '/payment/callback': typeof AppPaymentCallbackRoute
+  '/verify/letter/$qrToken': typeof VerifyLetterQrTokenRoute
   '/admin/support/$uuid': typeof AppAdminSupportUuidRoute
   '/org/support/$uuid': typeof AppOrgSupportUuidRoute
   '/org/team/$uuid': typeof AppOrgTeamUuidRoute
@@ -439,6 +447,7 @@ export interface FileRoutesById {
   '/_app/org/support': typeof AppOrgSupportRouteWithChildren
   '/_app/org/team': typeof AppOrgTeamRouteWithChildren
   '/_app/payment/callback': typeof AppPaymentCallbackRoute
+  '/verify/letter/$qrToken': typeof VerifyLetterQrTokenRoute
   '/_app/admin/support/$uuid': typeof AppAdminSupportUuidRoute
   '/_app/org/support/$uuid': typeof AppOrgSupportUuidRoute
   '/_app/org/team/$uuid': typeof AppOrgTeamUuidRoute
@@ -490,6 +499,7 @@ export interface FileRouteTypes {
     | '/org/support'
     | '/org/team'
     | '/payment/callback'
+    | '/verify/letter/$qrToken'
     | '/admin/support/$uuid'
     | '/org/support/$uuid'
     | '/org/team/$uuid'
@@ -536,6 +546,7 @@ export interface FileRouteTypes {
     | '/org/payroll'
     | '/org/salary-components'
     | '/payment/callback'
+    | '/verify/letter/$qrToken'
     | '/admin/support/$uuid'
     | '/org/support/$uuid'
     | '/org/team/$uuid'
@@ -586,6 +597,7 @@ export interface FileRouteTypes {
     | '/_app/org/support'
     | '/_app/org/team'
     | '/_app/payment/callback'
+    | '/verify/letter/$qrToken'
     | '/_app/admin/support/$uuid'
     | '/_app/org/support/$uuid'
     | '/_app/org/team/$uuid'
@@ -606,6 +618,7 @@ export interface RootRouteChildren {
   SystemAdminLoginRoute: typeof SystemAdminLoginRoute
   SystemAdminResetPasswordRoute: typeof SystemAdminResetPasswordRoute
   VerifyQrTokenRoute: typeof VerifyQrTokenRoute
+  VerifyLetterQrTokenRoute: typeof VerifyLetterQrTokenRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -904,6 +917,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppPaymentCallbackRouteImport
       parentRoute: typeof AppRoute
     }
+    '/verify/letter/$qrToken': {
+      id: '/verify/letter/$qrToken'
+      path: '/verify/letter/$qrToken'
+      fullPath: '/verify/letter/$qrToken'
+      preLoaderRoute: typeof VerifyLetterQrTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_app/admin/support/': {
       id: '/_app/admin/support/'
       path: '/'
@@ -1073,6 +1093,7 @@ const rootRouteChildren: RootRouteChildren = {
   SystemAdminLoginRoute: SystemAdminLoginRoute,
   SystemAdminResetPasswordRoute: SystemAdminResetPasswordRoute,
   VerifyQrTokenRoute: VerifyQrTokenRoute,
+  VerifyLetterQrTokenRoute: VerifyLetterQrTokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

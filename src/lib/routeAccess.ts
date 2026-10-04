@@ -103,7 +103,7 @@ export const ROUTE_ACCESS: Readonly<Record<string, RouteRule>> = {
   // is an act of the organization, and sub-admin delegation for it would mean
   // granting a sub-admin the power to attest to someone's employment to a third
   // party. Plan-level access is the separate axis handled by ModuleGate via
-  // module_flags (hr_letters_management) â€” deliberately not a column here, for
+  // module_flags (hr_letters_management) —” deliberately not a column here, for
   // the same reason the other plan modules are not.
   "/org/letter-templates": { roles: ["org_admin"] },
   "/org/hr-letters": { roles: ["org_admin"] },

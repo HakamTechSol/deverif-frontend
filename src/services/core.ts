@@ -815,6 +815,26 @@ export type PublicVerification = {
   document_hash: string | null;
 };
 
+/**
+ * Public, unauthenticated result for an HR Letter QR.
+ *
+ * Distinct from PublicVerification because the fields are: a letter carries a
+ * holder and an organisation rather than a CNIC and a file. A revoked letter is
+ * NOT representable here — the server returns a 404 for it, the same as for a
+ * forged or unknown token, so a scanner cannot tell the cases apart.
+ */
+export type PublicLetterVerification = {
+  valid: boolean;
+  reference_no: string;
+  letter_type: string;
+  title: string;
+  /** The employee the letter was issued to. */
+  holder_name: string;
+  designation: string | null;
+  organization_name: string;
+  issued_at: string;
+};
+
 /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ PAYMENTS (user) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ SUBSCRIPTION (org side: quota + custom plan) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */

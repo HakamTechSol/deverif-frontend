@@ -56,7 +56,7 @@ import { TableSkeleton } from "./_app.requests";
 import { formatDateTime, formatDate, apiErrorMessage } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/admin/leads")({
-  head: () => ({ meta: [{ title: "Leads â€” Dverif Admin" }] }),
+  head: () => ({ meta: [{ title: "Leads —” Dverif Admin" }] }),
   component: AdminLeadsPage,
 });
 
@@ -152,7 +152,7 @@ function ContactLeadsTab() {
           <SearchInput
             value={search}
             onChange={(v) => { setSearch(v); setPage(1); }}
-            placeholder="Search name, email, phoneâ€¦"
+            placeholder="Search name, email, phone—¦"
           />
           <Button
             variant="outline"
@@ -265,15 +265,15 @@ function ContactLeadRow({
         <TableCell data-label="S.No" className="w-10 text-muted-foreground">{serial}</TableCell>
         <TableCell data-label="Name" className="font-medium">{lead.name}</TableCell>
         <TableCell data-label="Email" className="text-muted-foreground">{lead.email}</TableCell>
-        <TableCell data-label="Phone" className="text-muted-foreground">{lead.phone ?? "â€”"}</TableCell>
+        <TableCell data-label="Phone" className="text-muted-foreground">{lead.phone ?? "—”"}</TableCell>
         <TableCell data-label="Message" className="max-w-xs truncate text-muted-foreground">
-          {lead.message ?? "â€”"}
+          {lead.message ?? "—”"}
         </TableCell>
         <TableCell data-label="Status" onClick={(e) => e.stopPropagation()}>
           <StatusBadge status={lead.status} />
         </TableCell>
         <TableCell data-label="Latest Note" className="max-w-[200px] truncate text-xs text-muted-foreground">
-          {lead.latest_note ?? "â€”"}
+          {lead.latest_note ?? "—”"}
         </TableCell>
         <TableCell data-label="Date" className="whitespace-nowrap text-xs text-muted-foreground">
           {formatDate(lead.created_at)}
@@ -332,7 +332,7 @@ function ContactLeadRow({
                   </Button>
                 </div>
                 <Textarea
-                  placeholder="Add a note (optional)â€¦"
+                  placeholder="Add a note (optional)—¦"
                   value={notesDraft}
                   onChange={(e) => setNotesDraft(e.target.value)}
                   rows={2}
@@ -373,7 +373,7 @@ function ContactLeadDetailDialog({
           <DialogDescription>Full submission and status history</DialogDescription>
         </DialogHeader>
         {detail.isLoading ? (
-          <div className="py-8 text-center text-sm text-muted-foreground">Loadingâ€¦</div>
+          <div className="py-8 text-center text-sm text-muted-foreground">Loading—¦</div>
         ) : lead ? (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3 text-sm">
@@ -386,7 +386,7 @@ function ContactLeadDetailDialog({
             </div>
             <div>
               <Label className="text-xs font-medium text-muted-foreground">Message</Label>
-              <p className="mt-1 whitespace-pre-wrap text-sm">{lead.message || "â€”"}</p>
+              <p className="mt-1 whitespace-pre-wrap text-sm">{lead.message || "—”"}</p>
             </div>
             {history.length > 0 && (
               <div>
@@ -443,7 +443,7 @@ function AccessRequestsTab() {
           <SearchInput
             value={search}
             onChange={(v) => { setSearch(v); setPage(1); }}
-            placeholder="Search organization, contact, emailâ€¦"
+            placeholder="Search organization, contact, email—¦"
           />
           <Button
             variant="outline"
@@ -561,13 +561,13 @@ function AccessRequestRow({
         <TableCell data-label="Organization" className="font-medium">{req.organization_name}</TableCell>
         <TableCell data-label="Contact" className="text-muted-foreground">{req.contact_name}</TableCell>
         <TableCell data-label="Email" className="text-muted-foreground">{req.email}</TableCell>
-        <TableCell data-label="Phone" className="text-muted-foreground">{req.phone ?? "â€”"}</TableCell>
-        <TableCell data-label="Company Size" className="text-muted-foreground">{req.company_size ?? "â€”"}</TableCell>
+        <TableCell data-label="Phone" className="text-muted-foreground">{req.phone ?? "—”"}</TableCell>
+        <TableCell data-label="Company Size" className="text-muted-foreground">{req.company_size ?? "—”"}</TableCell>
         <TableCell data-label="Status" onClick={(e) => e.stopPropagation()}>
           <StatusBadge status={req.status} />
         </TableCell>
         <TableCell data-label="Latest Note" className="max-w-[200px] truncate text-xs text-muted-foreground">
-          {req.latest_note ?? "â€”"}
+          {req.latest_note ?? "—”"}
         </TableCell>
         <TableCell data-label="Date" className="whitespace-nowrap text-xs text-muted-foreground">
           {formatDate(req.created_at)}
@@ -626,7 +626,7 @@ function AccessRequestRow({
                   </Button>
                 </div>
                 <Textarea
-                  placeholder="Add a note (optional)â€¦"
+                  placeholder="Add a note (optional)—¦"
                   value={notesDraft}
                   onChange={(e) => setNotesDraft(e.target.value)}
                   rows={2}
@@ -684,7 +684,7 @@ function AccessRequestDetailDialog({
           <DialogDescription>Full submission and status history</DialogDescription>
         </DialogHeader>
         {detail.isLoading ? (
-          <div className="py-8 text-center text-sm text-muted-foreground">Loadingâ€¦</div>
+          <div className="py-8 text-center text-sm text-muted-foreground">Loading—¦</div>
         ) : request ? (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3 text-sm">
@@ -699,7 +699,7 @@ function AccessRequestDetailDialog({
             </div>
             <div>
               <Label className="text-xs font-medium text-muted-foreground">Message</Label>
-              <p className="mt-1 whitespace-pre-wrap text-sm">{request.message || "â€”"}</p>
+              <p className="mt-1 whitespace-pre-wrap text-sm">{request.message || "—”"}</p>
             </div>
             {history.length > 0 && (
               <div>
@@ -806,7 +806,7 @@ function CreateOrgFromLeadDialog({
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button onClick={submit} disabled={!name.trim() || submitting}>
-            {submitting ? "Creatingâ€¦" : "Create Organization"}
+            {submitting ? "Creating—¦" : "Create Organization"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -820,7 +820,7 @@ function DetailField({ label, value, children }: { label: string; value?: string
   return (
     <div>
       <Label className="text-xs font-medium text-muted-foreground">{label}</Label>
-      <div className="mt-0.5 text-sm">{children ?? value ?? "â€”"}</div>
+      <div className="mt-0.5 text-sm">{children ?? value ?? "—”"}</div>
     </div>
   );
 }

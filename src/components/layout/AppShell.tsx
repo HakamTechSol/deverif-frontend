@@ -280,7 +280,7 @@ function SidebarInner({
               }}
               title={
                 needsUpgrade
-                  ? `${moduleLabel} â€” ${t("moduleLocked.navLockedTitle", { module: moduleLabel ?? "" })}`
+                  ? `${moduleLabel} —” ${t("moduleLocked.navLockedTitle", { module: moduleLabel ?? "" })}`
                   : needsRenewal
                     ? t("subscriptionLocked.notActive")
                     : undefined

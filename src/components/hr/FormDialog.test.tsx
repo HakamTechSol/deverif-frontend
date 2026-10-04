@@ -17,7 +17,7 @@ import { FormDialog } from "@/components/hr/FormDialog";
  *      provider FormDialog renders, so the read returned null and the page threw
  *      "Cannot destructure property 'register' of 'useFormContext(...)'".
  *
- * Both are invisible to TypeScript â€” the code type-checks perfectly. Both are
+ * Both are invisible to TypeScript —” the code type-checks perfectly. Both are
  * caught instantly by rendering.
  */
 
@@ -67,7 +67,7 @@ function Fields({ form }: { form: UseFormReturn<Values> }) {
   );
 }
 
-describe("FormDialog â€” submits REGISTERED values", () => {
+describe("FormDialog —” submits REGISTERED values", () => {
   it("passes the field values through, not an empty object", async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn().mockResolvedValue(undefined);
@@ -122,7 +122,7 @@ describe("FormDialog â€” submits REGISTERED values", () => {
  * pattern cannot be reintroduced. If this test starts throwing, the fix in this
  * file's header comment is being undone.
  */
-describe("FormDialog â€” the anti-pattern stays broken", () => {
+describe("FormDialog —” the anti-pattern stays broken", () => {
   it("useFormContext() in the PARENT is null, which is why we do not use it", () => {
     let seen: unknown = "not-called";
     function AntiPattern() {

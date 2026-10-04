@@ -20,7 +20,7 @@ import {
 /**
  * Employee portal: my letters.
  *
- * Read-only by design. The employee cannot issue, revoke or draft â€” those are
+ * Read-only by design. The employee cannot issue, revoke or draft —” those are
  * org-admin actions under /org/hr-letters. What an employee needs from a letter is
  * to download it and to show a bank or a new employer that it is genuine, so the
  * verification link is surfaced on every row rather than hidden behind a detail
@@ -69,7 +69,7 @@ function MyLettersPage() {
       header: t("letters.issuedAt"),
       render: (r) => (
         <span className="text-xs text-muted-foreground">
-          {r.issued_at ? new Date(r.issued_at).toLocaleDateString("en-PK") : "â€”"}
+          {r.issued_at ? new Date(r.issued_at).toLocaleDateString("en-PK") : "—”"}
         </span>
       ),
     },
