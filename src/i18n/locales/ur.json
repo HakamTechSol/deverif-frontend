@@ -1163,7 +1163,10 @@
     "attachmentDownload": "ڈاؤن لوڈ کریں",
     "attachmentDelete": "ہٹائیں",
     "attachmentNoPreview": "یہ قسم کی فائل preview نہیں ہو سکتی۔ کھولنے کے لیے ڈاؤن لوڈ کریں۔",
-    "attachmentPreviewHint": "Preview آپ کے سیشن کے ذریعے ہوتا ہے، اس لیے فائل لنک نہیں بلکہ fetch ہوتی ہے۔ محفوظ رکھنے کے لیے ڈاؤن لوڈ کریں۔"
+    "attachmentPreviewHint": "Preview آپ کے سیشن کے ذریعے ہوتا ہے، اس لیے فائل لنک نہیں بلکہ fetch ہوتی ہے۔ محفوظ رکھنے کے لیے ڈاؤن لوڈ کریں۔",
+    "attachmentDeleteTitle": "کیا یہ فائل ہٹا دی جائے؟",
+    "attachmentDeleteConfirm": "کیا آپ واقعی یہ رسید/دستاویز حذف کرنا چاہتے ہیں؟ یہ عمل واپس نہیں لیا جا سکتا۔",
+    "attachmentDeleteFailed": "فائل ہٹا نہیں جا سکی۔ دوبارہ کوشش کریں۔"
   },
   "myAssets": {
     "title": "میرے اثاثات",

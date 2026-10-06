@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Download, Eye, FileText, ImageIcon, Loader2, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import {
   Dialog,
   DialogContent,
@@ -48,6 +49,12 @@ export function AttachmentCard({
   const { t } = useTranslation();
   const [hovered, setHovered] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  // Deletion is confirmed, not immediate. The button only OPENS the dialog; the
+  // API call lives in handleDelete below, which the dialog's onConfirm invokes.
+  // Firing it from the button made a stray click destroy a purchase receipt -
+  // the one file in this drawer that cannot be re-created from data.
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [busy, setBusy] = useState<null | "view" | "download" | "delete">(null);
 
   const image = isImage(attachment.mime_type);
@@ -80,9 +87,22 @@ export function AttachmentCard({
 
   const handleDelete = async () => {
     setBusy("delete");
+    setDeleteError(null);
     try {
       await assetsService.removeAttachment(attachment.uuid);
+      // Close only on success. A failed delete that closed the dialog would look
+      // exactly like one that worked, and the row would still be sitting there.
+      setConfirmOpen(false);
       onDeleted();
+    } catch {
+      // Surfaced in the dialog rather than swallowed. Axios renders a rejection as
+      // "Request failed with status code 500", which names no file and explains
+      // nothing.
+      setDeleteError(t("assets.attachmentDeleteFailed"));
+      // Re-thrown deliberately. ConfirmDialog closes itself when the action
+      // RESOLVES and stays open when it rejects, so swallowing this would close the
+      // dialog and discard the message set a line above.
+      throw new Error("attachment delete failed");
     } finally {
       setBusy(null);
     }
@@ -162,7 +182,9 @@ export function AttachmentCard({
           size="icon"
           title={t("assets.attachmentDelete")}
           disabled={busy !== null}
-          onClick={() => void handleDelete()}
+          // Opens the confirmation only. handleDelete is reached solely through
+          // the dialog's onConfirm, so there is no path from this click to the API.
+          onClick={() => setConfirmOpen(true)}
         >
           {busy === "delete" ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -199,6 +221,34 @@ export function AttachmentCard({
           </div>
         </DialogContent>
       </Dialog>
+
+      {/*
+        Rendered outside the card's own <div> because AlertDialog portals itself,
+        and nesting it inside the hover-armed subtree would be fine visually but
+        muddles which layer owns the confirmation.
+
+        destructive, so the confirm button is styled as a removal rather than a
+        save: this is the one action here that cannot be undone.
+      */}
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={(v) => {
+          setConfirmOpen(v);
+          if (!v) setDeleteError(null);
+        }}
+        title={t("assets.attachmentDeleteTitle")}
+        description={t("assets.attachmentDeleteConfirm")}
+        confirmLabel={t("assets.attachmentDelete")}
+        destructive
+        loading={busy === "delete"}
+        error={deleteError}
+        // Returns the promise rather than `void handleDelete()`. ConfirmDialog
+        // closes itself when the action RESOLVES and stays open when it rejects,
+        // so discarding it with `void` made every failure look like a success -
+        // the dialog vanished and the error was set on a component that was no
+        // longer on screen.
+        onConfirm={() => handleDelete()}
+      />
     </div>
   );
 }

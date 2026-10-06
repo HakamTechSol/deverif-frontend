@@ -174,14 +174,58 @@ describe("attachment card", () => {
     });
   });
 
-  it("deletes through the attachment API and reports it", async () => {
+  it("OPENS a confirmation and does NOT delete until it is confirmed", async () => {
     const onDeleted = renderCard();
     const user = userEvent.setup();
 
     await user.click(screen.getByRole("button", { name: /remove|delete/i }));
 
+    // The guard itself: a click on the delete icon must reach no API at all.
+    // A purchase receipt is the one file in this drawer that cannot be recreated
+    // from data, so a stray click must be inert.
+    await waitFor(() => {
+      expect(screen.getByText(/cannot be undone/i)).toBeInTheDocument();
+    });
+    expect(removeAttachment).not.toHaveBeenCalled();
+    expect(onDeleted).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: /^(remove|delete)$/i }));
+
     await waitFor(() => expect(removeAttachment).toHaveBeenCalledWith("att-img"));
     await waitFor(() => expect(onDeleted).toHaveBeenCalled());
+  });
+
+  it("cancelling the confirmation deletes nothing", async () => {
+    const onDeleted = renderCard();
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole("button", { name: /remove|delete/i }));
+    await waitFor(() => expect(screen.getByText(/cannot be undone/i)).toBeInTheDocument());
+
+    // Escape is the fastest way out and the one most likely to be pressed by
+    // reflex, so it is the one worth asserting on.
+    await user.keyboard("{Escape}");
+
+    await waitFor(() => expect(screen.queryByText(/cannot be undone/i)).not.toBeInTheDocument());
+    expect(removeAttachment).not.toHaveBeenCalled();
+    expect(onDeleted).not.toHaveBeenCalled();
+  });
+
+  it("keeps the dialog open and explains a failed delete", async () => {
+    // Closing on failure would look identical to succeeding, with the row still
+    // sitting there and no message.
+    removeAttachment.mockRejectedValue(new Error("Request failed with status code 500"));
+    renderCard();
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole("button", { name: /remove|delete/i }));
+    await waitFor(() => expect(screen.getByText(/cannot be undone/i)).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: /^(remove|delete)$/i }));
+
+    await waitFor(() => expect(removeAttachment).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByText(/could not remove the file/i)).toBeInTheDocument());
+    // Still open, so the user is not left staring at a dialog that vanished.
+    expect(screen.getByText(/cannot be undone/i)).toBeInTheDocument();
   });
 });
 

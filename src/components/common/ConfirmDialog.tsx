@@ -8,7 +8,24 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
+
+/**
+ * Whether a value is a promise, without assuming the caller typed it as one.
+ *
+ * onConfirm is declared `() => void`, and callers routinely pass an async
+ * function, so its runtime value IS a promise even though the type says
+ * otherwise. Checking structurally keeps the shared component working for both
+ * without forcing every caller to change its signature.
+ */
+function isThenable(value: unknown): value is Promise<unknown> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as Promise<unknown>).then === "function"
+  );
+}
 
 export function ConfirmDialog({
   open,
@@ -47,8 +64,56 @@ export function ConfirmDialog({
   error?: string | null;
 }) {
   const { t } = useTranslation();
+  const [pending, setPending] = useState(false);
+
+  /**
+   * Close when the action SUCCEEDS, not when it is clicked.
+   *
+   * Radix's AlertDialogAction closes the dialog itself on click, before the
+   * action's promise settles. That made a FAILED action close the dialog with no
+   * message shown - the dialog vanishing reads exactly like success, which is
+   * precisely the failure mode the `error` prop exists to prevent.
+   *
+   * So the click's default is prevented and the result is awaited: fulfilled
+   * closes, rejected leaves the dialog open with the error visible. A synchronous
+   * onConfirm still closes immediately, so existing callers are unaffected.
+   */
+  const runConfirm = async () => {
+    if (pending || loading) return;
+    let result: unknown;
+    try {
+      result = onConfirm();
+    } catch {
+      // A synchronous throw is still a failure: leave the dialog open.
+      return;
+    }
+
+    if (!isThenable(result)) {
+      onOpenChange(false);
+      return;
+    }
+
+    setPending(true);
+    try {
+      await result;
+      onOpenChange(false);
+    } catch {
+      // Stay open. The caller renders `error`.
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const handleOpenChange = (next: boolean) => {
+    // Never close while an action is in flight, however the close was triggered.
+    if ((pending || loading) && !next) return;
+    onOpenChange(next);
+  };
+
+  const busy = pending || loading;
+
   return (
-    <AlertDialog open={open} onOpenChange={onOpenChange}>
+    <AlertDialog open={open} onOpenChange={handleOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>
@@ -63,10 +128,15 @@ export function ConfirmDialog({
           </p>
         ) : null}
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={loading}>{t("common.cancel")}</AlertDialogCancel>
+          <AlertDialogCancel disabled={busy}>{t("common.cancel")}</AlertDialogCancel>
           <AlertDialogAction
-            disabled={loading}
-            onClick={onConfirm}
+            disabled={busy}
+            onClick={(e) => {
+              // Prevent Radix closing on click; runConfirm decides, based on
+              // whether the action actually succeeded.
+              e.preventDefault();
+              void runConfirm();
+            }}
             className={
               destructive
                 ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"

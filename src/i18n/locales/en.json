@@ -1163,7 +1163,10 @@
     "attachmentDownload": "Download",
     "attachmentDelete": "Remove",
     "attachmentNoPreview": "This file type cannot be previewed. Download it to open it.",
-    "attachmentPreviewHint": "Preview uses your session, so the file is fetched rather than linked. Download it to keep a copy."
+    "attachmentPreviewHint": "Preview uses your session, so the file is fetched rather than linked. Download it to keep a copy.",
+    "attachmentDeleteTitle": "Remove this file?",
+    "attachmentDeleteConfirm": "Are you sure you want to delete this receipt/document? This action cannot be undone.",
+    "attachmentDeleteFailed": "Could not remove the file. Try again."
   },
   "myAssets": {
     "title": "My Assets",
