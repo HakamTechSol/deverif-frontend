@@ -21,6 +21,7 @@ import { ModuleGate } from "@/components/hr/ModuleGate";
 import { DataTable, type DataTableColumn } from "@/components/hr/DataTable";
 import { FormDialog } from "@/components/hr/FormDialog";
 import { FileDropzone } from "@/components/hr/FileDropzone";
+import { AttachmentCard } from "@/components/hr/AttachmentCard";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -45,6 +46,7 @@ import {
   assetCategoriesService,
   orgService,
   type Asset,
+  type AssetAttachment,
   type AssetDetail,
   type AssetStatus,
 } from "@/services";
@@ -446,6 +448,15 @@ function AssetDetailDrawer({
 
   const asset = detail.data;
 
+  /**
+   * Re-read this asset. Used after any attachment change, so a removed receipt
+   * leaves the list immediately rather than lingering until the panel is reopened.
+   */
+  const refreshDetail = () => {
+    void qc.invalidateQueries({ queryKey: ["asset", uuid] });
+    onChanged();
+  };
+
   return (
     // Sheet, not Drawer. `Drawer` is vaul, which is a MOBILE BOTTOM SHEET: it
     // ignores `w-full max-w-*` and slides up from the bottom edge, so on a
@@ -468,8 +479,15 @@ function AssetDetailDrawer({
     >
       {/* max-w-lg rather than the default sm:max-w-sm: the custody history and
           receipt rows are two-column and unusable at the narrower width.
-          overflow-y-auto on the PANEL, so the page behind never scrolls. */}
-      <SheetContent side="right" className="w-full max-w-lg gap-0 overflow-y-auto p-0 sm:max-w-lg">
+          overflow-y-auto on the PANEL, so the page behind never scrolls.
+          max-w-2xl rather than max-w-lg: at the narrower width the attachment
+          cards were squeezed until they clipped their own right edge. Widening
+          cannot add a nested scrollbar, because the panel is already the only
+          scroll container. */}
+      <SheetContent
+        side="right"
+        className="w-full max-w-2xl gap-0 overflow-y-auto p-0 sm:max-w-2xl"
+      >
         <SheetHeader className="border-b px-5 py-4 text-left">
           <SheetTitle>{asset ? `${asset.asset_tag} — ${asset.name}` : t("loading")}</SheetTitle>
           <SheetDescription>
@@ -553,7 +571,7 @@ function AssetDetailDrawer({
                       </p>
 
                       {(job.invoices ?? []).map((inv) => (
-                        <AttachmentRow key={inv.uuid} file={inv} />
+                        <AttachmentRow key={inv.uuid} file={inv} refresh={refreshDetail} />
                       ))}
 
                       {activeJob === job.uuid ? (
@@ -613,7 +631,9 @@ function AssetDetailDrawer({
               {asset.receipts.length === 0 ? (
                 <p className="text-sm text-muted-foreground">{t("assets.noReceipts")}</p>
               ) : (
-                asset.receipts.map((r) => <AttachmentRow key={r.uuid} file={r} />)
+                asset.receipts.map((r) => (
+                  <AttachmentRow key={r.uuid} file={r} refresh={refreshDetail} />
+                ))
               )}
 
               <FileDropzone
@@ -645,16 +665,21 @@ function AssetDetailDrawer({
   );
 }
 
-function AttachmentRow({ file }: { file: { uuid: string; file_name: string; file_size: number } }) {
-  const { t } = useTranslation();
+/**
+ * One attachment inside a list.
+ *
+ * Wraps AttachmentCard rather than reimplementing it, so the receipts section and
+ * the per-job invoices section behave identically: both can preview, download and
+ * remove, and neither can render a filename as inert text.
+ *
+ * `refresh` is passed down so a removal re-reads the asset and the mutations that
+ * follow it are visibly current - deleting a receipt otherwise left the row on
+ * screen until the panel was reopened.
+ */
+function AttachmentRow({ file, refresh }: { file: AssetAttachment; refresh: () => void }) {
   return (
-    <div className="mt-1 flex items-center justify-between gap-2 text-xs">
-      <span className="truncate" title={file.file_name}>
-        {file.file_name}
-      </span>
-      {/* Shared formatter: a hand-rolled "/1024 + KB" here would show 0 KB for
-          anything under 512 bytes and disagree with the uploader's own copy. */}
-      <span className="shrink-0 text-muted-foreground">{formatFileSize(file.file_size)}</span>
+    <div className="mt-2">
+      <AttachmentCard attachment={file} onDeleted={refresh} />
     </div>
   );
 }

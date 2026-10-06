@@ -116,9 +116,13 @@ describe("file uploads", () => {
     expect(code(SERVICE)).not.toMatch(/receipt_path|invoice_path/);
   });
 
-  it("the page renders an attachment size with the shared formatter", () => {
-    expect(ASSETS_PAGE).toContain("formatFileSize(");
-    expect(ASSETS_PAGE).not.toMatch(/file_size\s*\/\s*1024/);
+  it("the attachment size uses the shared formatter, not a hand-rolled division", () => {
+    // Moved into AttachmentCard when attachments became interactive. Asserted
+    // where the rendering now lives: a hand-rolled "/1024 + KB" shows 0 KB for
+    // anything under 512 bytes and disagrees with the uploader's own copy.
+    const card = readFileSync("src/components/hr/AttachmentCard.tsx", "utf8");
+    expect(card).toContain("formatFileSize(");
+    expect(card).not.toMatch(/file_size\s*\/\s*1024/);
   });
 });
 

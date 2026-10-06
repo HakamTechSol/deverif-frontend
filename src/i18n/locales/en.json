@@ -1158,7 +1158,12 @@
       "completed": "Completed",
       "cancelled": "Cancelled"
     },
-    "assignedDate": "Assigned on"
+    "assignedDate": "Assigned on",
+    "attachmentView": "View",
+    "attachmentDownload": "Download",
+    "attachmentDelete": "Remove",
+    "attachmentNoPreview": "This file type cannot be previewed. Download it to open it.",
+    "attachmentPreviewHint": "Preview uses your session, so the file is fetched rather than linked. Download it to keep a copy."
   },
   "myAssets": {
     "title": "My Assets",

@@ -1158,7 +1158,12 @@
       "completed": "مکمل",
       "cancelled": "منسوخ"
     },
-    "assignedDate": "دیا گیا"
+    "assignedDate": "دیا گیا",
+    "attachmentView": "دیکھیں",
+    "attachmentDownload": "ڈاؤن لوڈ کریں",
+    "attachmentDelete": "ہٹائیں",
+    "attachmentNoPreview": "یہ قسم کی فائل preview نہیں ہو سکتی۔ کھولنے کے لیے ڈاؤن لوڈ کریں۔",
+    "attachmentPreviewHint": "Preview آپ کے سیشن کے ذریعے ہوتا ہے، اس لیے فائل لنک نہیں بلکہ fetch ہوتی ہے۔ محفوظ رکھنے کے لیے ڈاؤن لوڈ کریں۔"
   },
   "myAssets": {
     "title": "میرے اثاثات",

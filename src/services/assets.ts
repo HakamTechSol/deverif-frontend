@@ -291,6 +291,21 @@ export const assetsService = {
   removeAttachment: (attachmentUuid: UUID) =>
     api.delete(`/org/asset-attachments/${attachmentUuid}`).then((r) => r.data),
 
+  /**
+   * Fetch an attachment as a Blob, through axios so the auth interceptor runs.
+   *
+   * A plain `<a href="/org/asset-attachments/...">` would NOT work: the endpoint
+   * is authenticated, a new tab carries no Authorization header, and the result
+   * is a 401 page rendered where a receipt should be. Going through axios and
+   * handing the caller a Blob is what makes View and Download possible at all.
+   *
+   * The caller owns the resulting object URL and must revoke it.
+   */
+  downloadAttachment: (attachmentUuid: UUID) =>
+    api
+      .get(`/org/asset-attachments/${attachmentUuid}/download`, { responseType: "blob" })
+      .then((r) => r.data as Blob),
+
   /** Authenticated, so it must go through axios rather than a plain <a href>. */
   attachmentDownloadUrl: (attachmentUuid: UUID) =>
     `/org/asset-attachments/${attachmentUuid}/download`,
