@@ -21,6 +21,7 @@ import { Route as AppAutoVerifiedRouteImport } from './routes/_app.auto-verified
 import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
 import { Route as AppInboxRouteImport } from './routes/_app.inbox'
 import { Route as AppLeavesRouteImport } from './routes/_app.leaves'
+import { Route as AppMyAssetsRouteImport } from './routes/_app.my-assets'
 import { Route as AppMyLettersRouteImport } from './routes/_app.my-letters'
 import { Route as AppPaymentsRouteImport } from './routes/_app.payments'
 import { Route as AppPayrollRouteImport } from './routes/_app.payroll'
@@ -118,6 +119,11 @@ const AppInboxRoute = AppInboxRouteImport.update({
 const AppLeavesRoute = AppLeavesRouteImport.update({
   id: '/leaves',
   path: '/leaves',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppMyAssetsRoute = AppMyAssetsRouteImport.update({
+  id: '/my-assets',
+  path: '/my-assets',
   getParentRoute: () => AppRoute,
 } as any)
 const AppMyLettersRoute = AppMyLettersRouteImport.update({
@@ -330,6 +336,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof AppDashboardRoute
   '/inbox': typeof AppInboxRoute
   '/leaves': typeof AppLeavesRoute
+  '/my-assets': typeof AppMyAssetsRoute
   '/my-letters': typeof AppMyLettersRoute
   '/payments': typeof AppPaymentsRoute
   '/payroll': typeof AppPayrollRoute
@@ -382,6 +389,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof AppDashboardRoute
   '/inbox': typeof AppInboxRoute
   '/leaves': typeof AppLeavesRoute
+  '/my-assets': typeof AppMyAssetsRoute
   '/my-letters': typeof AppMyLettersRoute
   '/payments': typeof AppPaymentsRoute
   '/payroll': typeof AppPayrollRoute
@@ -433,6 +441,7 @@ export interface FileRoutesById {
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/inbox': typeof AppInboxRoute
   '/_app/leaves': typeof AppLeavesRoute
+  '/_app/my-assets': typeof AppMyAssetsRoute
   '/_app/my-letters': typeof AppMyLettersRoute
   '/_app/payments': typeof AppPaymentsRoute
   '/_app/payroll': typeof AppPayrollRoute
@@ -487,6 +496,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/inbox'
     | '/leaves'
+    | '/my-assets'
     | '/my-letters'
     | '/payments'
     | '/payroll'
@@ -539,6 +549,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/inbox'
     | '/leaves'
+    | '/my-assets'
     | '/my-letters'
     | '/payments'
     | '/payroll'
@@ -589,6 +600,7 @@ export interface FileRouteTypes {
     | '/_app/dashboard'
     | '/_app/inbox'
     | '/_app/leaves'
+    | '/_app/my-assets'
     | '/_app/my-letters'
     | '/_app/payments'
     | '/_app/payroll'
@@ -729,6 +741,13 @@ declare module '@tanstack/react-router' {
       path: '/leaves'
       fullPath: '/leaves'
       preLoaderRoute: typeof AppLeavesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/my-assets': {
+      id: '/_app/my-assets'
+      path: '/my-assets'
+      fullPath: '/my-assets'
+      preLoaderRoute: typeof AppMyAssetsRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/my-letters': {
@@ -1055,6 +1074,7 @@ interface AppRouteChildren {
   AppDashboardRoute: typeof AppDashboardRoute
   AppInboxRoute: typeof AppInboxRoute
   AppLeavesRoute: typeof AppLeavesRoute
+  AppMyAssetsRoute: typeof AppMyAssetsRoute
   AppMyLettersRoute: typeof AppMyLettersRoute
   AppPaymentsRoute: typeof AppPaymentsRoute
   AppPayrollRoute: typeof AppPayrollRoute
@@ -1091,6 +1111,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppDashboardRoute: AppDashboardRoute,
   AppInboxRoute: AppInboxRoute,
   AppLeavesRoute: AppLeavesRoute,
+  AppMyAssetsRoute: AppMyAssetsRoute,
   AppMyLettersRoute: AppMyLettersRoute,
   AppPaymentsRoute: AppPaymentsRoute,
   AppPayrollRoute: AppPayrollRoute,

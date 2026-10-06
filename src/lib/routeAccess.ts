@@ -88,6 +88,19 @@ export const ROUTE_ACCESS: Readonly<Record<string, RouteRule>> = {
   // Plan-level access is handled by ModuleGate via module_flags.
   "/my-letters": { roles: ["employee"] },
 
+  // --- My assets ---------------------------------------------------------------
+  // ALL ORG ROLES, which is the one deliberate difference from /my-letters above.
+  //
+  // The page answers "what equipment is assigned to ME", derived from the
+  // session, so it leaks nobody else's hardware. Restricting it to the employee
+  // role would hide it from a sub-admin or org_admin who is also on the roster and
+  // has therefore been handed a laptop - the person most likely to be mid-way
+  // through logging its serial number. Someone with no employee record gets an
+  // empty list, which is the correct answer rather than a 403.
+  //
+  // Plan-level access is ModuleGate via module_flags (asset_management).
+  "/my-assets": { roles: ALL_ORG_ROLES },
+
   // --- Org operations: staff only ------------------------------------------
   "/org/support": { roles: STAFF_ROLES },
   "/org/team": { roles: STAFF_ROLES, feature: "manage_employees", always: ["org_admin"] },

@@ -37,7 +37,8 @@
     "hrLetters": "ایچ آر خطوط",
     "myLetters": "میرے خطوط",
     "assets": "اثاثات",
-    "assetCategories": "اثاثات کی اقسام"
+    "assetCategories": "اثاثات کی اقسام",
+    "myAssets": "میرے اثاثات"
   },
   "common": {
     "search": "تلاش کریں…",
@@ -1104,7 +1105,7 @@
     "retireWarning": "ریٹائر کرنے سے ریکارڈ آڈٹ کے لیے محفوظ رہتا ہے لیکن اثاثہ مزید تفویض نہیں ہو سکتا۔ غلطی ہو تو بعد میں بحال کیا جا سکتا ہے۔",
     "reinstate": "بحال کریں",
     "viewDetails": "تفصیلات دیکھیں",
-    "detailDescription": "قسم: {category}",
+    "detailDescription": "قسم: {{category}}",
     "notFound": "اثاثہ لوڈ نہیں ہو سکا۔",
     "custodyHistory": "ملکیت کی تاریخ",
     "neverAssigned": "کبھی تفویض نہیں ہوا",
@@ -1131,7 +1132,7 @@
     "categoryName": "نام",
     "categoryDescriptionLabel": "تفصیل",
     "defaultLifespan": "طے شد عمر",
-    "months": "{count, plural, one {# ماہ} other {# ماہ}}",
+    "months": "{{count}} ماہ",
     "categoryActive": "فعال",
     "assetsInCategory": "اثاثات",
     "searchCategories": "اقسام تلاش کریں",
@@ -1139,7 +1140,7 @@
     "hideInactive": "غیر فعال چھپائیں",
     "noCategories": "ابھی کوئی قسم نہیں",
     "noCategoriesDescription": "اثاثات شامل کرنے سے پہلے ایک قسم بنائیں تاکہ وہ گروپ ہو سکیں۔",
-    "deleteCategoryWarning": "کیا \"{name}\" حذف کریں؟",
+    "deleteCategoryWarning": "کیا \"{{name}}\" حذف کریں؟",
     "deleteCategoryWarningGeneric": "کیا یہ قسم حذف کریں؟",
     "status": {
       "available": "دستیاب",
@@ -1156,6 +1157,14 @@
       "open": "کھلا",
       "completed": "مکمل",
       "cancelled": "منسوخ"
-    }
+    },
+    "assignedDate": "دیا گیا"
+  },
+  "myAssets": {
+    "title": "میرے اثاثات",
+    "description": "وہ سامان جو اس وقت آپ کو دیا گیا ہے۔",
+    "empty": "آپ کو کچھ نہیں دیا گیا",
+    "emptyDescription": "آپ کے نام کوئی کمپنی سامان نہیں ہے۔ اگر آپ کو کچھ دیا گیا ہے تو ایچ آر کو بتائیں۔",
+    "reportIssue": "اگر یہاں کچھ غلط یا کم ہے تو ایچ آر سے رابطہ کریں — سامان واپس یا تبدیل کرنا ایچ آر کا کام ہے، اس صفحے سے نہیں۔"
   }
 }

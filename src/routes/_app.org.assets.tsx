@@ -31,12 +31,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  Drawer,
-  DrawerContent,
-  DrawerDescription,
-  DrawerHeader,
-  DrawerTitle,
-} from "@/components/ui/drawer";
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { PageHeader } from "@/components/common/PageHeader";
 import { SearchInput } from "@/components/common/SearchInput";
 import {
@@ -256,7 +256,11 @@ function AssetsPage() {
         />
       </div>
 
-      <AssetDetailDrawer uuid={detailUuid} onChanged={invalidate} />
+      <AssetDetailDrawer
+        uuid={detailUuid}
+        onChanged={invalidate}
+        onOpenChangeClose={() => setDetailUuid(null)}
+      />
 
       <AssetDialog
         kind={dialog}
@@ -391,7 +395,15 @@ function RowActions({
 // Detail drawer: custody history, maintenance, receipts
 // ---------------------------------------------------------------------------
 
-function AssetDetailDrawer({ uuid, onChanged }: { uuid: string | null; onChanged: () => void }) {
+function AssetDetailDrawer({
+  uuid,
+  onChanged,
+  onOpenChangeClose,
+}: {
+  uuid: string | null;
+  onChanged: () => void;
+  onOpenChangeClose: () => void;
+}) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const open = Boolean(uuid);
@@ -435,21 +447,42 @@ function AssetDetailDrawer({ uuid, onChanged }: { uuid: string | null; onChanged
   const asset = detail.data;
 
   return (
-    <Drawer open={open} onOpenChange={(v) => !v && (setActiveJob(null), onChanged())}>
-      <DrawerContent className="w-full max-w-xl overflow-y-auto">
-        <DrawerHeader>
-          <DrawerTitle>{asset ? `${asset.asset_tag} — ${asset.name}` : t("loading")}</DrawerTitle>
-          <DrawerDescription>
+    // Sheet, not Drawer. `Drawer` is vaul, which is a MOBILE BOTTOM SHEET: it
+    // ignores `w-full max-w-*` and slides up from the bottom edge, so on a
+    // narrow viewport the detail panel was clipped off-screen with no reachable
+    // close control. Sheet is the Radix side-panel primitive: fixed
+    // inset-y-0 right-0, a dimmed backdrop, and a close button in its top-right
+    // corner. That is the shape this was always meant to be.
+    <Sheet
+      open={open}
+      onOpenChange={(v) => {
+        if (!v) {
+          setActiveJob(null);
+          setJobFiles([]);
+        }
+        // onChanged is deliberately NOT called on close: closing a panel is not
+        // a mutation, and refreshing the table behind it made the list flicker
+        // every time someone glanced at an asset.
+        onOpenChangeClose();
+      }}
+    >
+      {/* max-w-lg rather than the default sm:max-w-sm: the custody history and
+          receipt rows are two-column and unusable at the narrower width.
+          overflow-y-auto on the PANEL, so the page behind never scrolls. */}
+      <SheetContent side="right" className="w-full max-w-lg gap-0 overflow-y-auto p-0 sm:max-w-lg">
+        <SheetHeader className="border-b px-5 py-4 text-left">
+          <SheetTitle>{asset ? `${asset.asset_tag} — ${asset.name}` : t("loading")}</SheetTitle>
+          <SheetDescription>
             {asset ? t("assets.detailDescription", { category: asset.category_name ?? "—" }) : ""}
-          </DrawerDescription>
-        </DrawerHeader>
+          </SheetDescription>
+        </SheetHeader>
 
         {detail.isLoading ? (
-          <p className="p-4 text-sm text-muted-foreground">{t("loading")}</p>
+          <p className="p-5 text-sm text-muted-foreground">{t("loading")}</p>
         ) : !asset ? (
-          <p className="p-4 text-sm text-destructive">{t("assets.notFound")}</p>
+          <p className="p-5 text-sm text-destructive">{t("assets.notFound")}</p>
         ) : (
-          <div className="space-y-6 px-4 pb-6">
+          <div className="space-y-6 px-5 pb-8">
             <dl className="grid grid-cols-2 gap-2 text-sm">
               <Detail label={t("common.status")}>
                 <Badge variant={ASSET_STATUS_VARIANT[asset.status]}>
@@ -607,8 +640,8 @@ function AssetDetailDrawer({ uuid, onChanged }: { uuid: string | null; onChanged
             </section>
           </div>
         )}
-      </DrawerContent>
-    </Drawer>
+      </SheetContent>
+    </Sheet>
   );
 }
 

@@ -52,6 +52,12 @@ export const userNavItems: NavItem[] = [
 export const memberNavItems: NavItem[] = [
   { to: "/attendance", labelKey: "nav.attendance", icon: ClipboardCheck },
   { to: "/my-letters", labelKey: "nav.myLetters", icon: FileSignature },
+  // Staff INCLUDED, deliberately, unlike /my-letters beside it. A sub-admin who
+  // is also on the employee roster is holding a company laptop like anyone else,
+  // and the page returns an empty list for anyone without an employee record.
+  // Hiding it from staff would mean a colleague who is handed a device cannot
+  // see what they were given. ROUTE_ACCESS opens it to all org roles to match.
+  { to: "/my-assets", labelKey: "nav.myAssets", icon: Package },
   { to: "/payroll", labelKey: "nav.payroll", icon: Wallet },
 ];
 

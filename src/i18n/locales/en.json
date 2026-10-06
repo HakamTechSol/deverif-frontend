@@ -37,7 +37,8 @@
     "hrLetters": "HR Letters",
     "myLetters": "My Letters",
     "assets": "Assets",
-    "assetCategories": "Asset Categories"
+    "assetCategories": "Asset Categories",
+    "myAssets": "My Assets"
   },
   "common": {
     "search": "Search…",
@@ -1104,7 +1105,7 @@
     "retireWarning": "Retiring keeps the record for your audit trail but stops the asset being assigned. You can reinstate it afterwards if this was a mistake.",
     "reinstate": "Reinstate",
     "viewDetails": "View details",
-    "detailDescription": "Category: {category}",
+    "detailDescription": "Category: {{category}}",
     "notFound": "Asset could not be loaded.",
     "custodyHistory": "Custody history",
     "neverAssigned": "Never assigned",
@@ -1131,7 +1132,7 @@
     "categoryName": "Name",
     "categoryDescriptionLabel": "Description",
     "defaultLifespan": "Default lifespan",
-    "months": "{count, plural, one {# month} other {# months}}",
+    "months": "{{count}} month(s)",
     "categoryActive": "Active",
     "assetsInCategory": "Assets",
     "searchCategories": "Search categories",
@@ -1139,7 +1140,7 @@
     "hideInactive": "Hide inactive",
     "noCategories": "No categories yet",
     "noCategoriesDescription": "Create a category before adding assets, so they can be grouped.",
-    "deleteCategoryWarning": "Delete \"{name}\"?",
+    "deleteCategoryWarning": "Delete \"{{name}}\"?",
     "deleteCategoryWarningGeneric": "Delete this category?",
     "status": {
       "available": "Available",
@@ -1156,6 +1157,14 @@
       "open": "Open",
       "completed": "Completed",
       "cancelled": "Cancelled"
-    }
+    },
+    "assignedDate": "Assigned on"
+  },
+  "myAssets": {
+    "title": "My Assets",
+    "description": "Equipment currently assigned to you.",
+    "empty": "Nothing assigned to you",
+    "emptyDescription": "You have no company equipment on record. If you have been given something, tell HR.",
+    "reportIssue": "If something here is wrong or missing, contact HR — returning or replacing equipment is handled by them, not from this page."
   }
 }

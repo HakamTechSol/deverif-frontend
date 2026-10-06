@@ -139,6 +139,26 @@ export const assetCategoriesService = {
   remove: (uuid: UUID) => api.delete(`/org/asset-categories/${uuid}`).then((r) => r.data),
 };
 
+/**
+ * What an employee sees about their own hardware.
+ *
+ * A DISTINCT TYPE from Asset on purpose. An employee's view carries no cost, no
+ * vendor and no notes — those are HR's, and `Asset` would make it trivial to
+ * render them here by accident once someone copies a column across. Keeping the
+ * type narrow means the compiler objects rather than the employee.
+ */
+export type MyAsset = {
+  uuid: UUID;
+  assignment_uuid: string;
+  asset_tag: string;
+  name: string;
+  category_name: string | null;
+  model_details: string | null;
+  serial_number: string | null;
+  warranty_expires_at: string | null;
+  assigned_at: string;
+};
+
 export const assetsService = {
   list: (
     params: {
@@ -274,4 +294,19 @@ export const assetsService = {
   /** Authenticated, so it must go through axios rather than a plain <a href>. */
   attachmentDownloadUrl: (attachmentUuid: UUID) =>
     `/org/asset-attachments/${attachmentUuid}/download`,
+};
+
+/**
+ * Employee self-service: assets currently assigned to me.
+ *
+ * Takes no parameters, and that is the point. The employee is derived from the
+ * session, so there is no id a caller could change to read a colleague's
+ * hardware. Read only: assigning, returning and retiring are HR actions, and the
+ * server would refuse them here regardless.
+ */
+export const myAssetsService = {
+  list: () =>
+    api
+      .get<{ items?: MyAsset[] }>("/my/assets")
+      .then((r) => (Array.isArray(r.data.items) ? r.data.items : [])),
 };
