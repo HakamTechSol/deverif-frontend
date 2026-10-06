@@ -22,6 +22,7 @@ import { readFileSync } from "node:fs";
 const ASSETS_PAGE = readFileSync("src/routes/_app.org.assets.tsx", "utf8");
 const CATEGORIES_PAGE = readFileSync("src/routes/_app.org.asset-categories.tsx", "utf8");
 const SERVICE = readFileSync("src/services/assets.ts", "utf8");
+const ORG_SERVICE = readFileSync("src/services/org.ts", "utf8");
 const NAV = readFileSync("src/lib/navItems.ts", "utf8");
 const ACCESS = readFileSync("src/lib/routeAccess.ts", "utf8");
 const UTILS = readFileSync("src/lib/utils.ts", "utf8");
@@ -59,6 +60,61 @@ function serviceBlock(src: string, name: string): string {
   const next = rest.search(/\n};\n/);
   return next === -1 ? rest : rest.slice(0, next);
 }
+
+describe("edit can actually clear a field", () => {
+  const PAGE = code(ASSETS_PAGE);
+
+  it("the update service accepts null, which is the wire format for a clear", () => {
+    // The server skips undefined ("field absent") and writes null ("clear this").
+    // A type of `string | undefined` cannot express a clear at all, so the call
+    // site had nowhere to send one even once someone noticed the bug.
+    const body = member(serviceBlock(code(SERVICE), "assetsService"), "update");
+    for (const field of [
+      "model_details",
+      "serial_number",
+      "purchase_date",
+      "purchase_cost",
+      "vendor",
+      "warranty_expires_at",
+      "notes",
+    ]) {
+      expect(body, `update cannot clear ${field}`).toMatch(
+        new RegExp(`${field}\\?:\\s*\\w+ \\| null`),
+      );
+    }
+  });
+
+  it("the edit branch sends null for an emptied field, not undefined", () => {
+    const at = PAGE.indexOf("assetsService.update(asset.uuid, {");
+    expect(at, "the update call site was not found").toBeGreaterThan(-1);
+    const edit = PAGE.slice(at, at + 700);
+    expect(edit).toContain("clear(values.vendor)");
+    expect(edit).toContain("clear(values.notes)");
+    // The bug: `values.vendor || undefined` types fine and skips server-side, so
+    // clearing a vendor looked saved and the register kept the old value.
+    expect(edit).not.toMatch(/values\.(vendor|notes|serial_number)\s*\|\|\s*undefined/);
+  });
+
+  it("the create branch still omits, because there is nothing to clear", () => {
+    const at = PAGE.indexOf("assetsService.create({");
+    expect(at, "the create call site was not found").toBeGreaterThan(-1);
+    const create = PAGE.slice(at, at + 700);
+    expect(create).toContain("omit(values.vendor)");
+    expect(create).not.toContain("clear(values.vendor)");
+  });
+});
+
+describe("filter changes cannot strand the table on a page past its end", () => {
+  const PAGE = code(ASSETS_PAGE);
+
+  it("search, status and category each reset to page 1", () => {
+    // Narrowing a filter while sitting on page 4 renders an empty table, which
+    // reads as "nothing matches" rather than "there is no page 4 of this".
+    expect(PAGE).toMatch(/setSearch\(v\);\s*setPage\(1\);/);
+    expect(PAGE).toMatch(/setStatus\([^)]*\);\s*setPage\(1\);/);
+    expect(PAGE).toMatch(/setCategory\([^)]*\);\s*setPage\(1\);/);
+  });
+});
 
 describe("assets client never sends status", () => {
   const ASSETS = serviceBlock(code(SERVICE), "assetsService");
@@ -160,17 +216,129 @@ describe("asset actions match the server's transitions", () => {
     expect(branchFor("maintenance")).not.toContain("assets.assign");
   });
 
-  it("offers Reinstate for retired instead of Assign or Return", () => {
-    const idx = ASSETS_PAGE.indexOf('row.status !== "retired"');
-    expect(idx).toBeGreaterThan(-1);
-    const tail = ASSETS_PAGE.slice(idx, idx + 600);
-    expect(tail).toContain("assets.reinstate");
-    expect(tail).not.toContain("assets.assign");
-    expect(tail).not.toContain("assets.returnAsset");
+  it("offers Retire only when available, and Reinstate only when retired", () => {
+    // retireAsset refuses an `assigned` asset ("Return this asset before retiring
+    // it") and a `maintenance` one ("Close the open maintenance job before
+    // retiring this asset"). The menu used to gate Retire on
+    // `status !== "retired"`, so on both of those rows it offered an action whose
+    // only possible outcome was a 409 - which teaches people the page is broken.
+    expect(ASSETS_PAGE).not.toContain('row.status !== "retired"');
+    expect(ASSETS_PAGE).toMatch(
+      /\{row\.status === "available" \? \(\s*<DropdownMenuItem onSelect=\{\(\) => onDialog\("retire"\)\}/,
+    );
+    expect(ASSETS_PAGE).toMatch(
+      /\{row\.status === "retired" \? \(\s*<DropdownMenuItem onSelect=\{\(\) => void run\(\(\) => assetsService\.reinstate/,
+    );
+
+    expect(branchFor("assigned"), "a retire action leaked into the assigned row").not.toContain(
+      "assets.retire",
+    );
+    expect(
+      branchFor("maintenance"),
+      "a retire action leaked into the maintenance row",
+    ).not.toContain("assets.retire");
+  });
+
+  it("reports a failed action instead of doing nothing", () => {
+    // The menu's runner is called as `void run(...)`, which discards the promise.
+    // With no catch, a rejected Reinstate produced zero feedback AND an unhandled
+    // rejection: the button simply did nothing.
+    const runner = ASSETS_PAGE.slice(
+      ASSETS_PAGE.indexOf("const run = async"),
+      ASSETS_PAGE.indexOf("const run = async") + 900,
+    );
+    expect(runner).toContain("catch");
+    expect(runner).toContain("toast.error");
   });
 
   it("keeps the row click from also opening the drawer behind the menu", () => {
     expect(ASSETS_PAGE).toMatch(/onClick=\{\(e\) => e\.stopPropagation\(\)\}/);
+  });
+});
+
+describe("the Assign picker can reach the whole company", () => {
+  it("asks for the org roster, not just the records this admin imported", () => {
+    // By default an org_admin's employee list is filtered to what they personally
+    // added, which is right for the Employees page and wrong for a picker over
+    // the company: a colleague another admin onboarded was not hidden behind a
+    // "show more", they were absent, so the only symptom was that the company's
+    // own employees seemed not to exist.
+    expect(ASSETS_PAGE).toMatch(/orgService\.employees\(\{[^}]*scope: "org"/);
+  });
+
+  it("the service can express the opt-out", () => {
+    expect(ORG_SERVICE).toMatch(/scope\?:\s*"org"/);
+  });
+});
+
+describe("the summary cards show the server's figures", () => {
+  it("reads total_value and maintenance_spend off the summary response", () => {
+    // Summing the rows on screen would report only the current page's worth: the
+    // register is paginated, so a 10-page inventory would claim 1/10th of its
+    // value. The server already computes both across the whole org.
+    expect(ASSETS_PAGE).toContain("money?.total_value");
+    expect(ASSETS_PAGE).toContain("money?.maintenance_spend");
+  });
+
+  it("does not compute a money total from the rows", () => {
+    expect(ASSETS_PAGE).not.toMatch(/purchase_cost\s*\*\s*rows\.length/);
+    expect(ASSETS_PAGE).not.toMatch(/rows\.reduce\([^)]*purchase_cost/);
+  });
+
+  it("says what each figure includes, so the number can be trusted", () => {
+    // An unexplained total is how a register gets disbelieved: someone reconciles
+    // it against the ledger, finds a difference, and stops reading the page.
+    expect(ASSETS_PAGE).toContain("assets.totalValueHint");
+    expect(ASSETS_PAGE).toContain("assets.maintenanceSpendHint");
+  });
+
+  it("surfaces open_jobs next to the status it explains", () => {
+    // "Maintenance" for two separate faults is one problem on a dashboard and two
+    // on a worklist. The count is what stops the asset being closed out after the
+    // first repair.
+    expect(ASSETS_PAGE).toContain("assets.openJobs");
+    expect(ASSETS_PAGE).toContain("r.open_jobs");
+  });
+});
+
+describe("a maintenance job can be closed either way", () => {
+  it("offers Cancel as well as Mark repaired", () => {
+    // Cancel is not the same as complete. With only "complete", a job raised in
+    // error could only be recorded as a repair that happened - and since
+    // maintenance_spend counts COMPLETED jobs, a wrongly completed job
+    // permanently inflated the money the dashboard reported as spent.
+    expect(ASSETS_PAGE).toContain("assets.markRepaired");
+    expect(ASSETS_PAGE).toContain("assets.cancelMaintenance");
+    expect(ASSETS_PAGE).toMatch(/status: "cancelled"/);
+    expect(ASSETS_PAGE).toMatch(/status: "completed"/);
+  });
+
+  it("passes the transition through, rather than always sending an empty body", () => {
+    const at = ASSETS_PAGE.indexOf("const closeJob = useMutation(");
+    expect(at, "the closeJob mutation was not found").toBeGreaterThan(-1);
+    const body = ASSETS_PAGE.slice(at, at + 400);
+    expect(body).toMatch(/completeMaintenance\(/);
+    expect(body).toMatch(/status: vars\.status/);
+  });
+
+  it("shows how the job closed", () => {
+    // Without completion_notes a cancelled job and a completed one look identical,
+    // which is the whole distinction the new button exists to record.
+    expect(ASSETS_PAGE).toContain("job.completion_notes");
+  });
+});
+
+describe("notes are readable, not just writable", () => {
+  it("renders them in the detail drawer", () => {
+    // retireAsset APPENDS "Retired: <reason>" to notes, and the edit menu item is
+    // hidden for retired rows - so on a scrapped asset the drawer is the only
+    // place the reason could ever appear. It rendered nowhere at all.
+    expect(ASSETS_PAGE).toMatch(/\{asset\.notes \?/);
+    expect(ASSETS_PAGE).toContain("whitespace-pre-wrap");
+  });
+
+  it("labels the section, rather than leaving a floating paragraph", () => {
+    expect(ASSETS_PAGE).toMatch(/t\("assets\.notes"\)/);
   });
 });
 

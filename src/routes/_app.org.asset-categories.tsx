@@ -130,9 +130,15 @@ function AssetCategoriesPage() {
           <Button
             variant="ghost"
             size="icon"
-            title={t("common.delete")}
-            // Disabled up front when the category is in use, with the reason on
-            // the tooltip, rather than letting the click fail server-side.
+            // A disabled control whose title still says "Delete" is a dead button
+            // with no explanation, which is the outcome this page set out to
+            // avoid. The title has to carry the REASON, because a disabled button
+            // cannot be clicked to find out and nothing else on the row says so.
+            title={
+              (r.asset_count ?? 0) > 0
+                ? t("assets.categoryInUse", { count: r.asset_count ?? 0 })
+                : t("common.delete")
+            }
             disabled={(r.asset_count ?? 0) > 0}
             onClick={() => setDeleting(r)}
           >

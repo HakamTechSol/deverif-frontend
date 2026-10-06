@@ -199,13 +199,21 @@ export const assetsService = {
       category_uuid?: UUID;
       name?: string;
       asset_tag?: string;
-      model_details?: string;
-      serial_number?: string;
-      purchase_date?: string;
-      purchase_cost?: number;
-      vendor?: string;
-      warranty_expires_at?: string;
-      notes?: string;
+      /**
+       * `string | null`, and the null is load-bearing.
+       *
+       * The server treats undefined as "leave this field alone" and null as
+       * "clear this field". So an update that must be able to REMOVE a vendor,
+       * a cost, a serial or a note has to send null; sending undefined types
+       * fine and silently does nothing, which looks like a save that worked.
+       */
+      model_details?: string | null;
+      serial_number?: string | null;
+      purchase_date?: string | null;
+      purchase_cost?: number | null;
+      vendor?: string | null;
+      warranty_expires_at?: string | null;
+      notes?: string | null;
     },
   ) => api.put<{ asset: AssetDetail }>(`/org/assets/${uuid}`, data).then((r) => r.data.asset),
 
@@ -313,10 +321,6 @@ export const assetsService = {
     api
       .get(`/org/asset-attachments/${attachmentUuid}/download`, { responseType: "blob" })
       .then((r) => r.data as Blob),
-
-  /** Authenticated, so it must go through axios rather than a plain <a href>. */
-  attachmentDownloadUrl: (attachmentUuid: UUID) =>
-    `/org/asset-attachments/${attachmentUuid}/download`,
 };
 
 /**

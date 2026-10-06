@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
 import {
   Ban,
   Download,
@@ -40,10 +41,12 @@ import {
 } from "@/components/ui/sheet";
 import { PageHeader } from "@/components/common/PageHeader";
 import { SearchInput } from "@/components/common/SearchInput";
+import { SearchableSelect, type SearchableSelectItem } from "@/components/common/SearchableSelect";
 import {
   ASSET_STATUS_VARIANT,
   assetsService,
   assetCategoriesService,
+  isCurrentEmployee,
   orgService,
   type Asset,
   type AssetAttachment,
@@ -148,7 +151,19 @@ function AssetsPage() {
       key: "status",
       header: t("common.status"),
       render: (r) => (
-        <Badge variant={ASSET_STATUS_VARIANT[r.status]}>{t(`assets.status.${r.status}`)}</Badge>
+        // open_jobs is the server's count of unfinished repair jobs, and it is
+        // only meaningful next to the status it explains: a badge that says
+        // "Maintenance" for two separate faults is one problem on a dashboard and
+        // two problems on a worklist, and the count is what stops the asset being
+        // closed out after the first repair.
+        <span className="flex items-center gap-1.5">
+          <Badge variant={ASSET_STATUS_VARIANT[r.status]}>{t(`assets.status.${r.status}`)}</Badge>
+          {(r.open_jobs ?? 0) > 0 ? (
+            <span className="text-xs text-muted-foreground">
+              {t("assets.openJobs", { count: r.open_jobs ?? 0 })}
+            </span>
+          ) : null}
+        </span>
       ),
     },
     {
@@ -186,6 +201,7 @@ function AssetsPage() {
   ];
 
   const s = summary.data?.by_status;
+  const money = summary.data;
 
   return (
     <ModuleGate module="asset_management">
@@ -207,7 +223,14 @@ function AssetsPage() {
         />
 
         {/* Counts, because "12 assigned" is the number an administrator is
-            actually asked for and it should not require a filter click. */}
+            actually asked for and it should not require a filter click.
+
+            total_value and maintenance_spend are the server's figures, not a
+            client-side sum of the page: the register is paginated, so summing the
+            rows on screen would silently report only the first page's worth.
+            maintenance_spend also only counts COMPLETED jobs, which is the money
+            actually spent - an open job has a cost attached but has not been paid,
+            and showing it as spend makes the number move before anything is paid. */}
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           <Stat label={t("assets.status.available")} value={s?.available ?? 0} />
           <Stat label={t("assets.status.assigned")} value={s?.assigned ?? 0} />
@@ -215,11 +238,37 @@ function AssetsPage() {
           <Stat label={t("assets.status.retired")} value={s?.retired ?? 0} />
         </div>
 
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <MoneyStat
+            label={t("assets.totalValue")}
+            value={money?.total_value ?? 0}
+            hint={t("assets.totalValueHint")}
+          />
+          <MoneyStat
+            label={t("assets.maintenanceSpend")}
+            value={money?.maintenance_spend ?? 0}
+            hint={t("assets.maintenanceSpendHint")}
+          />
+        </div>
+
         <div className="flex flex-wrap items-center gap-2">
-          <SearchInput value={search} onChange={setSearch} placeholder={t("assets.search")} />
+          {/* Every filter resets to page 1. Narrowing a list while sitting on
+              page 4 shows an empty table, which reads as "no assets match" when
+              in fact page 4 of the new filter simply does not exist. */}
+          <SearchInput
+            value={search}
+            onChange={(v) => {
+              setSearch(v);
+              setPage(1);
+            }}
+            placeholder={t("assets.search")}
+          />
           <select
             value={status}
-            onChange={(e) => setStatus(e.target.value as AssetStatus | "")}
+            onChange={(e) => {
+              setStatus(e.target.value as AssetStatus | "");
+              setPage(1);
+            }}
             className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
           >
             <option value="">{t("assets.allStatuses")}</option>
@@ -231,7 +280,10 @@ function AssetsPage() {
           </select>
           <select
             value={category}
-            onChange={(e) => setCategory(e.target.value)}
+            onChange={(e) => {
+              setCategory(e.target.value);
+              setPage(1);
+            }}
             className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
           >
             <option value="">{t("assets.allCategories")}</option>
@@ -292,6 +344,23 @@ function Stat({ label, value }: { label: string; value: number }) {
 }
 
 /**
+ * A money figure the SERVER computed.
+ *
+ * `hint` states what the number does and does not include, because an
+ * unexplained total is how a register gets disbelieved: someone compares it to
+ * the finance ledger, finds a difference, and stops trusting the page.
+ */
+function MoneyStat({ label, value, hint }: { label: string; value: number; hint: string }) {
+  return (
+    <div className="rounded-lg border bg-card px-3 py-2">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="text-lg font-semibold">{formatCurrency(value)}</p>
+      <p className="text-xs text-muted-foreground">{hint}</p>
+    </div>
+  );
+}
+
+/**
  * Actions per status, mirroring the transitions the backend accepts.
  *
  * Retired offers Reinstate because retirement is otherwise terminal: a laptop
@@ -317,6 +386,12 @@ function RowActions({
       await fn();
       await qc.invalidateQueries({ queryKey: ["assets"] });
       await qc.invalidateQueries({ queryKey: ["assets-summary"] });
+    } catch (e) {
+      // The call site is `void run(...)`, which throws away the promise, so a
+      // rejection here was previously invisible AND an unhandled rejection: the
+      // button simply did nothing. Every other mutation in this module surfaces
+      // its failure; this one has to as well.
+      toast.error(apiErrorMessage(e, t("assets.actionFailed")));
     } finally {
       setBusy(false);
     }
@@ -377,17 +452,26 @@ function RowActions({
           </DropdownMenuItem>
         ) : null}
 
-        {row.status !== "retired" ? (
+        {/* Retire is available-only, and that is the server's rule, not a UI
+            preference: retireAsset refuses an `assigned` asset ("Return this
+            asset before retiring it") and a `maintenance` one ("Close the open
+            maintenance job first"). Offering it on those rows was a menu item
+            whose only possible outcome was a 409 - which teaches people the page
+            is broken. The two ways out are already above: Return for assigned,
+            and the drawer's "mark repaired" for maintenance. */}
+        {row.status === "available" ? (
           <DropdownMenuItem onSelect={() => onDialog("retire")}>
             <Trash2 className="mr-2 h-4 w-4" />
             {t("assets.retire")}
           </DropdownMenuItem>
-        ) : (
+        ) : null}
+
+        {row.status === "retired" ? (
           <DropdownMenuItem onSelect={() => void run(() => assetsService.reinstate(row.uuid))}>
             <RotateCcw className="mr-2 h-4 w-4" />
             {t("assets.reinstate")}
           </DropdownMenuItem>
-        )}
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -439,7 +523,8 @@ function AssetDetailDrawer({
   });
 
   const closeJob = useMutation({
-    mutationFn: (jobUuid: string) => assetsService.completeMaintenance(jobUuid, {}),
+    mutationFn: (vars: { jobUuid: string; status: "completed" | "cancelled" }) =>
+      assetsService.completeMaintenance(vars.jobUuid, { status: vars.status }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["asset", uuid] });
       onChanged();
@@ -518,6 +603,20 @@ function AssetDetailDrawer({
               </Detail>
             </dl>
 
+            {/* ---- notes ----
+                Notes are not decoration here. retireAsset APPENDS "Retired: <reason>"
+                to this column, so on a scrapped asset this is the only place the
+                reason is readable — and the edit menu item is hidden for retired
+                rows, so the drawer is the only place it could ever appear. */}
+            {asset.notes ? (
+              <section>
+                <h3 className="mb-2 text-sm font-semibold">{t("assets.notes")}</h3>
+                <p className="whitespace-pre-wrap rounded-md border bg-muted/30 px-3 py-2 text-sm">
+                  {asset.notes}
+                </p>
+              </section>
+            ) : null}
+
             {/* ---- custody history ---- */}
             <section>
               <h3 className="mb-2 text-sm font-semibold">{t("assets.custodyHistory")}</h3>
@@ -570,6 +669,12 @@ function AssetDetailDrawer({
                         {formatDateTime(job.reported_at)}
                       </p>
 
+                      {job.completion_notes ? (
+                        <p className="mt-1 whitespace-pre-wrap text-xs text-muted-foreground">
+                          {job.completion_notes}
+                        </p>
+                      ) : null}
+
                       {(job.invoices ?? []).map((inv) => (
                         <AttachmentRow key={inv.uuid} file={inv} refresh={refreshDetail} />
                       ))}
@@ -592,16 +697,35 @@ function AssetDetailDrawer({
                           </Button>
                         </div>
                       ) : (
-                        <div className="mt-2 flex gap-2">
+                        <div className="mt-2 flex flex-wrap gap-2">
                           {job.status === "open" ? (
                             <>
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => closeJob.mutate(job.uuid)}
+                                onClick={() =>
+                                  closeJob.mutate({ jobUuid: job.uuid, status: "completed" })
+                                }
                                 disabled={closeJob.isPending}
                               >
                                 {t("assets.markRepaired")}
+                              </Button>
+                              {/* Cancel is not the same as complete, and offering only
+                                  "complete" made a false record: a job raised in error,
+                                  or one the asset turned out not to need, could only be
+                                  closed as a repair that happened. It also matters to
+                                  maintenance_spend, which counts COMPLETED jobs - so a
+                                  wrongly completed job permanently inflates the money
+                                  the dashboard reports as spent. */}
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() =>
+                                  closeJob.mutate({ jobUuid: job.uuid, status: "cancelled" })
+                                }
+                                disabled={closeJob.isPending}
+                              >
+                                {t("assets.cancelMaintenance")}
                               </Button>
                               <Button
                                 size="sm"
@@ -780,20 +904,45 @@ function AssetDialog({
 
   const save = useMutation({
     mutationFn: async (values: AssetForm) => {
-      const payload = {
-        category_uuid: values.category_uuid,
-        name: values.name.trim(),
-        model_details: values.model_details || undefined,
-        serial_number: values.serial_number || undefined,
-        purchase_date: values.purchase_date || undefined,
-        purchase_cost: values.purchase_cost ? Number(values.purchase_cost) : undefined,
-        vendor: values.vendor || undefined,
-        warranty_expires_at: values.warranty_expires_at || undefined,
-        notes: values.notes || undefined,
-      };
-      return kind === "edit" && asset
-        ? assetsService.update(asset.uuid, { ...payload, asset_tag: values.asset_tag.trim() })
-        : assetsService.create({ ...payload, asset_tag: values.asset_tag.trim() || undefined });
+      const text = (raw: string) => raw.trim();
+      const shared = { category_uuid: values.category_uuid, name: values.name.trim() };
+      const costText = text(values.purchase_cost);
+
+      // On create an empty optional field is simply omitted.
+      const omit = (raw: string) => text(raw) || undefined;
+
+      // On edit an empty optional field is a CLEAR, and the wire format for a
+      // clear is null. The server distinguishes the two: buildUpdate skips
+      // undefined ("field absent") and writes null ("clear this"). Sending
+      // undefined for a field the user just emptied is therefore how clearing
+      // Vendor or Cost silently kept the old value forever - the form looked
+      // saved and the register disagreed.
+      const clear = (raw: string) => text(raw) || null;
+
+      if (kind === "edit" && asset) {
+        return assetsService.update(asset.uuid, {
+          ...shared,
+          asset_tag: values.asset_tag.trim(),
+          model_details: clear(values.model_details),
+          serial_number: clear(values.serial_number),
+          purchase_date: clear(values.purchase_date),
+          purchase_cost: costText ? Number(costText) : null,
+          vendor: clear(values.vendor),
+          warranty_expires_at: clear(values.warranty_expires_at),
+          notes: clear(values.notes),
+        });
+      }
+      return assetsService.create({
+        ...shared,
+        asset_tag: values.asset_tag.trim() || undefined,
+        model_details: omit(values.model_details),
+        serial_number: omit(values.serial_number),
+        purchase_date: omit(values.purchase_date),
+        purchase_cost: costText ? Number(costText) : undefined,
+        vendor: omit(values.vendor),
+        warranty_expires_at: omit(values.warranty_expires_at),
+        notes: omit(values.notes),
+      });
     },
     onSuccess: onSaved,
   });
@@ -982,29 +1131,44 @@ function ActionDialog({
   // count is surfaced, so a capped list can never read as "that is everyone".
   const employees = useQuery({
     queryKey: ["org-employees", "asset-assign"],
-    queryFn: () => orgService.employees({ page: 1, limit: 100 }),
+    // scope=org: the default list is "employee records I personally added", which
+    // is a work queue for the Employees page and the wrong set for a picker over
+    // the company. Without it an org_admin cannot hand a laptop to a colleague
+    // another admin onboarded - the person is not merely hidden, they are absent.
+    queryFn: () => orgService.employees({ page: 1, limit: 100, scope: "org" }),
     enabled: kind === "assign" && Boolean(asset),
   });
 
-  const employeeList = employees.data?.items ?? [];
+  const employeeList = useMemo(() => employees.data?.items ?? [], [employees.data]);
 
   /** Only people who could be assigned: on the roster and not already left. */
   const assignable = useMemo(
-    () => employeeList.filter((e) => e.status === "active"),
+    () => employeeList.filter((e) => isCurrentEmployee(e.status)),
     [employeeList],
   );
 
   const [employeeQuery, setEmployeeQuery] = useState("");
-  const visibleEmployees = useMemo(() => {
-    const needle = employeeQuery.trim().toLowerCase();
-    if (!needle) return assignable;
-    return assignable.filter(
-      (e) =>
-        e.full_name.toLowerCase().includes(needle) ||
-        (e.email ?? "").toLowerCase().includes(needle) ||
-        (e.cnic ?? "").toLowerCase().includes(needle),
-    );
-  }, [assignable, employeeQuery]);
+  /**
+   * The picker searches name, email and CNIC, but shows the name. Email and CNIC
+   * ride along as invisible keywords rather than being rendered, because nobody
+   * reads an assignment form to find out someone's national ID.
+   *
+   * Someone with no portal account stays in the list and stays marked: the
+   * assignment is legitimate, only their ability to SEE it is missing. Hiding
+   * them would make a real employee look absent from the company.
+   */
+  const employeeOptions = useMemo<SearchableSelectItem[]>(
+    () =>
+      assignable.map((e) => ({
+        value: e.uuid,
+        label: e.full_name,
+        hint: [e.designation, e.linked_user_uuid ? null : t("assets.noPortalAccount")]
+          .filter(Boolean)
+          .join(" · "),
+        keywords: `${e.email ?? ""} ${e.cnic ?? ""}`,
+      })),
+    [assignable, t],
+  );
 
   /**
    * The chosen employee, and whether they can actually see the assignment.
@@ -1062,33 +1226,19 @@ function ActionDialog({
     >
       {kind === "assign" ? (
         <div className="space-y-2">
-          <label className="block space-y-1 text-sm">
+          <div className="space-y-1 text-sm">
             <span className="font-medium">{t("assets.assignTo")}</span>
-            <input
-              value={employeeQuery}
-              onChange={(e) => setEmployeeQuery(e.target.value)}
-              placeholder={t("assets.searchEmployees")}
-              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+            <SearchableSelect
+              items={employeeOptions}
+              value={employee}
+              onChange={setEmployee}
+              placeholder={t("assets.pickEmployee")}
+              searchPlaceholder={t("assets.searchEmployees")}
+              emptyText={t("assets.noEmployeesMatch")}
+              search={employeeQuery}
+              onSearchChange={setEmployeeQuery}
             />
-          </label>
-
-          <select
-            value={employee}
-            onChange={(e) => setEmployee(e.target.value)}
-            size={Math.min(8, Math.max(4, visibleEmployees.length))}
-            className="w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
-          >
-            {visibleEmployees.length === 0 ? (
-              <option value="">{t("assets.noEmployeesMatch")}</option>
-            ) : null}
-            {visibleEmployees.map((e) => (
-              <option key={e.uuid} value={e.uuid}>
-                {e.full_name}
-                {e.designation ? ` (${e.designation})` : ""}
-                {e.linked_user_uuid ? "" : ` — ${t("assets.noPortalAccount")}`}
-              </option>
-            ))}
-          </select>
+          </div>
 
           {/* A capped page must never read as "everyone". Silently showing 100 of
               250 employees is how someone gets told "that person is not here"

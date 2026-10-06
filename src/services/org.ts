@@ -21,7 +21,23 @@ import type {
 } from "./core";
 export const orgService = {
   employees: (
-    params: { page?: number; limit?: number; search?: string; reference?: boolean } = {},
+    params: {
+      page?: number;
+      limit?: number;
+      search?: string;
+      reference?: boolean;
+      /**
+       * "org" widens the list to the whole organization roster.
+       *
+       * By default an org_admin sees only the employee records they personally
+       * added. That is right for the Employees page (a work queue of what I
+       * imported) and wrong for a picker over the company, so anything choosing
+       * a person to hand company property to must pass this — otherwise a
+       * colleague another admin onboarded simply does not exist as far as the
+       * picker is concerned. It never widens past your own organization.
+       */
+      scope?: "org";
+    } = {},
   ) => api.get<Paginated<EmployeeRecord>>("/org/employees", { params }).then((r) => r.data),
   getEmployee: (uuid: UUID) =>
     api.get<{ employee: EmployeeRecord }>(`/org/employees/${uuid}`).then((r) => r.data.employee),

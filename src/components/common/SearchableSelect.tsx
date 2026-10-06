@@ -16,7 +16,18 @@ export type SearchableSelectItem = {
   value: string;
   label: string;
   hint?: string;
+  /**
+   * Extra text the search box matches against but never renders.
+   *
+   * Needed wherever the thing a user searches for is not the thing they read:
+   * an employee is picked by name but looked up by email or CNIC.
+   */
+  keywords?: string;
 };
+
+/** Everything the search box may match, and nothing it must not. */
+const searchValue = (item: SearchableSelectItem) =>
+  [item.label, item.hint, item.keywords].filter(Boolean).join(" ");
 
 export function SearchableSelect({
   items,
@@ -26,6 +37,8 @@ export function SearchableSelect({
   searchPlaceholder,
   emptyText = "No results found.",
   className,
+  search,
+  onSearchChange,
 }: {
   items: SearchableSelectItem[];
   value: string;
@@ -34,12 +47,29 @@ export function SearchableSelect({
   searchPlaceholder?: string;
   emptyText?: string;
   className?: string;
+  /** Pass both to control the search box from the caller. */
+  search?: string;
+  onSearchChange?: (value: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [uncontrolledSearch, setUncontrolledSearch] = useState("");
   const selected = items.find((i) => i.value === value);
 
+  const query = search ?? uncontrolledSearch;
+  const handleSearch = (next: string) => {
+    setUncontrolledSearch(next);
+    onSearchChange?.(next);
+  };
+
+  // A filter left over from the last open reopens the list already narrowed, so
+  // an option that IS in the list looks like it is missing.
+  const handleOpenChange = (next: boolean) => {
+    setOpen(next);
+    if (!next) handleSearch("");
+  };
+
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         <Button
           variant="outline"
@@ -48,7 +78,12 @@ export function SearchableSelect({
           className={cn("h-10 w-full justify-between font-normal", className)}
         >
           {selected ? (
-            <span className="truncate">{selected.label}</span>
+            <span className="truncate">
+              {selected.label}
+              {selected.hint ? (
+                <span className="ml-1 text-xs text-muted-foreground">{selected.hint}</span>
+              ) : null}
+            </span>
           ) : (
             <span className="text-muted-foreground">{placeholder ?? "Select…"}</span>
           )}
@@ -57,21 +92,29 @@ export function SearchableSelect({
       </PopoverTrigger>
       <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
         <Command>
-          <CommandInput placeholder={searchPlaceholder ?? "Search…"} className="h-9" />
+          <CommandInput
+            value={query}
+            onValueChange={handleSearch}
+            placeholder={searchPlaceholder ?? "Search…"}
+            className="h-9"
+          />
           <CommandList>
             <CommandEmpty>{emptyText}</CommandEmpty>
             <CommandGroup>
               {items.map((item) => (
                 <CommandItem
                   key={item.value}
-                  value={`${item.label}${item.hint ? ` ${item.hint}` : ""}`}
+                  value={searchValue(item)}
                   onSelect={() => {
                     onChange(item.value);
-                    setOpen(false);
+                    handleOpenChange(false);
                   }}
                 >
                   <Check
-                    className={cn("mr-2 h-4 w-4 shrink-0", value === item.value ? "opacity-100" : "opacity-0")}
+                    className={cn(
+                      "mr-2 h-4 w-4 shrink-0",
+                      value === item.value ? "opacity-100" : "opacity-0",
+                    )}
                   />
                   <span className="truncate">{item.label}</span>
                   {item.hint ? (

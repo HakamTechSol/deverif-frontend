@@ -1100,6 +1100,12 @@
     "jobTitle": "What needs doing",
     "inMaintenance": "In maintenance",
     "markRepaired": "Mark repaired",
+    "cancelMaintenance": "Cancel maintenance",
+    "totalValue": "Total value held",
+    "totalValueHint": "Purchase value of every asset that is not retired, across the whole register — not just the current page.",
+    "maintenanceSpend": "Maintenance spend",
+    "maintenanceSpendHint": "Cost of completed repair jobs only. An open or cancelled job is not counted.",
+    "openJobs": "{{count}} open job(s)",
     "retire": "Retire asset",
     "retireReason": "Reason",
     "retireWarning": "Retiring keeps the record for your audit trail but stops the asset being assigned. You can reinstate it afterwards if this was a mistake.",
@@ -1172,6 +1178,7 @@
     "noPortalAccount": "no portal account",
     "assignNoPortalAccount": "This employee has no portal account, so they will not see this asset on their My Assets page. The assignment still counts as held. Create their login first if they should be able to see it.",
     "employeesTruncated": "Showing {{shown}} of {{total}} employees. Search to narrow the list.",
+    "categoryInUse": "Cannot delete: {{count}} asset(s) still use this category. Reassign them first.",
     "attachmentDownloadFailed": "Download failed. Your browser may be blocking it."
   },
   "myAssets": {
