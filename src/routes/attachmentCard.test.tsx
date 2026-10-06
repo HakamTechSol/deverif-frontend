@@ -261,6 +261,23 @@ describe("object URL lifecycle", () => {
     await waitFor(() => expect(revokeObjectURL).toHaveBeenCalled());
     clickSpy.mockRestore();
   });
+
+  it("says the download failed instead of failing silently", async () => {
+    // The test above only checked the URL was revoked. It never checked that the
+    // user found out anything, which is why a blocked download reported nothing
+    // at all and left an unhandled rejection behind.
+    renderCard();
+    const user = userEvent.setup();
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {
+      throw new Error("popup blocked");
+    });
+
+    await user.click(screen.getByRole("button", { name: /download/i }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(/download failed/i);
+    clickSpy.mockRestore();
+  });
 });
 
 describe("service contract", () => {

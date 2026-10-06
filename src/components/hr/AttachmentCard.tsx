@@ -55,6 +55,7 @@ export function AttachmentCard({
   // the one file in this drawer that cannot be re-created from data.
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
   const [busy, setBusy] = useState<null | "view" | "download" | "delete">(null);
 
   const image = isImage(attachment.mime_type);
@@ -73,6 +74,7 @@ export function AttachmentCard({
 
   const handleDownload = async () => {
     setBusy("download");
+    setDownloadError(null);
     try {
       // Reuse the bytes already fetched for the preview when they exist. The
       // object URL is for DISPLAY only — re-fetching from a blob: URL is not
@@ -80,6 +82,12 @@ export function AttachmentCard({
       // on exactly the cards the user has already opened.
       const blob = loadedBlob ?? (await assetsService.downloadAttachment(attachment.uuid));
       saveBlob(blob, attachment.file_name);
+    } catch {
+      // A blocked or failed download used to vanish without a trace: no toast, no
+      // state change, the button simply stopped spinning. With cards that preview
+      // in an <iframe>, "I clicked Download and nothing happened" is the single
+      // most reported symptom for this component.
+      setDownloadError(t("assets.attachmentDownloadFailed"));
     } finally {
       setBusy(null);
     }
@@ -193,6 +201,12 @@ export function AttachmentCard({
           )}
         </Button>
       </div>
+
+      {downloadError ? (
+        <p role="alert" className="mt-1 text-xs text-destructive">
+          {downloadError}
+        </p>
+      ) : null}
 
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
         <DialogContent className="max-w-3xl">

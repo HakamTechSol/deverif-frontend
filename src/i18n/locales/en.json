@@ -1166,7 +1166,13 @@
     "attachmentPreviewHint": "Preview uses your session, so the file is fetched rather than linked. Download it to keep a copy.",
     "attachmentDeleteTitle": "Remove this file?",
     "attachmentDeleteConfirm": "Are you sure you want to delete this receipt/document? This action cannot be undone.",
-    "attachmentDeleteFailed": "Could not remove the file. Try again."
+    "attachmentDeleteFailed": "Could not remove the file. Try again.",
+    "searchEmployees": "Search by name, email or CNIC",
+    "noEmployeesMatch": "No matching employees",
+    "noPortalAccount": "no portal account",
+    "assignNoPortalAccount": "This employee has no portal account, so they will not see this asset on their My Assets page. The assignment still counts as held. Create their login first if they should be able to see it.",
+    "employeesTruncated": "Showing {{shown}} of {{total}} employees. Search to narrow the list.",
+    "attachmentDownloadFailed": "Download failed. Your browser may be blocking it."
   },
   "myAssets": {
     "title": "My Assets",

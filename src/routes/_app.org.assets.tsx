@@ -974,11 +974,51 @@ function ActionDialog({
 
   // Employees are only fetched when the assign dialog is actually open: the
   // list is large and nobody else needs it.
+  //
+  // limit is the API's maxLimit (parsePagination defaults to 100), so asking for
+  // 200 did not fetch 200 — it silently fetched 100, and with a bigger roster the
+  // employees past the cap were simply not in the picker. Raised to the real
+  // ceiling and, more importantly, the list is FILTERED client-side below and the
+  // count is surfaced, so a capped list can never read as "that is everyone".
   const employees = useQuery({
     queryKey: ["org-employees", "asset-assign"],
-    queryFn: () => orgService.employees({ page: 1, limit: 200 }),
+    queryFn: () => orgService.employees({ page: 1, limit: 100 }),
     enabled: kind === "assign" && Boolean(asset),
   });
+
+  const employeeList = employees.data?.items ?? [];
+
+  /** Only people who could be assigned: on the roster and not already left. */
+  const assignable = useMemo(
+    () => employeeList.filter((e) => e.status === "active"),
+    [employeeList],
+  );
+
+  const [employeeQuery, setEmployeeQuery] = useState("");
+  const visibleEmployees = useMemo(() => {
+    const needle = employeeQuery.trim().toLowerCase();
+    if (!needle) return assignable;
+    return assignable.filter(
+      (e) =>
+        e.full_name.toLowerCase().includes(needle) ||
+        (e.email ?? "").toLowerCase().includes(needle) ||
+        (e.cnic ?? "").toLowerCase().includes(needle),
+    );
+  }, [assignable, employeeQuery]);
+
+  /**
+   * The chosen employee, and whether they can actually see the assignment.
+   *
+   * /my/assets resolves the employee FROM the session via
+   * employees.linked_user_uuid. An employee with no portal account will therefore
+   * never see this asset, while every staff view shows it as assigned and the
+   * stock count drops. Warning here is the only moment anyone can still fix it.
+   */
+  const chosenEmployee = useMemo(
+    () => assignable.find((e) => e.uuid === employee) ?? null,
+    [assignable, employee],
+  );
+  const chosenHasNoAccount = Boolean(chosenEmployee && !chosenEmployee.linked_user_uuid);
 
   const act = useMutation({
     mutationFn: async () => {
@@ -1021,22 +1061,53 @@ function ActionDialog({
       hideFooter={false}
     >
       {kind === "assign" ? (
-        <label className="block space-y-1 text-sm">
-          <span className="font-medium">{t("assets.assignTo")}</span>
+        <div className="space-y-2">
+          <label className="block space-y-1 text-sm">
+            <span className="font-medium">{t("assets.assignTo")}</span>
+            <input
+              value={employeeQuery}
+              onChange={(e) => setEmployeeQuery(e.target.value)}
+              placeholder={t("assets.searchEmployees")}
+              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+            />
+          </label>
+
           <select
             value={employee}
             onChange={(e) => setEmployee(e.target.value)}
-            className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+            size={Math.min(8, Math.max(4, visibleEmployees.length))}
+            className="w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
           >
-            <option value="">{t("assets.pickEmployee")}</option>
-            {(employees.data?.items ?? []).map((e) => (
+            {visibleEmployees.length === 0 ? (
+              <option value="">{t("assets.noEmployeesMatch")}</option>
+            ) : null}
+            {visibleEmployees.map((e) => (
               <option key={e.uuid} value={e.uuid}>
                 {e.full_name}
                 {e.designation ? ` (${e.designation})` : ""}
+                {e.linked_user_uuid ? "" : ` — ${t("assets.noPortalAccount")}`}
               </option>
             ))}
           </select>
-        </label>
+
+          {/* A capped page must never read as "everyone". Silently showing 100 of
+              250 employees is how someone gets told "that person is not here"
+              when they simply were not fetched. */}
+          {employees.data && employees.data.total > employeeList.length ? (
+            <p className="text-xs text-muted-foreground">
+              {t("assets.employeesTruncated", {
+                shown: employeeList.length,
+                total: employees.data.total,
+              })}
+            </p>
+          ) : null}
+
+          {chosenHasNoAccount ? (
+            <p className="rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+              {t("assets.assignNoPortalAccount")}
+            </p>
+          ) : null}
+        </div>
       ) : null}
 
       {kind === "return" ? (

@@ -211,9 +211,17 @@ export const assetsService = {
 
   assign: (uuid: UUID, employeeUuid: UUID) =>
     api
-      .post<{ status: AssetStatus; employee_name: string }>(`/org/assets/${uuid}/assign`, {
-        employee_uuid: employeeUuid,
-      })
+      .post<{
+        status: AssetStatus;
+        employee_name: string;
+        /**
+         * False when the employee has no portal account, so /my/assets can never
+         * show them the assignment: that page resolves the employee from the
+         * session via linked_user_uuid. Surfaced so the UI can warn - the staff
+         * views all show the asset as assigned regardless.
+         */
+        employee_has_portal_account: boolean;
+      }>(`/org/assets/${uuid}/assign`, { employee_uuid: employeeUuid })
       .then((r) => r.data),
 
   return: (uuid: UUID, condition: AssetReturnCondition, notes?: string) =>

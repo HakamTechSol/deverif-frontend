@@ -161,3 +161,54 @@ describe("/my-assets", () => {
     expect(MY_ASSETS).toContain("myAssets.reportIssue");
   });
 });
+
+/**
+ * The assign dialog and the employee page can disagree without either being wrong,
+ * which is exactly the failure this module had. /my/assets resolves the employee
+ * FROM the session, via employees.linked_user_uuid. So assigning to an employee
+ * who has no portal account produces a perfect assignment - visible in every staff
+ * view, stock decremented, audit trail intact - that the holder can never see.
+ */
+describe("assigning to an employee who cannot see the result", () => {
+  it("warns when the chosen employee has no portal account", () => {
+    // Keyed off linked_user_uuid, the same field the endpoint joins on. A warning
+    // keyed off anything else (status, is_platform_user) would be wrong.
+    expect(code(ASSETS)).toContain("linked_user_uuid");
+    expect(code(ASSETS)).toContain("chosenHasNoAccount");
+    expect(ASSETS).toContain("assets.assignNoPortalAccount");
+  });
+
+  it("marks such employees in the picker rather than hiding them", () => {
+    // Hiding them would look like success and silently reintroduce the bug; the
+    // assignment is legitimate, only the visibility is missing.
+    expect(ASSETS).toContain("assets.noPortalAccount");
+    expect(code(ASSETS)).toContain("assignable");
+  });
+
+  it("asks the server, so the flag cannot drift from the endpoint's own join", () => {
+    // The backend reads linked_user_uuid inside the assign transaction, so a
+    // value cached in the page can never go stale mid-dialog.
+    expect(SERVICE).toContain("employee_has_portal_account");
+  });
+});
+
+describe("the employee picker cannot silently truncate the roster", () => {
+  it("does not request a page size the API would refuse", () => {
+    // parsePagination caps at maxLimit 100, so "limit: 200" returned 100 and
+    // everyone past that was missing from the picker with no indication.
+    const limit = ASSETS.match(/orgService\.employees\(\{[^}]*limit:\s*(\d+)/)?.[1];
+    expect(limit, "the picker page size could not be found").toBeDefined();
+    expect(Number(limit), `limit ${limit} exceeds the API maxLimit of 100`).toBeLessThanOrEqual(100);
+  });
+
+  it("says so when the roster is larger than the fetched page", () => {
+    // Without this a capped list reads as the whole company, and someone gets
+    // told "that employee is not in the system" when they simply were not fetched.
+    expect(ASSETS).toContain("assets.employeesTruncated");
+  });
+
+  it("is searchable, so a large roster is reachable without paging", () => {
+    expect(ASSETS).toContain("assets.searchEmployees");
+    expect(code(ASSETS)).toContain("employeeQuery");
+  });
+});

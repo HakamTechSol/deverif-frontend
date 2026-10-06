@@ -91,6 +91,10 @@ export function saveBlob(blob: Blob, filename: string) {
     a.href = url;
     a.download = filename || "download";
     document.body.appendChild(a);
+    // Deliberately NOT wrapped: click() throws when the browser blocks the
+    // download (popup blocker, sandboxed iframe, lost user activation), and the
+    // caller is the only one that can tell the user about it. Swallowing it here
+    // is what made a blocked download fail with no message and no trace.
     a.click();
     a.remove();
   } finally {
