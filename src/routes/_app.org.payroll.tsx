@@ -44,7 +44,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { orgSalaryService, orgService, type SalaryRecord, type EmployeeRecord } from "@/services";
+import {
+  orgSalaryService,
+  orgService,
+  type PayrollPreview,
+  type SalaryRecord,
+  type EmployeeRecord,
+} from "@/services";
 import { Checkbox } from "@/components/ui/checkbox";
 
 export const Route = createFileRoute("/_app/org/payroll")({
@@ -222,6 +228,28 @@ function OrgPayrollPage() {
     },
   });
 
+  /**
+   * Preview: the same computation the generate path runs, written nowhere.
+   *
+   * Automatic deductions are the part of a payslip people contest, so the number
+   * has to be inspectable BEFORE it is committed. This is not a second
+   * implementation - the backend runs one function for both - so the figure
+   * previewed and the figure committed cannot drift apart, which is the failure
+   * mode of every hand-written "dry run".
+   */
+  const preview = useMutation<
+    PayrollPreview,
+    Error,
+    { uuids: string[]; month: number; year: number }
+  >({
+    mutationFn: ({ uuids, month, year }) =>
+      orgSalaryService.preview({
+        month,
+        year,
+        employee_uuids: uuids.length ? uuids : undefined,
+      }),
+  });
+
   const regenerate = useMutation<
     {
       items: SalaryRecord[];
@@ -327,8 +355,16 @@ function OrgPayrollPage() {
                 onClick={exportCsv}
                 disabled={isLocked || exporting || items.length === 0}
               >
-                {isLocked ? <Lock className="mr-1.5 h-3.5 w-3.5" /> : <Download className="mr-1.5 h-3.5 w-3.5" />}
-                {isLocked ? "Subscription Required" : exporting ? t("payroll.exporting") : t("payroll.exportCsv")}
+                {isLocked ? (
+                  <Lock className="mr-1.5 h-3.5 w-3.5" />
+                ) : (
+                  <Download className="mr-1.5 h-3.5 w-3.5" />
+                )}
+                {isLocked
+                  ? "Subscription Required"
+                  : exporting
+                    ? t("payroll.exporting")
+                    : t("payroll.exportCsv")}
               </Button>
             </div>
           ) : (
@@ -341,7 +377,11 @@ function OrgPayrollPage() {
                 disabled={isLocked || validSelected.size === 0}
                 onClick={() => setPeriodOpen(true)}
               >
-                {isLocked ? <Lock className="mr-1.5 h-4 w-4" /> : <Plus className="mr-1.5 h-4 w-4" />}
+                {isLocked ? (
+                  <Lock className="mr-1.5 h-4 w-4" />
+                ) : (
+                  <Plus className="mr-1.5 h-4 w-4" />
+                )}
                 {isLocked ? "Subscription Required" : t("payroll.generatePayroll")}
               </Button>
             </div>
@@ -430,10 +470,16 @@ function OrgPayrollPage() {
                               <div className="text-xs text-muted-foreground">{emp.email}</div>
                             ) : null}
                           </TableCell>
-                          <TableCell data-label="Designation" className="whitespace-nowrap text-sm text-muted-foreground hidden sm:table-cell">
+                          <TableCell
+                            data-label="Designation"
+                            className="whitespace-nowrap text-sm text-muted-foreground hidden sm:table-cell"
+                          >
                             {emp.designation ?? "—"}
                           </TableCell>
-                          <TableCell data-label="Department" className="whitespace-nowrap text-sm text-muted-foreground hidden md:table-cell">
+                          <TableCell
+                            data-label="Department"
+                            className="whitespace-nowrap text-sm text-muted-foreground hidden md:table-cell"
+                          >
                             {emp.department ?? "—"}
                           </TableCell>
                         </TableRow>
@@ -552,22 +598,40 @@ function OrgPayrollPage() {
                                 {r.employee_email ?? ""}
                               </div>
                             </TableCell>
-                            <TableCell data-label="Period" className="whitespace-nowrap text-sm text-muted-foreground">
+                            <TableCell
+                              data-label="Period"
+                              className="whitespace-nowrap text-sm text-muted-foreground"
+                            >
                               {MONTHS[Number(r.month) - 1]} {r.year}
                             </TableCell>
-                            <TableCell data-label="Basic" className="whitespace-nowrap text-right text-sm text-muted-foreground">
+                            <TableCell
+                              data-label="Basic"
+                              className="whitespace-nowrap text-right text-sm text-muted-foreground"
+                            >
                               {money(r.basic_salary)}
                             </TableCell>
-                            <TableCell data-label="Allowances" className="whitespace-nowrap text-right text-sm text-muted-foreground">
+                            <TableCell
+                              data-label="Allowances"
+                              className="whitespace-nowrap text-right text-sm text-muted-foreground"
+                            >
                               {money(r.allowances)}
                             </TableCell>
-                            <TableCell data-label="Deductions" className="whitespace-nowrap text-right text-sm text-muted-foreground">
+                            <TableCell
+                              data-label="Deductions"
+                              className="whitespace-nowrap text-right text-sm text-muted-foreground"
+                            >
                               {money(r.deductions)}
                             </TableCell>
-                            <TableCell data-label="Net" className="whitespace-nowrap text-right text-sm font-semibold text-foreground">
+                            <TableCell
+                              data-label="Net"
+                              className="whitespace-nowrap text-right text-sm font-semibold text-foreground"
+                            >
                               {money(r.net_salary)}
                             </TableCell>
-                            <TableCell data-label="Payslip" className="whitespace-nowrap text-right">
+                            <TableCell
+                              data-label="Payslip"
+                              className="whitespace-nowrap text-right"
+                            >
                               <Button
                                 size="sm"
                                 variant="ghost"
@@ -587,7 +651,11 @@ function OrgPayrollPage() {
                                   disabled={isLocked}
                                   onClick={() => setDeleteTarget(r)}
                                 >
-                                  {isLocked ? <Lock className="h-3.5 w-3.5" /> : <Trash2 className="h-3.5 w-3.5" />}
+                                  {isLocked ? (
+                                    <Lock className="h-3.5 w-3.5" />
+                                  ) : (
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  )}
                                 </Button>
                               ) : null}
                             </TableCell>
@@ -675,9 +743,22 @@ function OrgPayrollPage() {
             <Button
               variant="ghost"
               onClick={() => setPeriodOpen(false)}
-              disabled={generate.isPending || regenerate.isPending}
+              disabled={generate.isPending || regenerate.isPending || preview.isPending}
             >
               {t("actions.cancel", "Cancel")}
+            </Button>
+            {/* Preview sits between Cancel and Generate on purpose: the numbers are
+                the thing being agreed, so seeing them must not require committing
+                to them. */}
+            <Button
+              variant="outline"
+              onClick={() =>
+                preview.mutate({ uuids: [...validSelected], month: genMonth, year: genYear })
+              }
+              disabled={generate.isPending || regenerate.isPending || preview.isPending}
+              loading={preview.isPending}
+            >
+              {t("payroll.preview", { defaultValue: "Preview" })}
             </Button>
             {selectedHasExisting ? (
               <Button
@@ -699,6 +780,158 @@ function OrgPayrollPage() {
                 {t("payroll.generatePayroll")}
               </Button>
             )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ---------- Payroll preview: what will be computed, and why ---------- */}
+      <Dialog
+        open={preview.isSuccess && periodOpen}
+        onOpenChange={(o) => {
+          // Closing resets rather than merely hiding, so reopening the period
+          // dialog never shows the previous period's figures under the new
+          // month - which is how someone approves last month's deductions.
+          if (!o) preview.reset();
+        }}
+      >
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              {t("payroll.previewTitle", { defaultValue: "Payroll preview" })}
+            </DialogTitle>
+            <DialogDescription>
+              {t("payroll.previewDesc", {
+                period: `${MONTHS[genMonth - 1]} ${genYear}`,
+                count: preview.data?.count ?? 0,
+                defaultValue:
+                  "For {{period}}, {{count}} employee(s). Nothing is saved — generating payroll afterwards will store exactly these figures.",
+              })}
+            </DialogDescription>
+          </DialogHeader>
+
+          {preview.isError ? (
+            <p className="text-sm text-destructive">
+              {apiErrorMessage(preview.error, t("payroll.previewFailed", "Preview failed"))}
+            </p>
+          ) : null}
+
+          <div className="space-y-3">
+            {(preview.data?.items ?? []).map((item) => {
+              const a = item.attendance;
+              const auto = item.lines.filter((l) => l.source !== "component");
+              return (
+                <div key={item.employee_uuid} className="rounded-md border p-3 text-sm">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="font-medium">{item.employee_name}</span>
+                    <span className="font-mono text-sm font-semibold">
+                      {money(item.net_salary)}
+                    </span>
+                  </div>
+
+                  {/* The four figures the deduction is actually made of. Shown as
+                      counts rather than only as money, because "2 unpaid leave
+                      days" is an explanation and "2818.18" is not. */}
+                  <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-4">
+                    <div>
+                      <span className="text-muted-foreground">
+                        {t("payroll.previewAttended", "Attended")}
+                      </span>
+                      <p className="font-medium">
+                        {a.attended_days} / {a.working_days}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">
+                        {t("payroll.previewUnpaidLeave", "Unpaid leave")}
+                      </span>
+                      <p className="font-medium">
+                        {a.unpaid_leave_days}
+                        {a.paid_leave_days > 0 ? (
+                          <span className="ml-1 font-normal text-muted-foreground">
+                            (+{a.paid_leave_days} paid)
+                          </span>
+                        ) : null}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">
+                        {t("payroll.previewLate", "Late arrivals")}
+                      </span>
+                      <p className="font-medium">{a.late_count}</p>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">
+                        {t("payroll.previewOvertime", "Overtime (hrs)")}
+                      </span>
+                      <p className="font-medium">{a.approved_overtime_hours}</p>
+                    </div>
+                  </div>
+
+                  {item.rates.skip_reason ? (
+                    // Stated rather than left blank: an employee with no automatic
+                    // lines and an employee whose lines could not be computed look
+                    // identical otherwise, and only one of them is a problem.
+                    <p className="mt-2 rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-xs text-amber-700">
+                      {item.rates.skip_reason === "no_basic_salary"
+                        ? t(
+                            "payroll.previewNoSalary",
+                            "No basic salary on record for this month, so attendance and leave cannot be converted to money.",
+                          )
+                        : t(
+                            "payroll.previewNoWorkingDays",
+                            "This month has no working days, so there is no daily rate to deduct against.",
+                          )}
+                    </p>
+                  ) : null}
+
+                  {auto.length > 0 ? (
+                    <ul className="mt-2 space-y-1 border-t pt-2 text-xs">
+                      {auto.map((line) => (
+                        <li
+                          key={`${line.source}-${line.label}`}
+                          className="flex justify-between gap-3"
+                        >
+                          <span className="text-muted-foreground">
+                            {line.label}
+                            {line.source === "auto_overtime" ? "" : ""}
+                          </span>
+                          <span
+                            className={
+                              line.type === "earning"
+                                ? "font-mono font-medium text-emerald-600 dark:text-emerald-400"
+                                : "font-mono font-medium"
+                            }
+                          >
+                            {line.type === "earning" ? "+" : "−"}
+                            {money(line.amount)}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {t("payroll.previewRates", {
+                      perDay: money(item.rates.per_day),
+                      hourly: money(item.rates.hourly),
+                      defaultValue: "Daily rate {{perDay}} · hourly rate {{hourly}}",
+                    })}
+                    {a.holidays_in_month > 0
+                      ? ` · ${t("payroll.previewHolidays", {
+                          count: a.holidays_in_month,
+                          defaultValue: "{{count}} holiday(s) excluded from working days",
+                        })}`
+                      : ""}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => preview.reset()}>
+              {t("actions.close", "Close")}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

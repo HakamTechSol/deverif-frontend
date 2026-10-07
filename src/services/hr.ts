@@ -118,6 +118,74 @@ export const orgAttendanceService = {
       .then((r) => r.data),
 };
 
+/**
+ * One line on a payslip.
+ *
+ * `source` is what separates "what we agreed" from "what actually happened": a
+ * component is a standing arrangement an admin configured, an automatic line is
+ * derived from a specific leave request or a specific month of attendance. An
+ * employee disputing a payslip needs to be told which of the two they are
+ * looking at, and `basisValue`/`basisUnit` are the arithmetic behind the amount.
+ */
+export type PayrollLine = {
+  label: string;
+  type: "earning" | "deduction";
+  source:
+    | "basic"
+    | "component"
+    | "auto_unpaid_leave"
+    | "auto_absenteeism"
+    | "auto_late"
+    | "auto_overtime"
+    | "manual";
+  amount: number;
+  basis_value: number | null;
+  basis_unit: "days" | "hours" | "late_arrivals" | null;
+};
+
+export type PayrollPreviewItem = {
+  employee_uuid: UUID;
+  employee_name: string;
+  basic_salary: number | string;
+  allowances: number | string;
+  deductions: number | string;
+  net_salary: number | string;
+  lines: PayrollLine[];
+  attendance: {
+    working_days: number;
+    attended_days: number;
+    absent_days: number;
+    late_count: number;
+    paid_leave_days: number;
+    unpaid_leave_days: number;
+    approved_overtime_hours: number;
+    holidays_in_month: number;
+  };
+  rates: {
+    per_day: number;
+    hourly: number;
+    /**
+     * Why there are no automatic lines: "no_working_days" or "no_basic_salary".
+     * Surfaced rather than left as an unexplained empty list, which reads as
+     * "nothing to report" when it actually means "could not be computed".
+     */
+    skip_reason: string | null;
+  };
+};
+
+export type PayrollPreview = {
+  month: number;
+  year: number;
+  items: PayrollPreviewItem[];
+  totals: {
+    basic: number | string;
+    allowances: number | string;
+    deductions: number | string;
+    net: number | string;
+  };
+  count: number;
+};
+
 export const orgSalaryService = {
   list: (
     params: {
@@ -129,6 +197,18 @@ export const orgSalaryService = {
       year?: number;
     } = {},
   ) => api.get<Paginated<SalaryRecord>>("/org/salary-records", { params }).then((r) => r.data),
+  /**
+   * Compute payroll for a period WITHOUT writing anything.
+   *
+   * Same endpoint shape as generate, one word different, and the difference is
+   * the whole point: automatic deductions are the part of a payslip people
+   * contest, so the numbers have to be inspectable before they are committed
+   * rather than discovered a month later from a stored total. The backend runs
+   * the identical computation the generate path runs, so what is previewed and
+   * what is committed cannot diverge.
+   */
+  preview: (data: { month: number; year: number; employee_uuids?: UUID[] }) =>
+    api.post<PayrollPreview>("/org/payroll/preview", data).then((r) => r.data),
   generate: (data: {
     month: number;
     year: number;

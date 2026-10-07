@@ -869,6 +869,18 @@
     "regenerateTitle": "Regenerate payroll for this period?",
     "regenerateConfirm": "This will overwrite existing payroll for {{count}} selected employee(s) for {{period}} — their records will be deleted and recomputed. This cannot be undone.",
     "regenerate": "Regenerate",
+    "preview": "Preview",
+    "previewTitle": "Payroll preview",
+    "previewDesc": "For {{period}}, {{count}} employee(s). Nothing is saved — generating payroll afterwards stores exactly these figures.",
+    "previewFailed": "Could not work out the payroll figures",
+    "previewAttended": "Attended",
+    "previewUnpaidLeave": "Unpaid leave",
+    "previewLate": "Late arrivals",
+    "previewOvertime": "Overtime (hrs)",
+    "previewRates": "Daily rate {{perDay}} · hourly rate {{hourly}}",
+    "previewHolidays": "{{count}} holiday(s) excluded from working days",
+    "previewNoSalary": "No basic salary on record for this month, so attendance and leave cannot be converted to money.",
+    "previewNoWorkingDays": "This month has no working days, so there is no daily rate to deduct against.",
     "exportCsv": "Export CSV",
     "exporting": "Exporting…",
     "exportFailed": "Failed to export CSV",
@@ -1064,7 +1076,8 @@
     "manualTags": "You must supply these"
   },
   "actions": {
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "close": "Close"
   },
   "loading": "Loading…",
   "assets": {
