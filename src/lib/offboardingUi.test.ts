@@ -109,10 +109,50 @@ describe("the settlement is shown as arithmetic, not as one number", () => {
 describe("the employee's own page", () => {
   it("hides the form once a request is open, so a submitted date cannot be edited", () => {
     const e = code(ESS);
-    expect(e).toMatch(
-      /const open = request\?\.status === "pending" \|\| request\?\.status === "approved"/,
-    );
     expect(e).toContain("alreadySubmitted");
+  });
+
+  /**
+   * The regression from the first release.
+   *
+   * The form condition was `open = pending || approved`, so "show the form
+   * otherwise" included COMPLETED. An employee whose exit was finished - roster
+   * flipped to ex_employee, settlement paid, checklist 9/9 - was shown a fresh
+   * "Submit a resignation" form, and submitting it was refused with "this employee
+   * has already left the organization". A dead end with nothing on the page to
+   * explain it, on the one page an ex-employee is most likely to revisit.
+   */
+  it("hides the form for a COMPLETED exit - the employee has already left", () => {
+    const e = code(ESS);
+    expect(e).not.toMatch(/const open = request\?\.status === "pending"/);
+    // Only a genuinely resubmittable state shows it: no request at all, or a
+    // rejected one.
+    expect(e).toMatch(
+      /const canSubmit =[\s\S]{0,140}mine\.data\?\.on_roster !== false && \(!request \|\| request\.status === "rejected"\)/,
+    );
+  });
+
+  it("asks the SERVER whether they are on the roster, rather than inferring it", () => {
+    // Someone can be an ex-employee with no exit record at all - they left before
+    // this module existed, or HR set the status by hand - so the exit status alone
+    // cannot decide this. Inferring it is what put the form back on the screen.
+    const e = code(ESS);
+    expect(e).toContain("mine.data?.on_roster");
+    expect(SERVICE).toMatch(/on_roster: boolean/);
+  });
+
+  it("says plainly that they have left, instead of only hiding the form", () => {
+    // A form that merely vanishes leaves someone wondering whether they did
+    // something wrong.
+    expect(code(ESS)).toContain("alreadyLeft");
+  });
+
+  it("never renders a bare '0 day(s)' for a notice nobody agreed", () => {
+    // A completed exit recorded without a notice period displayed "0 day(s)", which
+    // reads as though the employee served a zero-day notice.
+    const e = code(ESS);
+    expect(e).toContain("noticeNotSet");
+    expect(e).toMatch(/request\.notice_period_days > 0/);
   });
 
   it("never lets the page send an employee_uuid or a request type", () => {

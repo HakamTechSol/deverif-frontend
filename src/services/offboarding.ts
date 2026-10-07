@@ -178,6 +178,17 @@ export type ClearanceQueueRow = {
 
 /** The employee's own view. `null` means they have no exit request. */
 export type MyExit = {
+  /**
+   * Whether this employee is still on the roster.
+   *
+   * The server's answer, not something the page infers from the exit status,
+   * because an ex-employee with no exit record exists - someone who left before
+   * this module, or whose status HR set by hand - and the form has to stay hidden
+   * for them too. Keying only on the exit status rendered a resignation form for
+   * people who had already left.
+   */
+  on_roster: boolean;
+  employee_status: string | null;
   exit_request: {
     uuid: UUID;
     status: ExitStatus;

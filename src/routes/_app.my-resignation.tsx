@@ -85,9 +85,27 @@ function MyResignationPage() {
 
   const request = mine.data?.exit_request ?? null;
   const summary = mine.data?.checklistSummary ?? null;
-  // The server treats the request as still open for pending and approved, so the
-  // form is hidden for both. Completing or rejecting is what frees it up.
-  const open = request?.status === "pending" || request?.status === "approved";
+
+  /**
+   * Whether the resignation form should be offered at all.
+   *
+   * Three cases, and the first one is the bug this replaces:
+   *
+   *   - COMPLETED. The exit is finished, the employee has left, and offering them
+   *     a resignation form is nonsense. Submitting it would be refused with "this
+   *     employee has already left the organization" - a dead end with nothing on
+   *     the page to explain it. Keying only on "pending or approved" treated every
+   *     other status as "show the form", so a completed exit rendered one.
+   *   - REJECTED. A genuine resubmission is allowed, so the form returns.
+   *   - NO REQUEST AT ALL. First time.
+   *
+   * `on_roster` is the server's answer rather than something inferred from the
+   * exit, because someone can be an ex-employee with no exit record at all - they
+   * left before this module existed, or HR set the status by hand - and they must
+   * not be shown a form either.
+   */
+  const leftOrg = mine.data?.on_roster === false;
+  const canSubmit = mine.data?.on_roster !== false && (!request || request.status === "rejected");
 
   return (
     <ModuleGate module="separation_management">
@@ -118,9 +136,16 @@ function MyResignationPage() {
                 <div>
                   <dt className="text-xs text-muted-foreground">{t("offboarding.notice")}</dt>
                   <dd>
+                    {/* Three answers, not two. "To be confirmed" for a request HR
+                        has not ruled on yet, the agreed number once they have, and
+                        NOT a bare "0 day(s)" when there is no agreed number - which
+                        is what a completed exit recorded without one used to show,
+                        reading as though the employee served a zero-day notice. */}
                     {request.status === "pending"
                       ? t("myResignation.noticePending")
-                      : t("offboarding.days", { count: request.notice_period_days })}
+                      : request.notice_period_days > 0
+                        ? t("offboarding.days", { count: request.notice_period_days })
+                        : t("myResignation.noticeNotSet")}
                   </dd>
                 </div>
               </dl>
@@ -197,7 +222,11 @@ function MyResignationPage() {
           </Card>
         ) : null}
 
-        {!open ? (
+        {!canSubmit ? (
+          <p className="text-sm text-muted-foreground">
+            {leftOrg ? t("myResignation.alreadyLeft") : t("myResignation.alreadySubmitted")}
+          </p>
+        ) : (
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-base">
@@ -249,8 +278,6 @@ function MyResignationPage() {
               </Button>
             </CardContent>
           </Card>
-        ) : (
-          <p className="text-sm text-muted-foreground">{t("myResignation.alreadySubmitted")}</p>
         )}
       </div>
     </ModuleGate>

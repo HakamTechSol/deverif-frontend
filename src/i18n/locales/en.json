@@ -1294,6 +1294,8 @@
     "submitted": "Resignation submitted. HR will review it.",
     "submitFailed": "Could not submit your resignation",
     "alreadySubmitted": "You already have a resignation in progress.",
+    "alreadyLeft": "You have left this organization, so there is nothing left to submit. Your exit record and clearance history are kept here.",
+    "noticeNotSet": "Not recorded",
     "noticePending": "To be confirmed at review",
     "clearanceTitle": "Clearance progress",
     "settlementTitle": "Your final settlement",
