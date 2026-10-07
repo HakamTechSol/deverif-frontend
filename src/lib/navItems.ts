@@ -16,6 +16,7 @@ import {
   Hourglass,
   Inbox,
   LayoutDashboard,
+  LogOut,
   MessageSquare,
   Package,
   ScrollText,
@@ -59,6 +60,12 @@ export const memberNavItems: NavItem[] = [
   // see what they were given. ROUTE_ACCESS opens it to all org roles to match.
   { to: "/my-assets", labelKey: "nav.myAssets", icon: Package },
   { to: "/payroll", labelKey: "nav.payroll", icon: Wallet },
+  // Staff INCLUDED, for the same reason as /my-assets above: the page returns an
+  // empty state for anyone without an employee record, and denying a colleague
+  // who is on the roster the ability to hand in notice would be denying them the
+  // one HR action they are entitled to as an employee. ROUTE_ACCESS opens this to
+  // all org roles to match the backend, which uses authUser with no role check.
+  { to: "/my-resignation", labelKey: "nav.myResignation", icon: LogOut },
 ];
 
 /** Org operations, for org_admin and (permission-gated) sub_admin. */
@@ -75,6 +82,10 @@ export const orgAdminNavItems: NavItem[] = [
   // inventory is read through, and because only an org_admin sees the first one.
   { to: "/org/asset-categories", labelKey: "nav.assetCategories", icon: FolderTree },
   { to: "/org/assets", labelKey: "nav.assets", icon: Package },
+  // Offboarding sits after payroll because the FnF settlement is where the two
+  // meet, and next to assets because the clearance checklist is what stands
+  // between a departure and the company getting its laptop back.
+  { to: "/org/offboarding", labelKey: "nav.offboarding", icon: LogOut },
   { to: "/org/support", labelKey: "nav.support", icon: Headset },
   { to: "/payments", labelKey: "nav.payments", icon: CreditCard },
 ];

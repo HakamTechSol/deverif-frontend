@@ -140,6 +140,23 @@ export const ROUTE_ACCESS: Readonly<Record<string, RouteRule>> = {
   "/org/assets": { roles: STAFF_ROLES },
   "/org/asset-categories": { roles: ["org_admin"] },
 
+  // --- Offboarding ------------------------------------------------------------
+  // STAFF_ROLES, mirroring the backend's separationMgmt. A sub-admin is staff and
+  // is documented as sharing operational access, and an exit is operational: they
+  // chase the clearances and see the settlement. Approving a termination is a
+  // separate question that the backend keeps org_admin-only by virtue of the
+  // action, not the page, so the page itself is staff-open.
+  //
+  // No feature key: plan entitlement is the separate axis, handled by ModuleGate
+  // via module_flags (separation_management), same as asset_management above.
+  "/org/offboarding": { roles: STAFF_ROLES },
+
+  // The employee's own resignation. ALL ORG ROLES, for the same reason as
+  // /my-assets: the backend mounts it with authUser and no role check so that a
+  // sub-admin who is also on the roster can serve notice. A page that returned 403
+  // to them would contradict what the server already permits them to do.
+  "/my-resignation": { roles: ALL_ORG_ROLES },
+
   // --- Billing --------------------------------------------------------------
   // The org can *read* subscription status as any role, but every mutating
   // action on this page (checkout, self-subscribe, cancel downgrade) is

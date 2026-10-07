@@ -23,6 +23,7 @@ import { Route as AppInboxRouteImport } from './routes/_app.inbox'
 import { Route as AppLeavesRouteImport } from './routes/_app.leaves'
 import { Route as AppMyAssetsRouteImport } from './routes/_app.my-assets'
 import { Route as AppMyLettersRouteImport } from './routes/_app.my-letters'
+import { Route as AppMyResignationRouteImport } from './routes/_app.my-resignation'
 import { Route as AppPaymentsRouteImport } from './routes/_app.payments'
 import { Route as AppPayrollRouteImport } from './routes/_app.payroll'
 import { Route as AppRequestsRouteImport } from './routes/_app.requests'
@@ -49,6 +50,7 @@ import { Route as AppOrgAttendanceRouteImport } from './routes/_app.org.attendan
 import { Route as AppOrgHrLettersRouteImport } from './routes/_app.org.hr-letters'
 import { Route as AppOrgLeavesRouteImport } from './routes/_app.org.leaves'
 import { Route as AppOrgLetterTemplatesRouteImport } from './routes/_app.org.letter-templates'
+import { Route as AppOrgOffboardingRouteImport } from './routes/_app.org.offboarding'
 import { Route as AppOrgPayrollRouteImport } from './routes/_app.org.payroll'
 import { Route as AppOrgSalaryComponentsRouteImport } from './routes/_app.org.salary-components'
 import { Route as AppOrgSupportRouteImport } from './routes/_app.org.support'
@@ -129,6 +131,11 @@ const AppMyAssetsRoute = AppMyAssetsRouteImport.update({
 const AppMyLettersRoute = AppMyLettersRouteImport.update({
   id: '/my-letters',
   path: '/my-letters',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppMyResignationRoute = AppMyResignationRouteImport.update({
+  id: '/my-resignation',
+  path: '/my-resignation',
   getParentRoute: () => AppRoute,
 } as any)
 const AppPaymentsRoute = AppPaymentsRouteImport.update({
@@ -263,6 +270,11 @@ const AppOrgLetterTemplatesRoute = AppOrgLetterTemplatesRouteImport.update({
   path: '/org/letter-templates',
   getParentRoute: () => AppRoute,
 } as any)
+const AppOrgOffboardingRoute = AppOrgOffboardingRouteImport.update({
+  id: '/org/offboarding',
+  path: '/org/offboarding',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppOrgPayrollRoute = AppOrgPayrollRouteImport.update({
   id: '/org/payroll',
   path: '/org/payroll',
@@ -338,6 +350,7 @@ export interface FileRoutesByFullPath {
   '/leaves': typeof AppLeavesRoute
   '/my-assets': typeof AppMyAssetsRoute
   '/my-letters': typeof AppMyLettersRoute
+  '/my-resignation': typeof AppMyResignationRoute
   '/payments': typeof AppPaymentsRoute
   '/payroll': typeof AppPayrollRoute
   '/requests': typeof AppRequestsRoute
@@ -364,6 +377,7 @@ export interface FileRoutesByFullPath {
   '/org/hr-letters': typeof AppOrgHrLettersRoute
   '/org/leaves': typeof AppOrgLeavesRoute
   '/org/letter-templates': typeof AppOrgLetterTemplatesRoute
+  '/org/offboarding': typeof AppOrgOffboardingRoute
   '/org/payroll': typeof AppOrgPayrollRoute
   '/org/salary-components': typeof AppOrgSalaryComponentsRoute
   '/org/support': typeof AppOrgSupportRouteWithChildren
@@ -391,6 +405,7 @@ export interface FileRoutesByTo {
   '/leaves': typeof AppLeavesRoute
   '/my-assets': typeof AppMyAssetsRoute
   '/my-letters': typeof AppMyLettersRoute
+  '/my-resignation': typeof AppMyResignationRoute
   '/payments': typeof AppPaymentsRoute
   '/payroll': typeof AppPayrollRoute
   '/requests': typeof AppRequestsRoute
@@ -416,6 +431,7 @@ export interface FileRoutesByTo {
   '/org/hr-letters': typeof AppOrgHrLettersRoute
   '/org/leaves': typeof AppOrgLeavesRoute
   '/org/letter-templates': typeof AppOrgLetterTemplatesRoute
+  '/org/offboarding': typeof AppOrgOffboardingRoute
   '/org/payroll': typeof AppOrgPayrollRoute
   '/org/salary-components': typeof AppOrgSalaryComponentsRoute
   '/payment/callback': typeof AppPaymentCallbackRoute
@@ -443,6 +459,7 @@ export interface FileRoutesById {
   '/_app/leaves': typeof AppLeavesRoute
   '/_app/my-assets': typeof AppMyAssetsRoute
   '/_app/my-letters': typeof AppMyLettersRoute
+  '/_app/my-resignation': typeof AppMyResignationRoute
   '/_app/payments': typeof AppPaymentsRoute
   '/_app/payroll': typeof AppPayrollRoute
   '/_app/requests': typeof AppRequestsRoute
@@ -469,6 +486,7 @@ export interface FileRoutesById {
   '/_app/org/hr-letters': typeof AppOrgHrLettersRoute
   '/_app/org/leaves': typeof AppOrgLeavesRoute
   '/_app/org/letter-templates': typeof AppOrgLetterTemplatesRoute
+  '/_app/org/offboarding': typeof AppOrgOffboardingRoute
   '/_app/org/payroll': typeof AppOrgPayrollRoute
   '/_app/org/salary-components': typeof AppOrgSalaryComponentsRoute
   '/_app/org/support': typeof AppOrgSupportRouteWithChildren
@@ -498,6 +516,7 @@ export interface FileRouteTypes {
     | '/leaves'
     | '/my-assets'
     | '/my-letters'
+    | '/my-resignation'
     | '/payments'
     | '/payroll'
     | '/requests'
@@ -524,6 +543,7 @@ export interface FileRouteTypes {
     | '/org/hr-letters'
     | '/org/leaves'
     | '/org/letter-templates'
+    | '/org/offboarding'
     | '/org/payroll'
     | '/org/salary-components'
     | '/org/support'
@@ -551,6 +571,7 @@ export interface FileRouteTypes {
     | '/leaves'
     | '/my-assets'
     | '/my-letters'
+    | '/my-resignation'
     | '/payments'
     | '/payroll'
     | '/requests'
@@ -576,6 +597,7 @@ export interface FileRouteTypes {
     | '/org/hr-letters'
     | '/org/leaves'
     | '/org/letter-templates'
+    | '/org/offboarding'
     | '/org/payroll'
     | '/org/salary-components'
     | '/payment/callback'
@@ -602,6 +624,7 @@ export interface FileRouteTypes {
     | '/_app/leaves'
     | '/_app/my-assets'
     | '/_app/my-letters'
+    | '/_app/my-resignation'
     | '/_app/payments'
     | '/_app/payroll'
     | '/_app/requests'
@@ -628,6 +651,7 @@ export interface FileRouteTypes {
     | '/_app/org/hr-letters'
     | '/_app/org/leaves'
     | '/_app/org/letter-templates'
+    | '/_app/org/offboarding'
     | '/_app/org/payroll'
     | '/_app/org/salary-components'
     | '/_app/org/support'
@@ -755,6 +779,13 @@ declare module '@tanstack/react-router' {
       path: '/my-letters'
       fullPath: '/my-letters'
       preLoaderRoute: typeof AppMyLettersRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/my-resignation': {
+      id: '/_app/my-resignation'
+      path: '/my-resignation'
+      fullPath: '/my-resignation'
+      preLoaderRoute: typeof AppMyResignationRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/payments': {
@@ -939,6 +970,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppOrgLetterTemplatesRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/org/offboarding': {
+      id: '/_app/org/offboarding'
+      path: '/org/offboarding'
+      fullPath: '/org/offboarding'
+      preLoaderRoute: typeof AppOrgOffboardingRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/org/payroll': {
       id: '/_app/org/payroll'
       path: '/org/payroll'
@@ -1076,6 +1114,7 @@ interface AppRouteChildren {
   AppLeavesRoute: typeof AppLeavesRoute
   AppMyAssetsRoute: typeof AppMyAssetsRoute
   AppMyLettersRoute: typeof AppMyLettersRoute
+  AppMyResignationRoute: typeof AppMyResignationRoute
   AppPaymentsRoute: typeof AppPaymentsRoute
   AppPayrollRoute: typeof AppPayrollRoute
   AppRequestsRoute: typeof AppRequestsRoute
@@ -1098,6 +1137,7 @@ interface AppRouteChildren {
   AppOrgHrLettersRoute: typeof AppOrgHrLettersRoute
   AppOrgLeavesRoute: typeof AppOrgLeavesRoute
   AppOrgLetterTemplatesRoute: typeof AppOrgLetterTemplatesRoute
+  AppOrgOffboardingRoute: typeof AppOrgOffboardingRoute
   AppOrgPayrollRoute: typeof AppOrgPayrollRoute
   AppOrgSalaryComponentsRoute: typeof AppOrgSalaryComponentsRoute
   AppOrgSupportRoute: typeof AppOrgSupportRouteWithChildren
@@ -1113,6 +1153,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppLeavesRoute: AppLeavesRoute,
   AppMyAssetsRoute: AppMyAssetsRoute,
   AppMyLettersRoute: AppMyLettersRoute,
+  AppMyResignationRoute: AppMyResignationRoute,
   AppPaymentsRoute: AppPaymentsRoute,
   AppPayrollRoute: AppPayrollRoute,
   AppRequestsRoute: AppRequestsRoute,
@@ -1135,6 +1176,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppOrgHrLettersRoute: AppOrgHrLettersRoute,
   AppOrgLeavesRoute: AppOrgLeavesRoute,
   AppOrgLetterTemplatesRoute: AppOrgLetterTemplatesRoute,
+  AppOrgOffboardingRoute: AppOrgOffboardingRoute,
   AppOrgPayrollRoute: AppOrgPayrollRoute,
   AppOrgSalaryComponentsRoute: AppOrgSalaryComponentsRoute,
   AppOrgSupportRoute: AppOrgSupportRouteWithChildren,

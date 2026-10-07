@@ -20,3 +20,4 @@ export * from "./hr";
 export * from "./misc";
 export * from "./support";
 export * from "./assets";
+export * from "./offboarding";
