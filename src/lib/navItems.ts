@@ -19,6 +19,7 @@ import {
   LogOut,
   MessageSquare,
   Package,
+  Receipt,
   ScrollText,
   Send,
   Settings,
@@ -59,6 +60,11 @@ export const memberNavItems: NavItem[] = [
   // Hiding it from staff would mean a colleague who is handed a device cannot
   // see what they were given. ROUTE_ACCESS opens it to all org roles to match.
   { to: "/my-assets", labelKey: "nav.myAssets", icon: Package },
+  // Same reasoning again: a sub-admin on the roster has taxi fares to reclaim
+  // exactly like anyone else, and the page returns an empty state for anyone
+  // without an employee record. ROUTE_ACCESS opens it to all org roles to match
+  // the backend, which uses authUser with no role check.
+  { to: "/my-expenses", labelKey: "nav.myExpenses", icon: Receipt },
   { to: "/payroll", labelKey: "nav.payroll", icon: Wallet },
   // Staff INCLUDED, for the same reason as /my-assets above: the page returns an
   // empty state for anyone without an employee record, and denying a colleague
@@ -78,6 +84,10 @@ export const orgAdminNavItems: NavItem[] = [
   { to: "/org/payroll", labelKey: "nav.payroll", icon: Wallet },
   { to: "/org/letter-templates", labelKey: "nav.letterTemplates", icon: FileText },
   { to: "/org/hr-letters", labelKey: "nav.hrLetters", icon: FileSignature },
+  // Expense claims sit after payroll and before assets, because the money ops
+  // read in that order: payroll decides what is paid, expense claims are what
+  // reimburses on top of it, and assets is the register of what was bought.
+  { to: "/org/expense-claims", labelKey: "nav.expenseClaims", icon: Receipt },
   // Asset categories sit before inventory because they are the filter the
   // inventory is read through, and because only an org_admin sees the first one.
   { to: "/org/asset-categories", labelKey: "nav.assetCategories", icon: FolderTree },

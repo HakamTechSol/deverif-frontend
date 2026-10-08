@@ -21,3 +21,4 @@ export * from "./misc";
 export * from "./support";
 export * from "./assets";
 export * from "./offboarding";
+export * from "./expenses";

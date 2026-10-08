@@ -22,6 +22,7 @@ import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
 import { Route as AppInboxRouteImport } from './routes/_app.inbox'
 import { Route as AppLeavesRouteImport } from './routes/_app.leaves'
 import { Route as AppMyAssetsRouteImport } from './routes/_app.my-assets'
+import { Route as AppMyExpensesRouteImport } from './routes/_app.my-expenses'
 import { Route as AppMyLettersRouteImport } from './routes/_app.my-letters'
 import { Route as AppMyResignationRouteImport } from './routes/_app.my-resignation'
 import { Route as AppPaymentsRouteImport } from './routes/_app.payments'
@@ -47,6 +48,7 @@ import { Route as AppOrgAdminsRouteImport } from './routes/_app.org.admins'
 import { Route as AppOrgAssetCategoriesRouteImport } from './routes/_app.org.asset-categories'
 import { Route as AppOrgAssetsRouteImport } from './routes/_app.org.assets'
 import { Route as AppOrgAttendanceRouteImport } from './routes/_app.org.attendance'
+import { Route as AppOrgExpenseClaimsRouteImport } from './routes/_app.org.expense-claims'
 import { Route as AppOrgHrLettersRouteImport } from './routes/_app.org.hr-letters'
 import { Route as AppOrgLeavesRouteImport } from './routes/_app.org.leaves'
 import { Route as AppOrgLetterTemplatesRouteImport } from './routes/_app.org.letter-templates'
@@ -126,6 +128,11 @@ const AppLeavesRoute = AppLeavesRouteImport.update({
 const AppMyAssetsRoute = AppMyAssetsRouteImport.update({
   id: '/my-assets',
   path: '/my-assets',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppMyExpensesRoute = AppMyExpensesRouteImport.update({
+  id: '/my-expenses',
+  path: '/my-expenses',
   getParentRoute: () => AppRoute,
 } as any)
 const AppMyLettersRoute = AppMyLettersRouteImport.update({
@@ -255,6 +262,11 @@ const AppOrgAttendanceRoute = AppOrgAttendanceRouteImport.update({
   path: '/org/attendance',
   getParentRoute: () => AppRoute,
 } as any)
+const AppOrgExpenseClaimsRoute = AppOrgExpenseClaimsRouteImport.update({
+  id: '/org/expense-claims',
+  path: '/org/expense-claims',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppOrgHrLettersRoute = AppOrgHrLettersRouteImport.update({
   id: '/org/hr-letters',
   path: '/org/hr-letters',
@@ -349,6 +361,7 @@ export interface FileRoutesByFullPath {
   '/inbox': typeof AppInboxRoute
   '/leaves': typeof AppLeavesRoute
   '/my-assets': typeof AppMyAssetsRoute
+  '/my-expenses': typeof AppMyExpensesRoute
   '/my-letters': typeof AppMyLettersRoute
   '/my-resignation': typeof AppMyResignationRoute
   '/payments': typeof AppPaymentsRoute
@@ -374,6 +387,7 @@ export interface FileRoutesByFullPath {
   '/org/asset-categories': typeof AppOrgAssetCategoriesRoute
   '/org/assets': typeof AppOrgAssetsRoute
   '/org/attendance': typeof AppOrgAttendanceRoute
+  '/org/expense-claims': typeof AppOrgExpenseClaimsRoute
   '/org/hr-letters': typeof AppOrgHrLettersRoute
   '/org/leaves': typeof AppOrgLeavesRoute
   '/org/letter-templates': typeof AppOrgLetterTemplatesRoute
@@ -404,6 +418,7 @@ export interface FileRoutesByTo {
   '/inbox': typeof AppInboxRoute
   '/leaves': typeof AppLeavesRoute
   '/my-assets': typeof AppMyAssetsRoute
+  '/my-expenses': typeof AppMyExpensesRoute
   '/my-letters': typeof AppMyLettersRoute
   '/my-resignation': typeof AppMyResignationRoute
   '/payments': typeof AppPaymentsRoute
@@ -428,6 +443,7 @@ export interface FileRoutesByTo {
   '/org/asset-categories': typeof AppOrgAssetCategoriesRoute
   '/org/assets': typeof AppOrgAssetsRoute
   '/org/attendance': typeof AppOrgAttendanceRoute
+  '/org/expense-claims': typeof AppOrgExpenseClaimsRoute
   '/org/hr-letters': typeof AppOrgHrLettersRoute
   '/org/leaves': typeof AppOrgLeavesRoute
   '/org/letter-templates': typeof AppOrgLetterTemplatesRoute
@@ -458,6 +474,7 @@ export interface FileRoutesById {
   '/_app/inbox': typeof AppInboxRoute
   '/_app/leaves': typeof AppLeavesRoute
   '/_app/my-assets': typeof AppMyAssetsRoute
+  '/_app/my-expenses': typeof AppMyExpensesRoute
   '/_app/my-letters': typeof AppMyLettersRoute
   '/_app/my-resignation': typeof AppMyResignationRoute
   '/_app/payments': typeof AppPaymentsRoute
@@ -483,6 +500,7 @@ export interface FileRoutesById {
   '/_app/org/asset-categories': typeof AppOrgAssetCategoriesRoute
   '/_app/org/assets': typeof AppOrgAssetsRoute
   '/_app/org/attendance': typeof AppOrgAttendanceRoute
+  '/_app/org/expense-claims': typeof AppOrgExpenseClaimsRoute
   '/_app/org/hr-letters': typeof AppOrgHrLettersRoute
   '/_app/org/leaves': typeof AppOrgLeavesRoute
   '/_app/org/letter-templates': typeof AppOrgLetterTemplatesRoute
@@ -515,6 +533,7 @@ export interface FileRouteTypes {
     | '/inbox'
     | '/leaves'
     | '/my-assets'
+    | '/my-expenses'
     | '/my-letters'
     | '/my-resignation'
     | '/payments'
@@ -540,6 +559,7 @@ export interface FileRouteTypes {
     | '/org/asset-categories'
     | '/org/assets'
     | '/org/attendance'
+    | '/org/expense-claims'
     | '/org/hr-letters'
     | '/org/leaves'
     | '/org/letter-templates'
@@ -570,6 +590,7 @@ export interface FileRouteTypes {
     | '/inbox'
     | '/leaves'
     | '/my-assets'
+    | '/my-expenses'
     | '/my-letters'
     | '/my-resignation'
     | '/payments'
@@ -594,6 +615,7 @@ export interface FileRouteTypes {
     | '/org/asset-categories'
     | '/org/assets'
     | '/org/attendance'
+    | '/org/expense-claims'
     | '/org/hr-letters'
     | '/org/leaves'
     | '/org/letter-templates'
@@ -623,6 +645,7 @@ export interface FileRouteTypes {
     | '/_app/inbox'
     | '/_app/leaves'
     | '/_app/my-assets'
+    | '/_app/my-expenses'
     | '/_app/my-letters'
     | '/_app/my-resignation'
     | '/_app/payments'
@@ -648,6 +671,7 @@ export interface FileRouteTypes {
     | '/_app/org/asset-categories'
     | '/_app/org/assets'
     | '/_app/org/attendance'
+    | '/_app/org/expense-claims'
     | '/_app/org/hr-letters'
     | '/_app/org/leaves'
     | '/_app/org/letter-templates'
@@ -772,6 +796,13 @@ declare module '@tanstack/react-router' {
       path: '/my-assets'
       fullPath: '/my-assets'
       preLoaderRoute: typeof AppMyAssetsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/my-expenses': {
+      id: '/_app/my-expenses'
+      path: '/my-expenses'
+      fullPath: '/my-expenses'
+      preLoaderRoute: typeof AppMyExpensesRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/my-letters': {
@@ -949,6 +980,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppOrgAttendanceRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/org/expense-claims': {
+      id: '/_app/org/expense-claims'
+      path: '/org/expense-claims'
+      fullPath: '/org/expense-claims'
+      preLoaderRoute: typeof AppOrgExpenseClaimsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/org/hr-letters': {
       id: '/_app/org/hr-letters'
       path: '/org/hr-letters'
@@ -1113,6 +1151,7 @@ interface AppRouteChildren {
   AppInboxRoute: typeof AppInboxRoute
   AppLeavesRoute: typeof AppLeavesRoute
   AppMyAssetsRoute: typeof AppMyAssetsRoute
+  AppMyExpensesRoute: typeof AppMyExpensesRoute
   AppMyLettersRoute: typeof AppMyLettersRoute
   AppMyResignationRoute: typeof AppMyResignationRoute
   AppPaymentsRoute: typeof AppPaymentsRoute
@@ -1134,6 +1173,7 @@ interface AppRouteChildren {
   AppOrgAssetCategoriesRoute: typeof AppOrgAssetCategoriesRoute
   AppOrgAssetsRoute: typeof AppOrgAssetsRoute
   AppOrgAttendanceRoute: typeof AppOrgAttendanceRoute
+  AppOrgExpenseClaimsRoute: typeof AppOrgExpenseClaimsRoute
   AppOrgHrLettersRoute: typeof AppOrgHrLettersRoute
   AppOrgLeavesRoute: typeof AppOrgLeavesRoute
   AppOrgLetterTemplatesRoute: typeof AppOrgLetterTemplatesRoute
@@ -1152,6 +1192,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppInboxRoute: AppInboxRoute,
   AppLeavesRoute: AppLeavesRoute,
   AppMyAssetsRoute: AppMyAssetsRoute,
+  AppMyExpensesRoute: AppMyExpensesRoute,
   AppMyLettersRoute: AppMyLettersRoute,
   AppMyResignationRoute: AppMyResignationRoute,
   AppPaymentsRoute: AppPaymentsRoute,
@@ -1173,6 +1214,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppOrgAssetCategoriesRoute: AppOrgAssetCategoriesRoute,
   AppOrgAssetsRoute: AppOrgAssetsRoute,
   AppOrgAttendanceRoute: AppOrgAttendanceRoute,
+  AppOrgExpenseClaimsRoute: AppOrgExpenseClaimsRoute,
   AppOrgHrLettersRoute: AppOrgHrLettersRoute,
   AppOrgLeavesRoute: AppOrgLeavesRoute,
   AppOrgLetterTemplatesRoute: AppOrgLetterTemplatesRoute,

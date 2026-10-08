@@ -102,8 +102,10 @@ console.log(orphanEn.length ? orphanEn.map((k) => `  ${k}`).join("\n") : "  none
 // KNOWN FALSE POSITIVES. These ARE used, but through a computed key, which a
 // regex cannot see: ApprovalTimeline holds `labelKey: "hr.approval.approved"` in a
 // lookup table and calls t(style.labelKey), and renders t(`hr.approval.${status}`).
+// The two expense pages keep a STATUS_LABEL / MODE_LABEL map for the same reason —
+// a template literal would hide a typo'd key from this audit entirely.
 // Treat "unreferenced" as a hint to check, never as proof of dead code.
-const DYNAMIC_KEY_PREFIXES = ["hr.approval."];
+const DYNAMIC_KEY_PREFIXES = ["hr.approval.", "expenses.status.", "expenses.mode."];
 const stillOrphan = orphanEn.filter((k) => !DYNAMIC_KEY_PREFIXES.some((p) => k.startsWith(p)));
 console.log(
   `\n(${DYNAMIC_KEY_PREFIXES.join(", ")}* are referenced via computed keys and are` +

@@ -39,12 +39,42 @@ function isPdf(mime: string | null): boolean {
   return mime === "application/pdf";
 }
 
+/**
+ * The two network operations a card needs, injectable.
+ *
+ * DEFAULTED TO THE ASSETS ENDPOINTS, and that default is why this component can be
+ * reused instead of forked. Expense receipts live in the SAME `attachments` table
+ * (entity_type='expense_claim') but behind different routes — `/org/expense-
+ * attachments/:uuid`, not `/org/asset-attachments/:uuid` — because the server's
+ * removeReceipt refuses any attachment whose entity_type is not an expense claim,
+ * and vice versa in assets.service.js. So a card cannot guess which endpoints to
+ * call, and the caller says.
+ *
+ * Everything that was actually hard here — lazy byte loading, the preview dialog,
+ * the confirm-before-delete that fires the API call from onConfirm rather than
+ * from the button, the blob reuse for download — stays in one place. The failure
+ * this shape prevents is a second card that reimplements deletion without the
+ * confirmation, which is how a receipt gets destroyed by a stray click.
+ */
+export type AttachmentCardHandlers = {
+  download: (attachmentUuid: string) => Promise<Blob>;
+  remove: (attachmentUuid: string) => Promise<unknown>;
+};
+
+const ASSET_ATTACHMENT_HANDLERS: AttachmentCardHandlers = {
+  download: (uuid) => assetsService.downloadAttachment(uuid),
+  remove: (uuid) => assetsService.removeAttachment(uuid),
+};
+
 export function AttachmentCard({
   attachment,
   onDeleted,
+  handlers = ASSET_ATTACHMENT_HANDLERS,
 }: {
   attachment: AssetAttachment;
   onDeleted: () => void;
+  /** Omit for asset attachments; expense receipts pass the expense service. */
+  handlers?: AttachmentCardHandlers;
 }) {
   const { t } = useTranslation();
   const [hovered, setHovered] = useState(false);
@@ -68,9 +98,7 @@ export function AttachmentCard({
     url,
     blob: loadedBlob,
     isLoading,
-  } = useAttachmentUrl(hovered || previewOpen, () =>
-    assetsService.downloadAttachment(attachment.uuid),
-  );
+  } = useAttachmentUrl(hovered || previewOpen, () => handlers.download(attachment.uuid));
 
   const handleDownload = async () => {
     setBusy("download");
@@ -80,7 +108,7 @@ export function AttachmentCard({
       // object URL is for DISPLAY only — re-fetching from a blob: URL is not
       // reliably supported, so depending on it would make Download silently fail
       // on exactly the cards the user has already opened.
-      const blob = loadedBlob ?? (await assetsService.downloadAttachment(attachment.uuid));
+      const blob = loadedBlob ?? (await handlers.download(attachment.uuid));
       saveBlob(blob, attachment.file_name);
     } catch {
       // A blocked or failed download used to vanish without a trace: no toast, no
@@ -97,7 +125,7 @@ export function AttachmentCard({
     setBusy("delete");
     setDeleteError(null);
     try {
-      await assetsService.removeAttachment(attachment.uuid);
+      await handlers.remove(attachment.uuid);
       // Close only on success. A failed delete that closed the dialog would look
       // exactly like one that worked, and the row would still be sitting there.
       setConfirmOpen(false);

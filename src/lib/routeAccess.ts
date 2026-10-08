@@ -101,6 +101,31 @@ export const ROUTE_ACCESS: Readonly<Record<string, RouteRule>> = {
   // Plan-level access is ModuleGate via module_flags (asset_management).
   "/my-assets": { roles: ALL_ORG_ROLES },
 
+  // --- My expenses -----------------------------------------------------------
+  // ALL ORG ROLES, for the same reason as /my-assets immediately above, and the
+  // backend agrees: /my/expenses is mounted behind authUser with NO role check.
+  //
+  // A sub-admin who is also on the roster gets a taxi to a client visit paid for
+  // on their own time, exactly like a colleague, and gating them out of their own
+  // reimbursement would be a bug rather than a policy. Someone with no employee
+  // record gets an empty list, which is the correct answer rather than a 403.
+  //
+  // Plan-level access is ModuleGate via module_flags (expense_management).
+  "/my-expenses": { roles: ALL_ORG_ROLES },
+
+  // --- Expense claims (staff) -------------------------------------------------
+  // STAFF_ROLES, mirroring the backend's expenseCategoryMgmt = staff plus
+  // requireModuleFeature("expense_management"). Reviewing a claim and settling one
+  // is day-to-day finance work a sub-admin does, so this is not org_admin-only —
+  // the same split as /org/assets above.
+  //
+  // Deliberately NO feature_access key. Plan entitlement is the separate axis
+  // handled by ModuleGate via module_flags (expense_management), exactly as
+  // asset_management and separation_management are. Inventing a per-user
+  // "expense" permission here would be a second source of truth the backend does
+  // not consult, and the client would then gate a page the server still serves.
+  "/org/expense-claims": { roles: STAFF_ROLES },
+
   // --- Org operations: staff only ------------------------------------------
   "/org/support": { roles: STAFF_ROLES },
   "/org/team": { roles: STAFF_ROLES, feature: "manage_employees", always: ["org_admin"] },
