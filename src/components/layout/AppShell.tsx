@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import notificationSound from "@/assets/NotificationSound/universfield-new-notification-040-493469.mp3";
-import { Bell, CheckCheck, Inbox, Languages, Lock, LogOut, Menu, Moon, Settings, Sun, X } from "lucide-react";
+import { Bell, CheckCheck, ChevronDown, Inbox, Languages, Lock, LogOut, Menu, Moon, Settings, Sun, UserRound, X } from "lucide-react";
 import { Logo } from "@/components/common/Logo";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -37,9 +37,8 @@ import { PlanPickerProvider, usePlanPicker } from "@/components/common/PlanPicke
 import { canAccessRoute } from "@/lib/routeAccess";
 import {
   adminNav,
-  memberNavItems,
-  orgAdminNavItems,
-  userNavItems,
+  personalEssItemsFor,
+  primaryNavItemsFor,
   type NavItem,
 } from "@/lib/navItems";
 
@@ -130,12 +129,23 @@ export function AppShell({ children }: { children: ReactNode }) {
   // table. Previously each group below re-derived visibility by hand from
   // role checks and feature flags, which is how an employee ended up with a
   // Support link that the guards bounced straight back to the dashboard.
-  const userNavVisible = userNavItems.filter((it) => canAccessRoute(user, it.to));
-
-  const memberServiceVisible = memberNavItems.filter((it) => canAccessRoute(user, it.to));
-
-  const orgNavVisible: NavItem[] = orgAdminNavItems.filter((it) => canAccessRoute(user, it.to));
-
+  //
+  // TWO FILTERS, IN THIS ORDER, AND THEY DO DIFFERENT JOBS:
+  //
+  //   1. primaryNavItemsFor / personalEssItemsFor decide which MENU a link belongs
+  //      in -- management work for staff, self-service for an employee. This is
+  //      presentation: an org_admin running payroll saw their own laptop and their
+  //      own taxi claim filed at the same weight as the org's expense queue.
+  //   2. canAccessRoute decides whether THIS user may open it, and additionally
+  //      whether their plan includes the module.
+  //
+  // The order matters only in that both are ANDed -- nothing in group 1 grants
+  // access, and nothing in group 2 changes prominence. Marking an item
+  // self-service never locks a page: the server is the only thing that does that,
+  // and for /my-assets, /my-expenses and /my-resignation it opens them to every
+  // org user. That is precisely why the Personal ESS group exists -- to keep those
+  // pages one click away for staff without putting them in the middle of a
+  // manager's menu.
   const items: NavItem[] = isAdmin
     ? adminNav.filter((it) => canAccessRoute(user, it.to)).map((it) => {
         const counts = adminSidebarCounts.data;
@@ -146,16 +156,24 @@ export function AppShell({ children }: { children: ReactNode }) {
           : undefined;
         return { ...it, badge };
       })
-    : [
-        ...userNavVisible.map((it) =>
-          it.to === "/inbox" ? { ...it, badge: inboxCount.data ?? 0 } : it,
-        ),
+    : primaryNavItemsFor(user?.org_role)
         // No role special-casing: canAccessRoute already answers false for
         // staff on the self-service pages and for employees on the org pages.
-        ...memberServiceVisible,
-        ...orgNavVisible,
-        { to: "/settings", labelKey: "nav.settings", icon: Settings },
-      ];
+        .filter((it) => canAccessRoute(user, it.to))
+        .map((it) => (it.to === "/inbox" ? { ...it, badge: inboxCount.data ?? 0 } : it));
+
+  /**
+   * Rendered as its OWN group in the sidebar footer, NOT appended to `items`.
+   *
+   * Appending them to the same array was the first attempt and it defeats the
+   * whole change: the links come back, just lower down, still sitting in the
+   * manager's menu between Offboarding and Payments. The complaint was about a
+   * management menu carrying six personal links, not about their vertical
+   * position.
+   */
+  const personalEssItems = isAdmin
+    ? []
+    : personalEssItemsFor(user);
 
   return (
     <PlanPickerProvider>
@@ -164,6 +182,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 border-r border-sidebar-border bg-sidebar lg:flex lg:flex-col">
         <SidebarInner
           items={items}
+          personalEssItems={personalEssItems}
           pathname={pathname}
           onNavigate={() => {}}
           onLogout={onLogout}
@@ -184,6 +203,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <aside className="absolute inset-y-0 left-0 flex w-64 flex-col border-r border-sidebar-border bg-sidebar">
             <SidebarInner
               items={items}
+              personalEssItems={personalEssItems}
               pathname={pathname}
               onNavigate={() => setMobileOpen(false)}
               onLogout={onLogout}
@@ -215,8 +235,18 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
 }
 
-function SidebarInner({
+/**
+ * Exported for the sidebar render test, which is the only way to verify what an
+ * org_admin actually SEES rather than what the composition functions return.
+ *
+ * The composition tests in lib/sidebarRoles.test.ts pin the item lists; this one
+ * renders the menu and asserts on the DOM, so a regression that puts a personal
+ * link back into the primary nav -- by editing this component rather than
+ * navItems -- still fails here.
+ */
+export function SidebarInner({
   items,
+  personalEssItems,
   pathname,
   onNavigate,
   onLogout,
@@ -226,6 +256,14 @@ function SidebarInner({
   pathModule,
 }: {
   items: NavItem[];
+  /**
+   * The caller's own employee pages, shown as a collapsible group ABOVE sign out.
+   *
+   * Empty for an employee (they have these in their primary menu) and for a
+   * platform admin (no employee record exists for them). Non-empty for a staff
+   * member who is also on the roster.
+   */
+  personalEssItems: NavItem[];
   pathname: string;
   onNavigate: () => void;
   onLogout: () => void;
@@ -238,6 +276,16 @@ function SidebarInner({
 }) {
   const { t } = useTranslation();
   const { openPicker } = usePlanPicker();
+  /**
+   * Collapsed by default, and STAYS collapsed once the user has been here.
+   *
+   * The complaint was that personal links crowded the management menu, so opening
+   * this group must cost the same one click as any other link and must not persist
+   * across renders -- otherwise an org_admin who once opened it comes back to a
+   * sidebar with their expenses showing again, and the change has quietly undone
+   * itself.
+   */
+  const [essOpen, setEssOpen] = useState(false);
   return (
     <>
       <div className="flex h-16 items-center justify-between border-b border-sidebar-border px-5">
@@ -319,6 +367,55 @@ function SidebarInner({
         })}
       </nav>
       <div className="border-t border-sidebar-border p-3">
+        {/*
+          Personal ESS, for a staff member who is also on the employee roster.
+
+          Present ONLY when there is something behind it. An employee, or a
+          platform admin with no employee record, gets no group and no heading --
+          an affordance that opens onto nothing is worse than no affordance, and
+          "Switch to Personal ESS" shown to someone with no employee record
+          advertises a page that will come back empty.
+        */}
+        {personalEssItems.length ? (
+          <div className="mb-2">
+            <button
+              type="button"
+              onClick={() => setEssOpen((v) => !v)}
+              aria-expanded={essOpen}
+              aria-controls="sidebar-personal-ess"
+              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs font-semibold uppercase tracking-wide text-sidebar-foreground/50 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
+            >
+              <UserRound className="h-3.5 w-3.5" />
+              {t("nav.personalEss")}
+              <ChevronDown
+                className={cn("ml-auto h-3.5 w-3.5 transition-transform", essOpen && "rotate-180")}
+              />
+            </button>
+
+            {essOpen ? (
+              <ul id="sidebar-personal-ess" className="mt-0.5 space-y-0.5">
+                {personalEssItems.map((it) => (
+                  <li key={it.to}>
+                    <Link
+                      to={it.to}
+                      onClick={onNavigate}
+                      className={cn(
+                        "flex items-center gap-2.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors",
+                        pathname === it.to || pathname.startsWith(`${it.to}/`)
+                          ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                          : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground",
+                      )}
+                    >
+                      <it.icon className="h-3.5 w-3.5 shrink-0" />
+                      {t(it.labelKey)}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        ) : null}
+
         <button
           onClick={onLogout}
           className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-xs font-medium text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-destructive"
