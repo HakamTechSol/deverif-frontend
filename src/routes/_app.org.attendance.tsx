@@ -1,9 +1,9 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { Info, Lock, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { Info, Lock, Plus, ShieldCheck, Trash2, UserCheck } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { authStore } from "@/lib/auth";
@@ -20,6 +20,15 @@ import { TableSkeleton } from "./_app.requests";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -36,8 +45,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { orgAttendanceService } from "@/services";
-import { formatDate, formatDateTime, parseFeatureAccess } from "@/lib/utils";
+import { orgAttendanceService, orgService, isCurrentEmployee } from "@/services";
+import { apiErrorMessage, formatDate, formatDateTime, parseFeatureAccess } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/org/attendance")({
   beforeLoad: () => {
@@ -54,6 +63,12 @@ export const Route = createFileRoute("/_app/org/attendance")({
 });
 
 const PAGE_SIZE = 10;
+
+/** Local YYYY-MM-DD. toISOString() would shift the day in any timezone behind UTC. */
+function localToday(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 
 function OrgAttendancePage() {
   const { user } = useAuth();
@@ -84,6 +99,7 @@ function OrgAttendanceContent() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [ipInput, setIpInput] = useState("");
+  const [manualOpen, setManualOpen] = useState(false);
 
   const ips = useQuery({
     queryKey: ["orgAllowedIps"],
@@ -131,6 +147,29 @@ function OrgAttendanceContent() {
   return (
     <div>
       <PageHeader title={t("nav.attendance")} description={t("attendance.description")} />
+
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <Button
+          size="sm"
+          onClick={() => setManualOpen(true)}
+          disabled={isLocked}
+          title="Record attendance for an employee manually"
+        >
+          {isLocked ? <Lock className="mr-1 h-3 w-3" /> : <UserCheck className="mr-1 h-3 w-3" />}
+          {isLocked ? "Subscription Required" : "Mark attendance"}
+        </Button>
+      </div>
+
+      <ManualAttendanceDialog
+        open={manualOpen}
+        onOpenChange={setManualOpen}
+        disabled={isLocked}
+        onDone={() => {
+          setManualOpen(false);
+          setPage(1);
+          qc.invalidateQueries({ queryKey: ["orgAttendance"] });
+        }}
+      />
 
       <Card className="border-border/70 shadow-none">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
@@ -328,5 +367,162 @@ function OrgAttendanceContent() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+/**
+ * Back-office attendance entry.
+ *
+ * The self-service check-in is gated by the IP allowlist, which silently
+ * strands anyone whose device sits behind a dynamic IP or who is working
+ * off-site. This dialog is the escape hatch. It mirrors the backend's rules
+ * rather than discovering them on submit: a reason is mandatory, the checkout
+ * must be after the check-in, and the date cannot be in the future.
+ */
+function ManualAttendanceDialog({
+  open,
+  onOpenChange,
+  disabled,
+  onDone,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  disabled?: boolean;
+  onDone: () => void;
+}) {
+  const [employeeUuid, setEmployeeUuid] = useState("");
+  const [date, setDate] = useState(localToday());
+  const [checkIn, setCheckIn] = useState("");
+  const [checkOut, setCheckOut] = useState("");
+  const [reason, setReason] = useState("");
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const employees = useQuery({
+    queryKey: ["manual-attendance-employees"],
+    queryFn: () => orgService.employees({ page: 1, limit: 1000 }),
+    enabled: open,
+  });
+
+  // The backend rejects the org admin's own row, so offering it would be a
+  // guaranteed dead end.
+  const options = useMemo(
+    () => (employees.data?.items ?? []).filter((e) => isCurrentEmployee(e.status)),
+    [employees.data],
+  );
+
+  const submit = useMutation({
+    mutationFn: () =>
+      orgAttendanceService.manualEntry({
+        employee_uuid: employeeUuid,
+        date,
+        check_in_time: checkIn,
+        check_out_time: checkOut || undefined,
+        reason: reason.trim(),
+      }),
+    onSuccess: () => {
+      toast.success("Attendance recorded");
+      setEmployeeUuid("");
+      setCheckIn("");
+      setCheckOut("");
+      setReason("");
+      setErrors({});
+      setDate(localToday());
+      onDone();
+    },
+    onError: (e) => toast.error(apiErrorMessage(e, "Could not record attendance")),
+  });
+
+  const handleSubmit = () => {
+    const next: Record<string, string> = {};
+    if (!employeeUuid) next.employeeUuid = "Choose an employee";
+    if (!date) next.date = "Date is required";
+    else if (date > localToday()) next.date = "Cannot be a future date";
+    if (!/^\d{2}:\d{2}$/.test(checkIn)) next.checkIn = "Check-in time is required";
+    if (checkOut && !/^\d{2}:\d{2}$/.test(checkOut)) next.checkOut = "Use HH:MM";
+    else if (checkOut && checkIn && checkOut <= checkIn)
+      next.checkOut = "Must be after the check-in time";
+    if (!reason.trim()) next.reason = "A reason is required for a manual entry";
+    setErrors(next);
+    if (Object.keys(next).length === 0) submit.mutate();
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Mark attendance</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          <div className="space-y-1.5">
+            <Label>Employee *</Label>
+            <Select value={employeeUuid} onValueChange={(v) => setEmployeeUuid(v)}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select employee" />
+              </SelectTrigger>
+              <SelectContent>
+                {options.map((e) => (
+                  <SelectItem key={e.uuid} value={e.uuid}>
+                    {e.full_name}
+                    {e.employee_code ? ` (${e.employee_code})` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {errors.employeeUuid ? (
+              <p className="text-xs text-destructive">{errors.employeeUuid}</p>
+            ) : null}
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Date *</Label>
+            <Input
+              type="date"
+              value={date}
+              max={localToday()}
+              onChange={(e) => setDate(e.target.value)}
+            />
+            {errors.date ? <p className="text-xs text-destructive">{errors.date}</p> : null}
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Check in *</Label>
+              <Input type="time" value={checkIn} onChange={(e) => setCheckIn(e.target.value)} />
+              {errors.checkIn ? (
+                <p className="text-xs text-destructive">{errors.checkIn}</p>
+              ) : null}
+            </div>
+            <div className="space-y-1.5">
+              <Label>Check out</Label>
+              <Input type="time" value={checkOut} onChange={(e) => setCheckOut(e.target.value)} />
+              {errors.checkOut ? (
+                <p className="text-xs text-destructive">{errors.checkOut}</p>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Reason *</Label>
+            <Textarea
+              value={reason}
+              rows={2}
+              placeholder="e.g. Field visit — device had no access to the office network"
+              onChange={(e) => setReason(e.target.value)}
+            />
+            {errors.reason ? <p className="text-xs text-destructive">{errors.reason}</p> : null}
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={submit.isPending}>
+            Cancel
+          </Button>
+          <Button onClick={handleSubmit} loading={submit.isPending} disabled={disabled}>
+            Save entry
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

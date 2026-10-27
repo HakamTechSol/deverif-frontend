@@ -1,6 +1,7 @@
 import { useAuth, type AuthUser } from "@/lib/auth";
 import type { FeatureAccessKey } from "@/services";
 import { parseFeatureAccess } from "@/lib/utils";
+import { FEATURE_KEYS, type FeatureAccessMap, type FeatureKey } from "@/lib/featureKeys";
 
 export type Role = "org_admin" | "sub_admin" | "employee";
 
@@ -51,18 +52,35 @@ export function useRoles() {
   };
 }
 
-/** Verification-product access: org_admin gets full access; sub_admin and employee rely on feature_access. */
-export function usePermissions() {
+/**
+ * The user's effective permissions.
+ *
+ * SPREAD OVER THE PARSED MAP RATHER THAN LISTING KEYS. This function used to return
+ * six named booleans written out one per line, which meant a key added to the
+ * server silently had no entry here — and because it was a literal, TypeScript said
+ * nothing. Building it from the same map everything else uses means a new permission
+ * is present the moment it is declared, and cannot be forgotten here.
+ *
+ * org_admin is OR-ed across the board rather than short-circuited, because the shape
+ * has to stay a complete FeatureAccessMap for callers that index it by a key chosen
+ * at runtime.
+ */
+export function usePermissions(): FeatureAccessMap & {
+  isOrgAdmin: boolean;
+  isSubAdmin: boolean;
+  isEmployee: boolean;
+} {
   const { user } = useAuth();
   const isOrgAdminUser = isOrgAdmin(user);
   const fa = parseFeatureAccess(user?.feature_access);
+
+  const effective = {} as FeatureAccessMap;
+  for (const key of Object.keys(fa) as FeatureKey[]) {
+    effective[key] = isOrgAdminUser || fa[key];
+  }
+
   return {
-    attendance: isOrgAdminUser || fa.attendance,
-    leave: isOrgAdminUser || fa.leave,
-    payroll: isOrgAdminUser || fa.payroll,
-    manage_employees: isOrgAdminUser || fa.manage_employees,
-    generate_request: isOrgAdminUser || fa.generate_request,
-    approve_request: isOrgAdminUser || fa.approve_request,
+    ...effective,
     isOrgAdmin: isOrgAdminUser,
     isSubAdmin: isSubAdmin(user),
     isEmployee: isEmployee(user),

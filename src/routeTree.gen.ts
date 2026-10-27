@@ -21,6 +21,10 @@ import { Route as AppAutoVerifiedRouteImport } from './routes/_app.auto-verified
 import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
 import { Route as AppInboxRouteImport } from './routes/_app.inbox'
 import { Route as AppLeavesRouteImport } from './routes/_app.leaves'
+import { Route as AppMyAssetsRouteImport } from './routes/_app.my-assets'
+import { Route as AppMyExpensesRouteImport } from './routes/_app.my-expenses'
+import { Route as AppMyLettersRouteImport } from './routes/_app.my-letters'
+import { Route as AppMyResignationRouteImport } from './routes/_app.my-resignation'
 import { Route as AppPaymentsRouteImport } from './routes/_app.payments'
 import { Route as AppPayrollRouteImport } from './routes/_app.payroll'
 import { Route as AppRequestsRouteImport } from './routes/_app.requests'
@@ -41,15 +45,27 @@ import { Route as AppAdminUnresponsiveRouteImport } from './routes/_app.admin.un
 import { Route as AppAdminUsersRouteImport } from './routes/_app.admin.users'
 import { Route as AppAutoVerifiedUuidRouteImport } from './routes/_app.auto-verified_.$uuid'
 import { Route as AppOrgAdminsRouteImport } from './routes/_app.org.admins'
+import { Route as AppOrgAssetCategoriesRouteImport } from './routes/_app.org.asset-categories'
+import { Route as AppOrgAssetsRouteImport } from './routes/_app.org.assets'
 import { Route as AppOrgAttendanceRouteImport } from './routes/_app.org.attendance'
+import { Route as AppOrgExpenseClaimsRouteImport } from './routes/_app.org.expense-claims'
+import { Route as AppOrgHrLettersRouteImport } from './routes/_app.org.hr-letters'
 import { Route as AppOrgLeavesRouteImport } from './routes/_app.org.leaves'
+import { Route as AppOrgLetterTemplatesRouteImport } from './routes/_app.org.letter-templates'
+import { Route as AppOrgOffboardingRouteImport } from './routes/_app.org.offboarding'
 import { Route as AppOrgPayrollRouteImport } from './routes/_app.org.payroll'
 import { Route as AppOrgSalaryComponentsRouteImport } from './routes/_app.org.salary-components'
 import { Route as AppOrgSupportRouteImport } from './routes/_app.org.support'
 import { Route as AppOrgTeamRouteImport } from './routes/_app.org.team'
 import { Route as AppPaymentCallbackRouteImport } from './routes/_app.payment.callback'
+import { Route as VerifyLetterQrTokenRouteImport } from './routes/verify.letter.$qrToken'
 import { Route as AppAdminSupportIndexRouteImport } from './routes/_app.admin.support.index'
 import { Route as AppAdminSupportUuidRouteImport } from './routes/_app.admin.support.$uuid'
+import { Route as AppOrgRecruitmentCandidatesRouteImport } from './routes/_app.org.recruitment.candidates'
+import { Route as AppOrgRecruitmentInterviewsRouteImport } from './routes/_app.org.recruitment.interviews'
+import { Route as AppOrgRecruitmentOffersRouteImport } from './routes/_app.org.recruitment.offers'
+import { Route as AppOrgRecruitmentOpeningsRouteImport } from './routes/_app.org.recruitment.openings'
+import { Route as AppOrgRecruitmentPipelineRouteImport } from './routes/_app.org.recruitment.pipeline'
 import { Route as AppOrgSupportIndexRouteImport } from './routes/_app.org.support.index'
 import { Route as AppOrgSupportUuidRouteImport } from './routes/_app.org.support.$uuid'
 import { Route as AppOrgTeamIndexRouteImport } from './routes/_app.org.team.index'
@@ -112,6 +128,26 @@ const AppInboxRoute = AppInboxRouteImport.update({
 const AppLeavesRoute = AppLeavesRouteImport.update({
   id: '/leaves',
   path: '/leaves',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppMyAssetsRoute = AppMyAssetsRouteImport.update({
+  id: '/my-assets',
+  path: '/my-assets',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppMyExpensesRoute = AppMyExpensesRouteImport.update({
+  id: '/my-expenses',
+  path: '/my-expenses',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppMyLettersRoute = AppMyLettersRouteImport.update({
+  id: '/my-letters',
+  path: '/my-letters',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppMyResignationRoute = AppMyResignationRouteImport.update({
+  id: '/my-resignation',
+  path: '/my-resignation',
   getParentRoute: () => AppRoute,
 } as any)
 const AppPaymentsRoute = AppPaymentsRouteImport.update({
@@ -216,14 +252,44 @@ const AppOrgAdminsRoute = AppOrgAdminsRouteImport.update({
   path: '/org/admins',
   getParentRoute: () => AppRoute,
 } as any)
+const AppOrgAssetCategoriesRoute = AppOrgAssetCategoriesRouteImport.update({
+  id: '/org/asset-categories',
+  path: '/org/asset-categories',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppOrgAssetsRoute = AppOrgAssetsRouteImport.update({
+  id: '/org/assets',
+  path: '/org/assets',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppOrgAttendanceRoute = AppOrgAttendanceRouteImport.update({
   id: '/org/attendance',
   path: '/org/attendance',
   getParentRoute: () => AppRoute,
 } as any)
+const AppOrgExpenseClaimsRoute = AppOrgExpenseClaimsRouteImport.update({
+  id: '/org/expense-claims',
+  path: '/org/expense-claims',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppOrgHrLettersRoute = AppOrgHrLettersRouteImport.update({
+  id: '/org/hr-letters',
+  path: '/org/hr-letters',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppOrgLeavesRoute = AppOrgLeavesRouteImport.update({
   id: '/org/leaves',
   path: '/org/leaves',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppOrgLetterTemplatesRoute = AppOrgLetterTemplatesRouteImport.update({
+  id: '/org/letter-templates',
+  path: '/org/letter-templates',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppOrgOffboardingRoute = AppOrgOffboardingRouteImport.update({
+  id: '/org/offboarding',
+  path: '/org/offboarding',
   getParentRoute: () => AppRoute,
 } as any)
 const AppOrgPayrollRoute = AppOrgPayrollRouteImport.update({
@@ -251,6 +317,11 @@ const AppPaymentCallbackRoute = AppPaymentCallbackRouteImport.update({
   path: '/payment/callback',
   getParentRoute: () => AppRoute,
 } as any)
+const VerifyLetterQrTokenRoute = VerifyLetterQrTokenRouteImport.update({
+  id: '/verify/letter/$qrToken',
+  path: '/verify/letter/$qrToken',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppAdminSupportIndexRoute = AppAdminSupportIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -261,6 +332,35 @@ const AppAdminSupportUuidRoute = AppAdminSupportUuidRouteImport.update({
   path: '/$uuid',
   getParentRoute: () => AppAdminSupportRoute,
 } as any)
+const AppOrgRecruitmentCandidatesRoute =
+  AppOrgRecruitmentCandidatesRouteImport.update({
+    id: '/org/recruitment/candidates',
+    path: '/org/recruitment/candidates',
+    getParentRoute: () => AppRoute,
+  } as any)
+const AppOrgRecruitmentInterviewsRoute =
+  AppOrgRecruitmentInterviewsRouteImport.update({
+    id: '/org/recruitment/interviews',
+    path: '/org/recruitment/interviews',
+    getParentRoute: () => AppRoute,
+  } as any)
+const AppOrgRecruitmentOffersRoute = AppOrgRecruitmentOffersRouteImport.update({
+  id: '/org/recruitment/offers',
+  path: '/org/recruitment/offers',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppOrgRecruitmentOpeningsRoute =
+  AppOrgRecruitmentOpeningsRouteImport.update({
+    id: '/org/recruitment/openings',
+    path: '/org/recruitment/openings',
+    getParentRoute: () => AppRoute,
+  } as any)
+const AppOrgRecruitmentPipelineRoute =
+  AppOrgRecruitmentPipelineRouteImport.update({
+    id: '/org/recruitment/pipeline',
+    path: '/org/recruitment/pipeline',
+    getParentRoute: () => AppRoute,
+  } as any)
 const AppOrgSupportIndexRoute = AppOrgSupportIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -294,6 +394,10 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof AppDashboardRoute
   '/inbox': typeof AppInboxRoute
   '/leaves': typeof AppLeavesRoute
+  '/my-assets': typeof AppMyAssetsRoute
+  '/my-expenses': typeof AppMyExpensesRoute
+  '/my-letters': typeof AppMyLettersRoute
+  '/my-resignation': typeof AppMyResignationRoute
   '/payments': typeof AppPaymentsRoute
   '/payroll': typeof AppPayrollRoute
   '/requests': typeof AppRequestsRoute
@@ -314,14 +418,26 @@ export interface FileRoutesByFullPath {
   '/admin/users': typeof AppAdminUsersRoute
   '/auto-verified/$uuid': typeof AppAutoVerifiedUuidRoute
   '/org/admins': typeof AppOrgAdminsRoute
+  '/org/asset-categories': typeof AppOrgAssetCategoriesRoute
+  '/org/assets': typeof AppOrgAssetsRoute
   '/org/attendance': typeof AppOrgAttendanceRoute
+  '/org/expense-claims': typeof AppOrgExpenseClaimsRoute
+  '/org/hr-letters': typeof AppOrgHrLettersRoute
   '/org/leaves': typeof AppOrgLeavesRoute
+  '/org/letter-templates': typeof AppOrgLetterTemplatesRoute
+  '/org/offboarding': typeof AppOrgOffboardingRoute
   '/org/payroll': typeof AppOrgPayrollRoute
   '/org/salary-components': typeof AppOrgSalaryComponentsRoute
   '/org/support': typeof AppOrgSupportRouteWithChildren
   '/org/team': typeof AppOrgTeamRouteWithChildren
   '/payment/callback': typeof AppPaymentCallbackRoute
+  '/verify/letter/$qrToken': typeof VerifyLetterQrTokenRoute
   '/admin/support/$uuid': typeof AppAdminSupportUuidRoute
+  '/org/recruitment/candidates': typeof AppOrgRecruitmentCandidatesRoute
+  '/org/recruitment/interviews': typeof AppOrgRecruitmentInterviewsRoute
+  '/org/recruitment/offers': typeof AppOrgRecruitmentOffersRoute
+  '/org/recruitment/openings': typeof AppOrgRecruitmentOpeningsRoute
+  '/org/recruitment/pipeline': typeof AppOrgRecruitmentPipelineRoute
   '/org/support/$uuid': typeof AppOrgSupportUuidRoute
   '/org/team/$uuid': typeof AppOrgTeamUuidRoute
   '/admin/support/': typeof AppAdminSupportIndexRoute
@@ -340,6 +456,10 @@ export interface FileRoutesByTo {
   '/dashboard': typeof AppDashboardRoute
   '/inbox': typeof AppInboxRoute
   '/leaves': typeof AppLeavesRoute
+  '/my-assets': typeof AppMyAssetsRoute
+  '/my-expenses': typeof AppMyExpensesRoute
+  '/my-letters': typeof AppMyLettersRoute
+  '/my-resignation': typeof AppMyResignationRoute
   '/payments': typeof AppPaymentsRoute
   '/payroll': typeof AppPayrollRoute
   '/requests': typeof AppRequestsRoute
@@ -359,12 +479,24 @@ export interface FileRoutesByTo {
   '/admin/users': typeof AppAdminUsersRoute
   '/auto-verified/$uuid': typeof AppAutoVerifiedUuidRoute
   '/org/admins': typeof AppOrgAdminsRoute
+  '/org/asset-categories': typeof AppOrgAssetCategoriesRoute
+  '/org/assets': typeof AppOrgAssetsRoute
   '/org/attendance': typeof AppOrgAttendanceRoute
+  '/org/expense-claims': typeof AppOrgExpenseClaimsRoute
+  '/org/hr-letters': typeof AppOrgHrLettersRoute
   '/org/leaves': typeof AppOrgLeavesRoute
+  '/org/letter-templates': typeof AppOrgLetterTemplatesRoute
+  '/org/offboarding': typeof AppOrgOffboardingRoute
   '/org/payroll': typeof AppOrgPayrollRoute
   '/org/salary-components': typeof AppOrgSalaryComponentsRoute
   '/payment/callback': typeof AppPaymentCallbackRoute
+  '/verify/letter/$qrToken': typeof VerifyLetterQrTokenRoute
   '/admin/support/$uuid': typeof AppAdminSupportUuidRoute
+  '/org/recruitment/candidates': typeof AppOrgRecruitmentCandidatesRoute
+  '/org/recruitment/interviews': typeof AppOrgRecruitmentInterviewsRoute
+  '/org/recruitment/offers': typeof AppOrgRecruitmentOffersRoute
+  '/org/recruitment/openings': typeof AppOrgRecruitmentOpeningsRoute
+  '/org/recruitment/pipeline': typeof AppOrgRecruitmentPipelineRoute
   '/org/support/$uuid': typeof AppOrgSupportUuidRoute
   '/org/team/$uuid': typeof AppOrgTeamUuidRoute
   '/admin/support': typeof AppAdminSupportIndexRoute
@@ -385,6 +517,10 @@ export interface FileRoutesById {
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/inbox': typeof AppInboxRoute
   '/_app/leaves': typeof AppLeavesRoute
+  '/_app/my-assets': typeof AppMyAssetsRoute
+  '/_app/my-expenses': typeof AppMyExpensesRoute
+  '/_app/my-letters': typeof AppMyLettersRoute
+  '/_app/my-resignation': typeof AppMyResignationRoute
   '/_app/payments': typeof AppPaymentsRoute
   '/_app/payroll': typeof AppPayrollRoute
   '/_app/requests': typeof AppRequestsRoute
@@ -405,14 +541,26 @@ export interface FileRoutesById {
   '/_app/admin/users': typeof AppAdminUsersRoute
   '/_app/auto-verified_/$uuid': typeof AppAutoVerifiedUuidRoute
   '/_app/org/admins': typeof AppOrgAdminsRoute
+  '/_app/org/asset-categories': typeof AppOrgAssetCategoriesRoute
+  '/_app/org/assets': typeof AppOrgAssetsRoute
   '/_app/org/attendance': typeof AppOrgAttendanceRoute
+  '/_app/org/expense-claims': typeof AppOrgExpenseClaimsRoute
+  '/_app/org/hr-letters': typeof AppOrgHrLettersRoute
   '/_app/org/leaves': typeof AppOrgLeavesRoute
+  '/_app/org/letter-templates': typeof AppOrgLetterTemplatesRoute
+  '/_app/org/offboarding': typeof AppOrgOffboardingRoute
   '/_app/org/payroll': typeof AppOrgPayrollRoute
   '/_app/org/salary-components': typeof AppOrgSalaryComponentsRoute
   '/_app/org/support': typeof AppOrgSupportRouteWithChildren
   '/_app/org/team': typeof AppOrgTeamRouteWithChildren
   '/_app/payment/callback': typeof AppPaymentCallbackRoute
+  '/verify/letter/$qrToken': typeof VerifyLetterQrTokenRoute
   '/_app/admin/support/$uuid': typeof AppAdminSupportUuidRoute
+  '/_app/org/recruitment/candidates': typeof AppOrgRecruitmentCandidatesRoute
+  '/_app/org/recruitment/interviews': typeof AppOrgRecruitmentInterviewsRoute
+  '/_app/org/recruitment/offers': typeof AppOrgRecruitmentOffersRoute
+  '/_app/org/recruitment/openings': typeof AppOrgRecruitmentOpeningsRoute
+  '/_app/org/recruitment/pipeline': typeof AppOrgRecruitmentPipelineRoute
   '/_app/org/support/$uuid': typeof AppOrgSupportUuidRoute
   '/_app/org/team/$uuid': typeof AppOrgTeamUuidRoute
   '/_app/admin/support/': typeof AppAdminSupportIndexRoute
@@ -433,6 +581,10 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/inbox'
     | '/leaves'
+    | '/my-assets'
+    | '/my-expenses'
+    | '/my-letters'
+    | '/my-resignation'
     | '/payments'
     | '/payroll'
     | '/requests'
@@ -453,14 +605,26 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/auto-verified/$uuid'
     | '/org/admins'
+    | '/org/asset-categories'
+    | '/org/assets'
     | '/org/attendance'
+    | '/org/expense-claims'
+    | '/org/hr-letters'
     | '/org/leaves'
+    | '/org/letter-templates'
+    | '/org/offboarding'
     | '/org/payroll'
     | '/org/salary-components'
     | '/org/support'
     | '/org/team'
     | '/payment/callback'
+    | '/verify/letter/$qrToken'
     | '/admin/support/$uuid'
+    | '/org/recruitment/candidates'
+    | '/org/recruitment/interviews'
+    | '/org/recruitment/offers'
+    | '/org/recruitment/openings'
+    | '/org/recruitment/pipeline'
     | '/org/support/$uuid'
     | '/org/team/$uuid'
     | '/admin/support/'
@@ -479,6 +643,10 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/inbox'
     | '/leaves'
+    | '/my-assets'
+    | '/my-expenses'
+    | '/my-letters'
+    | '/my-resignation'
     | '/payments'
     | '/payroll'
     | '/requests'
@@ -498,12 +666,24 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/auto-verified/$uuid'
     | '/org/admins'
+    | '/org/asset-categories'
+    | '/org/assets'
     | '/org/attendance'
+    | '/org/expense-claims'
+    | '/org/hr-letters'
     | '/org/leaves'
+    | '/org/letter-templates'
+    | '/org/offboarding'
     | '/org/payroll'
     | '/org/salary-components'
     | '/payment/callback'
+    | '/verify/letter/$qrToken'
     | '/admin/support/$uuid'
+    | '/org/recruitment/candidates'
+    | '/org/recruitment/interviews'
+    | '/org/recruitment/offers'
+    | '/org/recruitment/openings'
+    | '/org/recruitment/pipeline'
     | '/org/support/$uuid'
     | '/org/team/$uuid'
     | '/admin/support'
@@ -523,6 +703,10 @@ export interface FileRouteTypes {
     | '/_app/dashboard'
     | '/_app/inbox'
     | '/_app/leaves'
+    | '/_app/my-assets'
+    | '/_app/my-expenses'
+    | '/_app/my-letters'
+    | '/_app/my-resignation'
     | '/_app/payments'
     | '/_app/payroll'
     | '/_app/requests'
@@ -543,14 +727,26 @@ export interface FileRouteTypes {
     | '/_app/admin/users'
     | '/_app/auto-verified_/$uuid'
     | '/_app/org/admins'
+    | '/_app/org/asset-categories'
+    | '/_app/org/assets'
     | '/_app/org/attendance'
+    | '/_app/org/expense-claims'
+    | '/_app/org/hr-letters'
     | '/_app/org/leaves'
+    | '/_app/org/letter-templates'
+    | '/_app/org/offboarding'
     | '/_app/org/payroll'
     | '/_app/org/salary-components'
     | '/_app/org/support'
     | '/_app/org/team'
     | '/_app/payment/callback'
+    | '/verify/letter/$qrToken'
     | '/_app/admin/support/$uuid'
+    | '/_app/org/recruitment/candidates'
+    | '/_app/org/recruitment/interviews'
+    | '/_app/org/recruitment/offers'
+    | '/_app/org/recruitment/openings'
+    | '/_app/org/recruitment/pipeline'
     | '/_app/org/support/$uuid'
     | '/_app/org/team/$uuid'
     | '/_app/admin/support/'
@@ -570,6 +766,7 @@ export interface RootRouteChildren {
   SystemAdminLoginRoute: typeof SystemAdminLoginRoute
   SystemAdminResetPasswordRoute: typeof SystemAdminResetPasswordRoute
   VerifyQrTokenRoute: typeof VerifyQrTokenRoute
+  VerifyLetterQrTokenRoute: typeof VerifyLetterQrTokenRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -656,6 +853,34 @@ declare module '@tanstack/react-router' {
       path: '/leaves'
       fullPath: '/leaves'
       preLoaderRoute: typeof AppLeavesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/my-assets': {
+      id: '/_app/my-assets'
+      path: '/my-assets'
+      fullPath: '/my-assets'
+      preLoaderRoute: typeof AppMyAssetsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/my-expenses': {
+      id: '/_app/my-expenses'
+      path: '/my-expenses'
+      fullPath: '/my-expenses'
+      preLoaderRoute: typeof AppMyExpensesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/my-letters': {
+      id: '/_app/my-letters'
+      path: '/my-letters'
+      fullPath: '/my-letters'
+      preLoaderRoute: typeof AppMyLettersRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/my-resignation': {
+      id: '/_app/my-resignation'
+      path: '/my-resignation'
+      fullPath: '/my-resignation'
+      preLoaderRoute: typeof AppMyResignationRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/payments': {
@@ -798,6 +1023,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppOrgAdminsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/org/asset-categories': {
+      id: '/_app/org/asset-categories'
+      path: '/org/asset-categories'
+      fullPath: '/org/asset-categories'
+      preLoaderRoute: typeof AppOrgAssetCategoriesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/org/assets': {
+      id: '/_app/org/assets'
+      path: '/org/assets'
+      fullPath: '/org/assets'
+      preLoaderRoute: typeof AppOrgAssetsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/org/attendance': {
       id: '/_app/org/attendance'
       path: '/org/attendance'
@@ -805,11 +1044,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppOrgAttendanceRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/org/expense-claims': {
+      id: '/_app/org/expense-claims'
+      path: '/org/expense-claims'
+      fullPath: '/org/expense-claims'
+      preLoaderRoute: typeof AppOrgExpenseClaimsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/org/hr-letters': {
+      id: '/_app/org/hr-letters'
+      path: '/org/hr-letters'
+      fullPath: '/org/hr-letters'
+      preLoaderRoute: typeof AppOrgHrLettersRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/org/leaves': {
       id: '/_app/org/leaves'
       path: '/org/leaves'
       fullPath: '/org/leaves'
       preLoaderRoute: typeof AppOrgLeavesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/org/letter-templates': {
+      id: '/_app/org/letter-templates'
+      path: '/org/letter-templates'
+      fullPath: '/org/letter-templates'
+      preLoaderRoute: typeof AppOrgLetterTemplatesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/org/offboarding': {
+      id: '/_app/org/offboarding'
+      path: '/org/offboarding'
+      fullPath: '/org/offboarding'
+      preLoaderRoute: typeof AppOrgOffboardingRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/org/payroll': {
@@ -847,6 +1114,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppPaymentCallbackRouteImport
       parentRoute: typeof AppRoute
     }
+    '/verify/letter/$qrToken': {
+      id: '/verify/letter/$qrToken'
+      path: '/verify/letter/$qrToken'
+      fullPath: '/verify/letter/$qrToken'
+      preLoaderRoute: typeof VerifyLetterQrTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_app/admin/support/': {
       id: '/_app/admin/support/'
       path: '/'
@@ -860,6 +1134,41 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/support/$uuid'
       preLoaderRoute: typeof AppAdminSupportUuidRouteImport
       parentRoute: typeof AppAdminSupportRoute
+    }
+    '/_app/org/recruitment/candidates': {
+      id: '/_app/org/recruitment/candidates'
+      path: '/org/recruitment/candidates'
+      fullPath: '/org/recruitment/candidates'
+      preLoaderRoute: typeof AppOrgRecruitmentCandidatesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/org/recruitment/interviews': {
+      id: '/_app/org/recruitment/interviews'
+      path: '/org/recruitment/interviews'
+      fullPath: '/org/recruitment/interviews'
+      preLoaderRoute: typeof AppOrgRecruitmentInterviewsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/org/recruitment/offers': {
+      id: '/_app/org/recruitment/offers'
+      path: '/org/recruitment/offers'
+      fullPath: '/org/recruitment/offers'
+      preLoaderRoute: typeof AppOrgRecruitmentOffersRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/org/recruitment/openings': {
+      id: '/_app/org/recruitment/openings'
+      path: '/org/recruitment/openings'
+      fullPath: '/org/recruitment/openings'
+      preLoaderRoute: typeof AppOrgRecruitmentOpeningsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/org/recruitment/pipeline': {
+      id: '/_app/org/recruitment/pipeline'
+      path: '/org/recruitment/pipeline'
+      fullPath: '/org/recruitment/pipeline'
+      preLoaderRoute: typeof AppOrgRecruitmentPipelineRouteImport
+      parentRoute: typeof AppRoute
     }
     '/_app/org/support/': {
       id: '/_app/org/support/'
@@ -940,6 +1249,10 @@ interface AppRouteChildren {
   AppDashboardRoute: typeof AppDashboardRoute
   AppInboxRoute: typeof AppInboxRoute
   AppLeavesRoute: typeof AppLeavesRoute
+  AppMyAssetsRoute: typeof AppMyAssetsRoute
+  AppMyExpensesRoute: typeof AppMyExpensesRoute
+  AppMyLettersRoute: typeof AppMyLettersRoute
+  AppMyResignationRoute: typeof AppMyResignationRoute
   AppPaymentsRoute: typeof AppPaymentsRoute
   AppPayrollRoute: typeof AppPayrollRoute
   AppRequestsRoute: typeof AppRequestsRoute
@@ -956,13 +1269,24 @@ interface AppRouteChildren {
   AppAdminUsersRoute: typeof AppAdminUsersRoute
   AppAutoVerifiedUuidRoute: typeof AppAutoVerifiedUuidRoute
   AppOrgAdminsRoute: typeof AppOrgAdminsRoute
+  AppOrgAssetCategoriesRoute: typeof AppOrgAssetCategoriesRoute
+  AppOrgAssetsRoute: typeof AppOrgAssetsRoute
   AppOrgAttendanceRoute: typeof AppOrgAttendanceRoute
+  AppOrgExpenseClaimsRoute: typeof AppOrgExpenseClaimsRoute
+  AppOrgHrLettersRoute: typeof AppOrgHrLettersRoute
   AppOrgLeavesRoute: typeof AppOrgLeavesRoute
+  AppOrgLetterTemplatesRoute: typeof AppOrgLetterTemplatesRoute
+  AppOrgOffboardingRoute: typeof AppOrgOffboardingRoute
   AppOrgPayrollRoute: typeof AppOrgPayrollRoute
   AppOrgSalaryComponentsRoute: typeof AppOrgSalaryComponentsRoute
   AppOrgSupportRoute: typeof AppOrgSupportRouteWithChildren
   AppOrgTeamRoute: typeof AppOrgTeamRouteWithChildren
   AppPaymentCallbackRoute: typeof AppPaymentCallbackRoute
+  AppOrgRecruitmentCandidatesRoute: typeof AppOrgRecruitmentCandidatesRoute
+  AppOrgRecruitmentInterviewsRoute: typeof AppOrgRecruitmentInterviewsRoute
+  AppOrgRecruitmentOffersRoute: typeof AppOrgRecruitmentOffersRoute
+  AppOrgRecruitmentOpeningsRoute: typeof AppOrgRecruitmentOpeningsRoute
+  AppOrgRecruitmentPipelineRoute: typeof AppOrgRecruitmentPipelineRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
@@ -971,6 +1295,10 @@ const AppRouteChildren: AppRouteChildren = {
   AppDashboardRoute: AppDashboardRoute,
   AppInboxRoute: AppInboxRoute,
   AppLeavesRoute: AppLeavesRoute,
+  AppMyAssetsRoute: AppMyAssetsRoute,
+  AppMyExpensesRoute: AppMyExpensesRoute,
+  AppMyLettersRoute: AppMyLettersRoute,
+  AppMyResignationRoute: AppMyResignationRoute,
   AppPaymentsRoute: AppPaymentsRoute,
   AppPayrollRoute: AppPayrollRoute,
   AppRequestsRoute: AppRequestsRoute,
@@ -987,13 +1315,24 @@ const AppRouteChildren: AppRouteChildren = {
   AppAdminUsersRoute: AppAdminUsersRoute,
   AppAutoVerifiedUuidRoute: AppAutoVerifiedUuidRoute,
   AppOrgAdminsRoute: AppOrgAdminsRoute,
+  AppOrgAssetCategoriesRoute: AppOrgAssetCategoriesRoute,
+  AppOrgAssetsRoute: AppOrgAssetsRoute,
   AppOrgAttendanceRoute: AppOrgAttendanceRoute,
+  AppOrgExpenseClaimsRoute: AppOrgExpenseClaimsRoute,
+  AppOrgHrLettersRoute: AppOrgHrLettersRoute,
   AppOrgLeavesRoute: AppOrgLeavesRoute,
+  AppOrgLetterTemplatesRoute: AppOrgLetterTemplatesRoute,
+  AppOrgOffboardingRoute: AppOrgOffboardingRoute,
   AppOrgPayrollRoute: AppOrgPayrollRoute,
   AppOrgSalaryComponentsRoute: AppOrgSalaryComponentsRoute,
   AppOrgSupportRoute: AppOrgSupportRouteWithChildren,
   AppOrgTeamRoute: AppOrgTeamRouteWithChildren,
   AppPaymentCallbackRoute: AppPaymentCallbackRoute,
+  AppOrgRecruitmentCandidatesRoute: AppOrgRecruitmentCandidatesRoute,
+  AppOrgRecruitmentInterviewsRoute: AppOrgRecruitmentInterviewsRoute,
+  AppOrgRecruitmentOffersRoute: AppOrgRecruitmentOffersRoute,
+  AppOrgRecruitmentOpeningsRoute: AppOrgRecruitmentOpeningsRoute,
+  AppOrgRecruitmentPipelineRoute: AppOrgRecruitmentPipelineRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
@@ -1010,6 +1349,7 @@ const rootRouteChildren: RootRouteChildren = {
   SystemAdminLoginRoute: SystemAdminLoginRoute,
   SystemAdminResetPasswordRoute: SystemAdminResetPasswordRoute,
   VerifyQrTokenRoute: VerifyQrTokenRoute,
+  VerifyLetterQrTokenRoute: VerifyLetterQrTokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

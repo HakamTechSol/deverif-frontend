@@ -1,6 +1,9 @@
+import { buildFeatureAccess, type FeatureAccessMap } from "@/lib/featureKeys";
+
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { uiLocale } from "@/i18n";
+import { formatCNIC as formatCNICValue } from "@/lib/contactFormat";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -20,6 +23,14 @@ export function resolveAssetUrl(path?: string | null): string | undefined {
 export function formatDate(value?: string | Date | null, locale: string = uiLocale()): string {
   if (!value) return "—";
   try {
+    if (typeof value === "string") {
+      const match = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (match) {
+        const [, y, m, d] = match;
+        const dateObj = new Date(Number(y), Number(m) - 1, Number(d));
+        return dateObj.toLocaleDateString(locale, { year: "numeric", month: "short", day: "numeric" });
+      }
+    }
     const d = typeof value === "string" ? new Date(value.replace(" ", "T")) : value;
     if (isNaN(d.getTime())) return "—";
     return d.toLocaleDateString(locale, { year: "numeric", month: "short", day: "numeric" });
@@ -46,15 +57,22 @@ export function formatDateTime(value?: string | Date | null, locale: string = ui
 }
 
 export function formatCNIC(value: string): string {
-  const digits = value.replace(/\D/g, "").slice(0, 13);
-  if (digits.length <= 5) return digits;
-  if (digits.length <= 12) return `${digits.slice(0, 5)}-${digits.slice(5)}`;
-  return `${digits.slice(0, 5)}-${digits.slice(5, 12)}-${digits.slice(12)}`;
+  return formatCNICValue(value);
 }
 
 /** Keep only digits from a raw input value (for phone/number fields). */
 export function digitsOnly(value: string): string {
   return value.replace(/\D/g, "");
+}
+
+/**
+ * Convert a stored API date value to the YYYY-MM-DD format expected by a date input.
+ * The API may return ISO strings such as `2025-06-01T00:00:00.000Z`.
+ */
+export function normalizeDateInputValue(value?: string | null): string {
+  if (!value) return "";
+  const match = value.trim().match(/\d{4}-\d{2}-\d{2}/);
+  return match ? match[0] : "";
 }
 
 /** Inclusive calendar-day count between two date values (YYYY-MM-DD or ISO). */
@@ -85,25 +103,51 @@ export function formatFileSize(bytes?: number | null): string {
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
-/** Normalize a feature_access value (object or JSON string) into booleans. */
-export function parseFeatureAccess(raw: unknown) {
-  let obj: Record<string, unknown> = raw as Record<string, unknown>;
-  if (typeof raw === "string") {
-    try {
-      obj = JSON.parse(raw);
-    } catch {
-      obj = {};
-    }
+/**
+ * Format a money amount for display.
+ *
+ * ADDED FOR ASSETS, and deliberately in one place. Money is the first thing a
+ * spreadsheet gets wrong by rendering ad-hoc: one page shows "1234.5", the next
+ * "PKR 1,234.50", and an auditor cannot add the column up. This is the only
+ * currency formatter in the app, so a second one appearing elsewhere is a bug.
+ *
+ * Nullish renders as an em dash rather than "0" or "NaN": an asset with no
+ * recorded cost is UNKNOWN, and printing 0 asserts a value nobody entered.
+ *
+ * Accepts a string because DECIMAL columns arrive from MySQL as strings.
+ * A value that will not parse renders as the dash too, rather than "NaN".
+ */
+export function formatCurrency(
+  value?: number | string | null,
+  locale: string = uiLocale(),
+): string {
+  if (value === null || value === undefined || value === "") return "—";
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return "—";
+  try {
+    return new Intl.NumberFormat(locale, {
+      style: "currency",
+      currency: "PKR",
+      maximumFractionDigits: 2,
+    }).format(n);
+  } catch {
+    // An unknown locale must not blank the cell; the bare number still reads.
+    return n.toFixed(2);
   }
-  if (!obj || typeof obj !== "object" || Array.isArray(obj)) obj = {};
-  const n = obj as Record<string, unknown>;
-  const bool = (key: string, def: boolean) => (n[key] === undefined ? def : !!n[key]);
-  return {
-    attendance: bool("attendance", true),
-    leave: bool("leave", true),
-    payroll: bool("payroll", true),
-    manage_employees: bool("manage_employees", false),
-    generate_request: bool("generate_request", false),
-    approve_request: bool("approve_request", false),
-  };
+}
+
+/** Normalize a feature_access value (object or JSON string) into booleans. */
+/**
+ * Normalise a raw feature_access value into a complete boolean map.
+ *
+ * Now a thin re-export of buildFeatureAccess(). It used to hand-write the six keys
+ * it knew about, which made it a FIFTH copy of the permission list and the reason
+ * adding the HR-module keys failed to compile in three files at once. The behaviour
+ * is identical for the pre-existing keys; the difference is that a new key now
+ * arrives here automatically.
+ *
+ * Kept under its own name because eleven files import it from this module.
+ */
+export function parseFeatureAccess(raw: unknown): FeatureAccessMap {
+  return buildFeatureAccess(raw);
 }

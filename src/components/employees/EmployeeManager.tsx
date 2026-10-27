@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -13,9 +13,11 @@ import { EmptyState } from "@/components/common/EmptyState";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { ProtectedDocumentLink } from "@/components/common/ProtectedDocumentLink";
 import { EmployeeDocPicker, type StagedDoc } from "@/components/employees/EmployeeDocPicker";
+import { ManageOptionsDialog } from "@/components/employees/ManageOptionsDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@/components/ui/badge";
+
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -43,7 +45,8 @@ import {
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { TableSkeleton } from "@/routes/_app.requests";
 import { adminService, isCurrentEmployee, orgService, type EmployeeDocument, type EmployeeRecord, type ManagedOption, type Organization, type UUID } from "@/services";
-import { digitsOnly, formatCNIC, formatDate, formatFileSize } from "@/lib/utils";
+import { CONTACT_VALIDATION_LABEL, cnicError, formatCNIC, normalizeCNIC, phoneError } from "@/lib/contactFormat";
+import { formatDate, formatFileSize, normalizeDateInputValue } from "@/lib/utils";
 
 type EmployeeApi = {
   list: (params: { page?: number; limit?: number; search?: string; reference?: boolean }) => Promise<{
@@ -124,14 +127,18 @@ type InviteStatus =
   | { kind: "none" }
   | { kind: "used" }
   | { kind: "active"; daysAgo: number }
-  | { kind: "expired"; daysAgo: number };
+  | { kind: "expired"; daysAgo: number }
+  | { kind: "failed"; daysAgo: number };
 
 function inviteStatus(emp: EmployeeRecord): InviteStatus {
-  // No platform user at all -> no invite to show
-  if (emp.is_platform_user !== "yes" || !emp.invite_sent_at) return { kind: "none" };
-  // Token was actually used to set the password -> user is active
-  if (emp.invite_used_at) return { kind: "used" };
-
+  // No linked account means roster-only; an active account is independent of its old invite token.
+  if (emp.is_platform_user !== "yes") return { kind: "none" };
+  if (emp.linked_user_status === "active" || emp.invite_used_at) return { kind: "used" };
+  // Delivery failure or a linked but tokenless account can be retried safely.
+  if (emp.invite_delivery_status === "failed" || !emp.invite_sent_at) {
+    const sent = new Date(String(emp.invite_sent_at).replace(" ", "T")).getTime();
+    return { kind: "failed", daysAgo: Math.max(0, Math.floor((Date.now() - sent) / 86400000)) };
+  }
   const sent = new Date(String(emp.invite_sent_at).replace(" ", "T")).getTime();
   const now = Date.now();
   const daysAgo = Math.max(0, Math.floor((now - sent) / (1000 * 60 * 60 * 24)));
@@ -284,8 +291,6 @@ export function EmployeeManager({
                         <TableHead>Designation</TableHead>
                         <TableHead>Department</TableHead>
                         <TableHead>Status</TableHead>
-                        <TableHead>Platform User</TableHead>
-                        <TableHead>Org Role</TableHead>
                         <TableHead>Added By</TableHead>
                       </>
                     )}
@@ -314,6 +319,7 @@ export function EmployeeManager({
                       <TableCell data-label="Name">
                         <div className="flex items-center gap-2">
                           <span className="font-medium text-foreground">{emp.full_name}</span>
+                          {emp.employee_code ? <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px]">{emp.employee_code}</span> : null}
                           {isRef && (
                             <Badge variant="outline" className="rounded-full border-blue-500/30 bg-blue-500/10 text-blue-600 text-[10px] font-medium whitespace-nowrap">
                               Ex-Employee
@@ -323,18 +329,20 @@ export function EmployeeManager({
                         <div className="text-xs text-muted-foreground">{emp.email ?? "—"}</div>
                         {(() => {
                           const st = inviteStatus(emp);
-                          if (st.kind === "none" || st.kind === "used") return null;
+                          if (st.kind === "used") return <div className="mt-0.5 text-[10px] text-emerald-700">Portal access: Active</div>;
+                          if (st.kind === "none") return <div className="mt-0.5 text-[10px] text-muted-foreground">Portal access: No portal access</div>;
                           const expired = st.kind === "expired";
+                          const failed = st.kind === "failed";
                           return (
                             <div
                               className={`mt-0.5 inline-flex items-center gap-1 rounded-full px-1.5 py-px text-[10px] font-medium ${
-                                expired
+                                expired || failed
                                   ? "bg-destructive/10 text-destructive"
                                   : "bg-amber-500/10 text-amber-600"
                               }`}
                             >
                               <Mail className="h-2.5 w-2.5" />
-                              {expired
+                              {failed ? "Invite failed ? resend required" : expired
                                 ? `Invite expired (sent ${st.daysAgo}d ago)`
                                 : `Invite sent ${st.daysAgo}d ago`}
                             </div>
@@ -354,38 +362,8 @@ export function EmployeeManager({
                               {statusLabel(emp.status)}
                             </Badge>
                           </TableCell>
-                          <TableCell data-label="Platform User">
-                            <Badge
-                              variant="outline"
-                              className={
-                                emp.is_platform_user === "yes"
-                                  ? "rounded-full border-primary/30 bg-primary/10 text-primary"
-                                  : "rounded-full border-border text-muted-foreground"
-                              }
-                            >
-                              {emp.is_platform_user === "yes" ? "Yes" : "No"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell data-label="Org Role">
-                            {emp.is_platform_user === "yes" && emp.linked_user_role ? (
-                              <Badge
-                                variant="outline"
-                                className={
-                                  emp.linked_user_role === "org_admin" || emp.linked_user_role === "sub_admin"
-                                    ? "rounded-full border-primary/30 bg-primary/10 text-primary"
-                                    : "rounded-full border-border text-muted-foreground"
-                                }
-                              >
-                                {emp.linked_user_role === "org_admin"
-                                  ? "Org Admin"
-                                  : emp.linked_user_role === "sub_admin"
-                                    ? "Sub Admin"
-                                    : "Member"}
-                              </Badge>
-                            ) : (
-                              <span className="text-muted-foreground">—</span>
-                            )}
-                          </TableCell>
+                    
+                       
                         </>
                       )}
                       {isReferenceMode && (
@@ -402,7 +380,7 @@ export function EmployeeManager({
                         <div className="flex items-center justify-end gap-1">
                           {!isRef && (() => {
                             const st = inviteStatus(emp);
-                            if (st.kind === "active" || st.kind === "expired") {
+                            if (st.kind === "active" || st.kind === "expired" || st.kind === "failed") {
                               return (
                                 <Button
                                   variant="outline"
@@ -413,6 +391,20 @@ export function EmployeeManager({
                                 >
                                   {locked || userManagementLocked ? <Lock className="mr-1 h-3 w-3" /> : <RefreshCw className="mr-1 h-3 w-3" />}
                                   Resend
+                                </Button>
+                              );
+                            }
+                            if (st.kind === "none" && emp.email) {
+                              return (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-7 whitespace-nowrap px-2 text-xs"
+                                  onClick={() => resendInviteMut.mutate(emp.uuid)}
+                                  disabled={locked || userManagementLocked || resendInviteMut.isPending}
+                                >
+                                  {locked || userManagementLocked ? <Lock className="mr-1 h-3 w-3" /> : <Mail className="mr-1 h-3 w-3" />}
+                                  Send email
                                 </Button>
                               );
                             }
@@ -511,15 +503,40 @@ function EmployeeFormDialog({
     phone: editing?.phone ?? "",
     designation: editing?.designation ?? "",
     department: editing?.department ?? "",
+    employment_type: editing?.employment_type ?? "",
+    work_location: editing?.work_location ?? "",
+    reporting_manager_uuid: editing?.reporting_manager_uuid ?? "",
     // Defaults to 'current_employee', matching the column default and the create
     // payload's own fallback. Defaulting to 'active' would create an employee
     // that reads as deactivated.
     status: (editing?.status ?? "current_employee") as EmployeeRecord["status"],
-    joining_date: editing?.joining_date ?? "",
+    joining_date: normalizeDateInputValue(editing?.joining_date),
     emergency_contact: editing?.emergency_contact ?? "",
-    current_salary: editing ? String(editing?.current_salary ?? "0") : "",
+    current_salary: editing ? String(editing?.current_salary ?? "") : "",
+    send_invite: false,
     organization_uuid: (editing as unknown as { organization_uuid?: string })?.organization_uuid ?? "",
   });
+
+  useEffect(() => {
+    if (!open) return;
+    setForm({
+      full_name: editing?.full_name ?? "",
+      cnic: editing?.cnic ?? "",
+      email: editing?.email ?? "",
+      phone: editing?.phone ?? "",
+      designation: editing?.designation ?? "",
+      department: editing?.department ?? "",
+      employment_type: editing?.employment_type ?? "",
+      work_location: editing?.work_location ?? "",
+      reporting_manager_uuid: editing?.reporting_manager_uuid ?? "",
+      status: (editing?.status ?? "current_employee") as EmployeeRecord["status"],
+      joining_date: normalizeDateInputValue(editing?.joining_date),
+      emergency_contact: editing?.emergency_contact ?? "",
+      current_salary: editing ? String(editing.current_salary ?? "") : "",
+      send_invite: false,
+      organization_uuid: (editing as unknown as { organization_uuid?: string })?.organization_uuid ?? "",
+    });
+  }, [open, editing?.uuid]);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -533,6 +550,11 @@ function EmployeeFormDialog({
     queryKey: ["org-designations"],
     queryFn: () => orgService.designations.list(),
     enabled: open,
+  });
+  const managersQ = useQuery({
+    queryKey: ["employee-manager-options", editing?.organization_id],
+    queryFn: () => api.list({ page: 1, limit: 1000 }),
+    enabled: open && isEdit,
   });
 
   const [manageType, setManageType] = useState<null | "department" | "designation">(null);
@@ -578,19 +600,38 @@ function EmployeeFormDialog({
     onError: (e) => toast.error(apiErrorMessage(e, "Delete failed")),
   });
 
-  const formatCNICInput = (v: string) => {
-    const digits = v.replace(/\D/g, "").slice(0, 13);
-    if (digits.length <= 5) return digits;
-    if (digits.length <= 12) return `${digits.slice(0, 5)}-${digits.slice(5)}`;
-    return `${digits.slice(0, 5)}-${digits.slice(5, 12)}-${digits.slice(12)}`;
-  };
-
+  /**
+   * Identity validation, all of it now delegated to the shared contactFormat
+   * module.
+   *
+   * The CNIC checks it replaces used to be a bare non-empty test, so a CNIC of
+   * "1234" was saved and only failed later — at the uniqueness check, or not at
+   * all, since the platform has several places that collect this field. The
+   * phone field had no validation here at all while `org.admins` had a regex, so
+   * the same number was refused in one screen and accepted in the other.
+   *
+   * DIGITS ARE STRIPPED ON SUBMIT, not on keystroke. The input shows the dashed
+   * mask (it is what a CNIC looks like on the card), and `formatCNICInput`
+   * produces that; a user pasting "42101 2345678 9" or a spaced variant is
+   * normalised the same way, so the stored value is always the 13 digits.
+   */
   const validate = () => {
     const e: Record<string, string> = {};
     if (!form.full_name.trim()) e.full_name = "Name is required";
-    if (!isEdit && !form.cnic.trim()) e.cnic = "CNIC is required";
-    if (form.emergency_contact.trim() && !/^[0-9+\-() ]{6,30}$/.test(form.emergency_contact.trim()))
-      e.emergency_contact = "Invalid contact";
+    if (!isEdit && !normalizeCNIC(form.cnic)) e.cnic = CONTACT_VALIDATION_LABEL.cnicRequired;
+    else {
+      const cnicProblem = cnicError(form.cnic);
+      if (cnicProblem) e.cnic = cnicProblem;
+    }
+    if (form.current_salary.trim() && (!Number.isFinite(Number(form.current_salary)) || Number(form.current_salary) <= 0)) e.current_salary = "Enter a positive salary, or leave it blank until payroll is configured";
+    if (form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) e.email = "Enter a valid email address";
+    if (form.send_invite && !form.email.trim()) e.email = "Email is required for portal access";
+    const phoneProblem = phoneError(form.phone);
+    if (phoneProblem) e.phone = phoneProblem;
+    if (form.emergency_contact.trim()) {
+      const ecProblem = phoneError(form.emergency_contact);
+      if (ecProblem) e.emergency_contact = "Invalid contact";
+    }
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -601,11 +642,18 @@ function EmployeeFormDialog({
     try {
       const data: Record<string, unknown> = {
         full_name: form.full_name.trim(),
-        cnic: form.cnic.replace(/\D/g, ""),
+        // The mask is gone by the time it leaves: the server and the column both
+        // want the 13 bare digits, and `normalizeCNIC` is the one place that is
+        // decided.
+        cnic: normalizeCNIC(form.cnic),
         email: form.email.trim() || undefined,
+        send_invite: !isEdit && Boolean(form.email.trim()),
         phone: form.phone.trim() || undefined,
         designation: form.designation.trim() || undefined,
         department: form.department.trim() || undefined,
+        employment_type: form.employment_type || undefined,
+        work_location: form.work_location.trim() || undefined,
+        reporting_manager_uuid: isEdit ? (form.reporting_manager_uuid || undefined) : undefined,
         status: form.status,
         joining_date: form.joining_date || undefined,
         emergency_contact: form.emergency_contact.trim() || undefined,
@@ -614,7 +662,7 @@ function EmployeeFormDialog({
         data.organization_uuid = form.organization_uuid;
       }
       if (!isEdit) {
-        data.current_salary = form.current_salary ? Number(form.current_salary) : 0;
+        if (form.current_salary.trim()) data.current_salary = Number(form.current_salary);
       }
       if (isEdit) {
         await api.update(editing.uuid, data);
@@ -682,6 +730,7 @@ function EmployeeFormDialog({
           <DialogTitle>{isEdit ? "Edit Employee" : "Add Employee"}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-2">
+          <h3 className="border-b pb-1 text-sm font-semibold">Identity</h3>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label>Full Name *</Label>
@@ -695,10 +744,11 @@ function EmployeeFormDialog({
             <div className="space-y-1.5">
               <Label>CNIC {isEdit ? "" : "*"}</Label>
               <Input
-                value={isEdit ? formatCNIC(form.cnic) : form.cnic}
-                onChange={(e) => setForm({ ...form, cnic: isEdit ? form.cnic : formatCNICInput(e.target.value) })}
+                value={formatCNIC(form.cnic)}
+                onChange={(e) => setForm({ ...form, cnic: formatCNIC(e.target.value) })}
                 placeholder="XXXXX-XXXXXXX-X"
                 disabled={isEdit}
+                inputMode="numeric"
               />
               {errors.cnic && <p className="text-xs text-destructive">{errors.cnic}</p>}
             </div>
@@ -708,26 +758,30 @@ function EmployeeFormDialog({
               <Label>Email</Label>
               <Input
                 type="email"
+                aria-invalid={Boolean(errors.email)}
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
                 placeholder="email@example.com"
               />
-              {!isEdit && (
-                <p className="text-xs text-muted-foreground">
-                  A set-password link is emailed to this address as soon as you save, and the
-                  employee signs in with it. Leave it blank to keep them as a record only.
-                </p>
-              )}
+              {errors.email ? <p className="text-xs text-destructive">{errors.email}</p> : null}
+              {!isEdit && <p className="text-xs text-muted-foreground">Email is for contact unless portal access is explicitly enabled below.</p>}
             </div>
             <div className="space-y-1.5">
               <Label>Phone</Label>
               <Input
                 value={form.phone}
-                onChange={(e) => setForm({ ...form, phone: digitsOnly(e.target.value) })}
-                placeholder="Phone number"
+                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                placeholder="03XX XXX XXXX"
+                aria-invalid={Boolean(errors.phone)}
               />
+              {errors.phone ? <p className="text-xs text-destructive">{errors.phone}</p> : null}
             </div>
           </div>
+          {!isEdit && <label className="flex items-start gap-2 rounded-md border p-3 text-sm">
+            <input type="checkbox" checked={form.send_invite} disabled={userManagementLocked || !form.email.trim()} onChange={(e) => setForm({ ...form, send_invite: e.target.checked })} className="mt-0.5" />
+            <span><span className="font-medium">Portal access / send invitation</span><span className="block text-xs text-muted-foreground">Requires a valid email. Turn off to create a roster-only employee with no login account.</span></span>
+          </label>}
+          {userManagementLocked && !isEdit ? <p className="text-xs text-muted-foreground">Your organization plan or permissions do not currently allow portal accounts.</p> : null}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label>Emergency Contact</Label>
@@ -795,21 +849,65 @@ function EmployeeFormDialog({
               </Select>
             </div>
           </div>
+          <h3 className="border-b pb-1 pt-1 text-sm font-semibold">Employment</h3>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5"><Label>Employment Type</Label><Select value={form.employment_type} onValueChange={(v) => setForm({ ...form, employment_type: v })}><SelectTrigger><SelectValue placeholder="Select employment type" /></SelectTrigger><SelectContent><SelectItem value="full_time">Full-time</SelectItem><SelectItem value="part_time">Part-time</SelectItem><SelectItem value="contract">Contract</SelectItem><SelectItem value="temporary">Temporary</SelectItem><SelectItem value="intern">Intern</SelectItem></SelectContent></Select></div>
+            <div className="space-y-1.5"><Label>Work Location</Label><Input value={form.work_location} onChange={(e) => setForm({ ...form, work_location: e.target.value })} placeholder="Office / site / remote" /></div>
+          </div>
+          {isEdit ? (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label>Reporting Manager</Label>
+                <Select
+                  value={form.reporting_manager_uuid || "none"}
+                  onValueChange={(v) =>
+                    setForm({ ...form, reporting_manager_uuid: v === "none" ? "" : v })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="No reporting manager" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No reporting manager</SelectItem>
+                    {(managersQ.data?.items ?? [])
+                      .filter(
+                        (manager) =>
+                          manager.uuid !== editing?.uuid &&
+                          isCurrentEmployee(manager.status)
+                      )
+                      .map((manager) => (
+                        <SelectItem key={manager.uuid} value={manager.uuid}>
+                          {manager.full_name}
+                          {manager.employee_code ? ` (${manager.employee_code})` : ""}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <p className="self-end text-xs text-muted-foreground">
+                Workdays and payroll rules follow the confirmed organization schedule.
+              </p>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Workdays and payroll rules follow the confirmed organization schedule.
+            </p>
+          )}
+          {!isEdit ? <h3 className="border-b pb-1 pt-1 text-sm font-semibold">Payroll Setup</h3> : null}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {!isEdit && (
               <div className="space-y-1.5">
-                <Label>Current Salary</Label>
+                <Label>Starting Basic Salary</Label>
                 <Input
                   type="number"
-                  min={0}
+                  min="0.01"
                   step="0.01"
                   value={form.current_salary}
                   onChange={(e) => setForm({ ...form, current_salary: e.target.value })}
                   placeholder="0.00"
                 />
-                <p className="text-xs text-muted-foreground">
-                  Captured as this employee's starting salary on their salary history.
-                </p>
+                <p className="text-xs text-muted-foreground">Leave blank if compensation is not agreed yet. A positive amount is saved effective on the joining date and payroll uses the organization currency/pay-frequency policy.</p>
+                {errors.current_salary ? <p className="text-xs text-destructive">{errors.current_salary}</p> : null}
               </div>
             )}
             <div className="space-y-1.5">
@@ -944,97 +1042,6 @@ function EmployeeFormDialog({
         onOpenChange={(o) => !o && setManageType(null)}
         type={manageType}
       />
-    </Dialog>
-  );
-}
-
-function ManageOptionsDialog({
-  open,
-  onOpenChange,
-  type,
-}: {
-  open: boolean;
-  onOpenChange: (o: boolean) => void;
-  type: "department" | "designation" | null;
-}) {
-  const qc = useQueryClient();
-  const isDept = type === "department";
-  const title = isDept ? "Manage Departments" : "Manage Designations";
-  const { user } = useAuth();
-  const canDelete = user?.org_role === "org_admin";
-  const listQ = useQuery({
-    queryKey: [isDept ? "org-departments" : "org-designations"],
-    queryFn: () => (isDept ? orgService.departments.list() : orgService.designations.list()),
-    enabled: open,
-  });
-
-  const [name, setName] = useState("");
-  const createMut = useMutation({
-    mutationFn: (n: string) => (isDept ? orgService.departments.create(n) : orgService.designations.create(n)),
-    onSuccess: () => {
-      setName("");
-      qc.invalidateQueries({ queryKey: [isDept ? "org-departments" : "org-designations"] });
-      toast.success(`${isDept ? "Department" : "Designation"} added`);
-    },
-    onError: (e) => toast.error(apiErrorMessage(e, "Add failed")),
-  });
-  const removeMut = useMutation({
-    mutationFn: (uuid: UUID) => (isDept ? orgService.departments.remove(uuid) : orgService.designations.remove(uuid)),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: [isDept ? "org-departments" : "org-designations"] });
-      toast.success("Removed");
-    },
-    onError: (e) => toast.error(apiErrorMessage(e, "Remove failed")),
-  });
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-sm">
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-3 py-2">
-          <div className="flex gap-2">
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder={`New ${isDept ? "department" : "designation"} name`}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && name.trim()) createMut.mutate(name.trim());
-              }}
-            />
-            <Button onClick={() => name.trim() && createMut.mutate(name.trim())} loading={createMut.isPending}>
-              <Plus className="mr-1.5 h-4 w-4" /> Add
-            </Button>
-          </div>
-          <div className="max-h-60 space-y-1.5 overflow-y-auto">
-            {(listQ.data ?? []).map((opt: ManagedOption) => (
-              <div key={opt.uuid} className="flex items-center justify-between rounded-md border border-border px-2 py-1.5 text-sm">
-                <span className="truncate">{opt.name}</span>
-                {canDelete ? (
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                    onClick={() => removeMut.mutate(opt.uuid)}
-                    loading={removeMut.isPending && removeMut.variables === opt.uuid}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                ) : null}
-              </div>
-            ))}
-            {(listQ.data ?? []).length === 0 && (
-              <p className="text-xs text-muted-foreground">No items yet.</p>
-            )}
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
-            Close
-          </Button>
-        </DialogFooter>
-      </DialogContent>
     </Dialog>
   );
 }

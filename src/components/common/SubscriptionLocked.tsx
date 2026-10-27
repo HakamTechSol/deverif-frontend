@@ -111,7 +111,7 @@ export function SubscriptionBanner() {
   const isBusy = checkoutMut.isPending || requestCustom.isPending;
 
   // A renewal keeps the org on the same tier and simply extends the current
-  // expiry, and a downgrade is NOT applied immediately either â€” the current
+  // expiry, and a downgrade is NOT applied immediately either —” the current
   // plan is kept until the paid period ends. Both cases therefore have to be
   // labelled as such instead of implying an immediate switch.
   const hasLiveSub = hasLiveSubscription(orgSub);

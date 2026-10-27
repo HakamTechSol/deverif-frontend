@@ -1,6 +1,12 @@
 import { describe, it, expect } from "vitest";
 
-import { canAccessRoute, ROUTE_ACCESS, allKnownRoutes, type FeatureKey, type OrgRole } from "@/lib/routeAccess";
+import {
+  canAccessRoute,
+  ROUTE_ACCESS,
+  allKnownRoutes,
+  type FeatureKey,
+  type OrgRole,
+} from "@/lib/routeAccess";
 import { allNavPaths } from "@/lib/navItems";
 import type { AuthUser } from "@/lib/auth";
 
@@ -58,10 +64,24 @@ const EMPLOYEE_ONLY_PATHS = allKnownRoutes().filter((p) => {
   return r.length === 1 && r[0] === "employee";
 });
 
-/** Everything a platform admin must never reach. */
-const ORG_SCOPED_PATHS = allKnownRoutes().filter(
-  (p) => p !== "/dashboard" && p !== "/settings",
+/**
+ * Pages an org_admin cannot open, DERIVED FROM THE TABLE rather than hard-coded.
+ *
+ * This grew a second member. Until the Personal ESS change, org_admin could reach
+ * everything except EMPLOYEE_ONLY_PATHS, so that list was the complete set of
+ * exceptions and one derived filter was enough. Now three self-service pages also
+ * exclude org_admin -- not because they are employee-exclusive, but because they
+ * resolve the caller to an employee record and an org_admin has none.
+ *
+ * Derived rather than listed, for the same reason EMPLOYEE_ONLY_PATHS is: a
+ * hard-coded exclusion list is a place for the next route to be forgotten.
+ */
+const ORG_ADMIN_EXCLUDED_PATHS = allKnownRoutes().filter(
+  (p) => !ROUTE_ACCESS[p].roles.includes("org_admin"),
 );
+
+/** Everything a platform admin must never reach. */
+const ORG_SCOPED_PATHS = allKnownRoutes().filter((p) => p !== "/dashboard" && p !== "/settings");
 
 // ---------------------------------------------------------------------------
 // The invariant the whole design rests on
@@ -92,7 +112,11 @@ describe("canAccessRoute — honours its own table exactly", () => {
   it.each(combos)("$name matches the table row for every route", ({ u }) => {
     for (const [path, rule] of Object.entries(ROUTE_ACCESS)) {
       const roleOk = rule.roles.includes(u.org_role as OrgRole);
-      const expected = roleOk && (!rule.feature || !!rule.always?.includes(u.org_role as OrgRole) || !!u.feature_access?.[rule.feature]);
+      const expected =
+        roleOk &&
+        (!rule.feature ||
+          !!rule.always?.includes(u.org_role as OrgRole) ||
+          !!u.feature_access?.[rule.feature]);
       expect(canAccessRoute(u, path), `path=${path} rule=${JSON.stringify(rule)}`).toBe(expected);
     }
   });
@@ -106,7 +130,14 @@ describe("canAccessRoute — platform admin", () => {
   const admin = user({ role: "admin", org_role: undefined, organization: null });
 
   it("reaches the /admin area", () => {
-    for (const p of ["/admin/users", "/admin/organizations", "/admin/requests", "/admin/support", "/admin/support/abc-123", "/admin/leads"]) {
+    for (const p of [
+      "/admin/users",
+      "/admin/organizations",
+      "/admin/requests",
+      "/admin/support",
+      "/admin/support/abc-123",
+      "/admin/leads",
+    ]) {
       expect(canAccessRoute(admin, p), p).toBe(true);
     }
   });
@@ -130,7 +161,7 @@ describe("canAccessRoute — platform admin", () => {
 describe("canAccessRoute — org_admin", () => {
   it("reaches every org page regardless of feature_access", () => {
     const admin = user({ org_role: "org_admin", feature_access: everyFlagOff });
-    for (const p of allKnownRoutes().filter((r) => !EMPLOYEE_ONLY_PATHS.includes(r))) {
+    for (const p of allKnownRoutes().filter((r) => !ORG_ADMIN_EXCLUDED_PATHS.includes(r))) {
       expect(canAccessRoute(admin, p), p).toBe(true);
     }
   });
@@ -170,7 +201,16 @@ describe("canAccessRoute — sub_admin", () => {
 
   it("with no permissions is denied every permission-gated page", () => {
     const s = withFlags("sub_admin", everyFlagOff);
-    for (const p of ["/requests", "/inbox", "/auto-verified", "/org/team", "/org/leaves", "/org/attendance", "/org/salary-components", "/org/payroll"]) {
+    for (const p of [
+      "/requests",
+      "/inbox",
+      "/auto-verified",
+      "/org/team",
+      "/org/leaves",
+      "/org/attendance",
+      "/org/salary-components",
+      "/org/payroll",
+    ]) {
       expect(canAccessRoute(s, p), p).toBe(false);
     }
   });
@@ -204,14 +244,20 @@ describe("canAccessRoute — sub_admin", () => {
       const off = { ...everyFlagOff, [flag]: true } as Record<FeatureKey, boolean>;
       const on = { ...everyFlagOff, [flag]: true } as Record<FeatureKey, boolean>;
       expect(canAccessRoute(withFlags("sub_admin", on), path), `${flag} -> ${path}`).toBe(true);
-      expect(canAccessRoute(withFlags("sub_admin", everyFlagOff), path), `${flag} off -> ${path}`).toBe(false);
+      expect(
+        canAccessRoute(withFlags("sub_admin", everyFlagOff), path),
+        `${flag} off -> ${path}`,
+      ).toBe(false);
       // The permission must not leak into unrelated pages.
       for (const other of allKnownRoutes()) {
         const rule = ROUTE_ACCESS[other];
         if (rule.feature === flag || !rule.feature) continue;
         if (rule.always?.includes("sub_admin")) continue;
         if (!rule.roles.includes("sub_admin")) continue;
-        expect(canAccessRoute(withFlags("sub_admin", off), other), `leak: ${flag} -> ${other}`).toBe(false);
+        expect(
+          canAccessRoute(withFlags("sub_admin", off), other),
+          `leak: ${flag} -> ${other}`,
+        ).toBe(false);
       }
     }
   });
@@ -222,15 +268,15 @@ describe("canAccessRoute — sub_admin", () => {
 // ---------------------------------------------------------------------------
 
 describe("canAccessRoute — employee", () => {
-  it("cannot open Support (the reported bug)", () => {
+  it("can open Support to raise a tier-1 ticket to their organization admin", () => {
     const e = user({ org_role: "employee", feature_access: everyFlagOn });
-    expect(canAccessRoute(e, "/org/support")).toBe(false);
-    expect(canAccessRoute(e, "/org/support/abc-123")).toBe(false);
+    expect(canAccessRoute(e, "/org/support")).toBe(true);
+    expect(canAccessRoute(e, "/org/support/abc-123")).toBe(true);
   });
 
-  it("cannot open any org page, even holding every permission", () => {
+  it("cannot open the staff-only org pages, even holding every permission", () => {
     const e = user({ org_role: "employee", feature_access: everyFlagOn });
-    for (const p of allKnownRoutes().filter((r) => r.startsWith("/org/"))) {
+    for (const p of allKnownRoutes().filter((r) => r.startsWith("/org/") && r !== "/org/support")) {
       expect(canAccessRoute(e, p), p).toBe(false);
     }
   });
@@ -295,7 +341,8 @@ describe("canAccessRoute — path handling", () => {
     // No flags at all, so the only thing that can grant access is the role.
     const e = user({ org_role: "employee", feature_access: everyFlagOff });
     expect(canAccessRoute(e, "/org/team/abc-123")).toBe(false);
-    expect(canAccessRoute(e, "/org/support/abc-123")).toBe(false);
+    // Support is open to every org role by design; its list rule carries over.
+    expect(canAccessRoute(e, "/org/support/abc-123")).toBe(true);
     expect(canAccessRoute(e, "/auto-verified/abc-123")).toBe(false);
 
     const s = withFlags("sub_admin", everyFlagOff);
@@ -307,7 +354,7 @@ describe("canAccessRoute — path handling", () => {
     expect(canAccessRoute(admin, "/org/support/")).toBe(true);
     expect(canAccessRoute(admin, "/org/support?page=2")).toBe(true);
     expect(canAccessRoute(admin, "/org/support#top")).toBe(true);
-    expect(canAccessRoute(user({ org_role: "employee" }), "/org/support/")).toBe(false);
+    expect(canAccessRoute(user({ org_role: "employee" }), "/org/support/")).toBe(true);
   });
 
   it("fails closed for an unknown path", () => {
@@ -354,18 +401,15 @@ describe("sidebar and guards cannot drift apart", () => {
       user({ org_role: "sub_admin", feature_access: everyFlagOn }),
       user({ org_role: "employee", feature_access: everyFlagOn }),
     ];
-    const orphans = allNavPaths.filter(
-      (p) => !probes.some((u) => canAccessRoute(u, p)),
-    );
+    const orphans = allNavPaths.filter((p) => !probes.some((u) => canAccessRoute(u, p)));
     expect(orphans, `sidebar paths no role can open: ${orphans.join(", ")}`).toEqual([]);
   });
 
-  it("keeps /org/support out of the employee-reachable set", () => {
-    // Documents the product assumption behind the fix. If employees should
-    // regain Support, the backend already permits it -- flip the `roles` on the
-    // "/org/support" row in lib/routeAccess.ts and this test with it.
+  it("keeps /org/support reachable by every org role", () => {
+    // Tier 1 is employee -> org_admin, so the employee must be able to open the
+    // page that raises the ticket. The API still limits the rows they see.
     const e = user({ org_role: "employee", feature_access: everyFlagOn });
-    expect(ROUTE_ACCESS["/org/support"].roles).not.toContain("employee");
-    expect(canAccessRoute(e, "/org/support")).toBe(false);
+    expect(ROUTE_ACCESS["/org/support"].roles).toContain("employee");
+    expect(canAccessRoute(e, "/org/support")).toBe(true);
   });
 });

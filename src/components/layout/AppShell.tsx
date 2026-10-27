@@ -4,7 +4,21 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import notificationSound from "@/assets/NotificationSound/universfield-new-notification-040-493469.mp3";
-import { Bell, CheckCheck, Inbox, Languages, Lock, LogOut, Menu, Moon, Settings, Sun, X } from "lucide-react";
+import {
+  Bell,
+  CheckCheck,
+  ChevronDown,
+  Inbox,
+  Languages,
+  Lock,
+  LogOut,
+  Menu,
+  Moon,
+  Settings,
+  Sun,
+  UserRound,
+  X,
+} from "lucide-react";
 import { Logo } from "@/components/common/Logo";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -35,13 +49,7 @@ import { useOrgSubscription } from "@/hooks/useOrgSubscription";
 import { SubscriptionBanner } from "@/components/common/SubscriptionLocked";
 import { PlanPickerProvider, usePlanPicker } from "@/components/common/PlanPickerProvider";
 import { canAccessRoute } from "@/lib/routeAccess";
-import {
-  adminNav,
-  memberNavItems,
-  orgAdminNavItems,
-  userNavItems,
-  type NavItem,
-} from "@/lib/navItems";
+import { adminNav, accountItemsFor, primaryNavItemsFor, type NavItem } from "@/lib/navItems";
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { user } = useAuth();
@@ -49,7 +57,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { t } = useTranslation();
   const { openPicker } = usePlanPicker();
   const { isLocked, isModuleFlagOff } = useOrgSubscription();
-  const pathModule: Record<string, keyof ModuleFlags> = {    "/org/team": "employee_management",
+  const pathModule: Record<string, keyof ModuleFlags> = {
+    "/org/team": "employee_management",
     "/org/admins": "user_management",
     "/org/leaves": "leave_management",
     "/org/attendance": "attendance_management",
@@ -68,7 +77,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   //     include the module, so the item offers "upgrade to unlock" and opens
   //     the plan chooser. This is the common case on the Free plan.
   const moduleOffPaths = new Set(
-    !isAdmin ? modulePaths.filter((path) => isModuleFlagOff(pathModule[path])) : []
+    !isAdmin ? modulePaths.filter((path) => isModuleFlagOff(pathModule[path])) : [],
   );
   const blanketLockedPaths = new Set(!isAdmin && isLocked ? modulePaths : []);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -119,7 +128,10 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!user || isAdmin || !meSync.data) return;
-    const synced = meSync.data as { org_role?: "employee" | "org_admin" | "sub_admin"; feature_access?: Record<string, boolean> | null };
+    const synced = meSync.data as {
+      org_role?: "employee" | "org_admin" | "sub_admin";
+      feature_access?: Record<string, boolean> | null;
+    };
     const updates: Record<string, unknown> = {};
     if (synced.org_role !== user.org_role) updates.org_role = synced.org_role ?? "employee";
     if (synced.feature_access !== undefined) updates.feature_access = synced.feature_access;
@@ -130,93 +142,131 @@ export function AppShell({ children }: { children: ReactNode }) {
   // table. Previously each group below re-derived visibility by hand from
   // role checks and feature flags, which is how an employee ended up with a
   // Support link that the guards bounced straight back to the dashboard.
-  const userNavVisible = userNavItems.filter((it) => canAccessRoute(user, it.to));
-
-  const memberServiceVisible = memberNavItems.filter((it) => canAccessRoute(user, it.to));
-
-  const orgNavVisible: NavItem[] = orgAdminNavItems.filter((it) => canAccessRoute(user, it.to));
-
+  //
+  // TWO FILTERS, IN THIS ORDER, AND THEY DO DIFFERENT JOBS:
+  //
+  //   1. primaryNavItemsFor / accountItemsFor decide which MENU a link belongs
+  //      in -- management work for staff, self-service for an employee. This is
+  //      presentation: an org_admin running payroll saw their own laptop and their
+  //      own taxi claim filed at the same weight as the org's expense queue.
+  //   2. canAccessRoute decides whether THIS user may open it, and additionally
+  //      whether their plan includes the module.
+  //
+  // The order matters only in that both are ANDed -- nothing in group 1 grants
+  // access, and nothing in group 2 changes prominence. Marking an item
+  // self-service never locks a page: the server is the only thing that does that,
+  // and for /my-assets, /my-expenses and /my-resignation it opens them to every
+  // org user. That is precisely why the Personal ESS group exists -- to keep those
+  // pages one click away for staff without putting them in the middle of a
+  // manager's menu.
   const items: NavItem[] = isAdmin
-    ? adminNav.filter((it) => canAccessRoute(user, it.to)).map((it) => {
-        const counts = adminSidebarCounts.data;
-        const badge = it.to === "/admin/leads" ? counts?.leads
-          : it.to === "/admin/support" ? counts?.support_tickets
-          : it.to === "/admin/payments" ? counts?.custom_plan_requests
-          : it.to === "/admin/null-requests" ? counts?.unmatched_requests
-          : undefined;
-        return { ...it, badge };
-      })
-    : [
-        ...userNavVisible.map((it) =>
-          it.to === "/inbox" ? { ...it, badge: inboxCount.data ?? 0 } : it,
-        ),
+    ? adminNav
+        .filter((it) => canAccessRoute(user, it.to))
+        .map((it) => {
+          const counts = adminSidebarCounts.data;
+          const badge =
+            it.to === "/admin/leads"
+              ? counts?.leads
+              : it.to === "/admin/support"
+                ? counts?.support_tickets
+                : it.to === "/admin/payments"
+                  ? counts?.custom_plan_requests
+                  : it.to === "/admin/null-requests"
+                    ? counts?.unmatched_requests
+                    : undefined;
+          return { ...it, badge };
+        })
+    : primaryNavItemsFor(user?.org_role)
         // No role special-casing: canAccessRoute already answers false for
         // staff on the self-service pages and for employees on the org pages.
-        ...memberServiceVisible,
-        ...orgNavVisible,
-        { to: "/settings", labelKey: "nav.settings", icon: Settings },
-      ];
+        .filter((it) => canAccessRoute(user, it.to))
+        .map((it) => (it.to === "/inbox" ? { ...it, badge: inboxCount.data ?? 0 } : it));
+
+  /**
+   * Rendered as its OWN group in the sidebar footer, NOT appended to `items`.
+   *
+   * Appending them to the same array was the first attempt and it defeats the
+   * whole change: the links come back, just lower down, still sitting in the
+   * manager's menu between Offboarding and Payments. The complaint was about a
+   * management menu carrying six personal links, not about their vertical
+   * position.
+   */
+  const accountItems = isAdmin ? [] : accountItemsFor(user);
 
   return (
     <PlanPickerProvider>
-    <div className="min-h-screen bg-background">
-      {/* Sidebar (desktop) */}
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 border-r border-sidebar-border bg-sidebar lg:flex lg:flex-col">
-        <SidebarInner
-          items={items}
-          pathname={pathname}
-          onNavigate={() => {}}
-          onLogout={onLogout}
-          locked={!isAdmin && isLocked}
-          moduleOffPaths={moduleOffPaths}
-          blanketLockedPaths={blanketLockedPaths}
-          pathModule={pathModule}
-        />
-      </aside>
-
-      {/* Mobile drawer */}
-      {mobileOpen ? (
-        <div className="fixed inset-0 z-40 lg:hidden">
-          <div
-            className="absolute inset-0 bg-foreground/40 backdrop-blur-sm"
-            onClick={() => setMobileOpen(false)}
+      <div className="min-h-screen bg-background">
+        {/* Sidebar (desktop) */}
+        <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 border-r border-sidebar-border bg-sidebar lg:flex lg:flex-col">
+          <SidebarInner
+            items={items}
+            accountItems={accountItems}
+            pathname={pathname}
+            onNavigate={() => {}}
+            onLogout={onLogout}
+            locked={!isAdmin && isLocked}
+            moduleOffPaths={moduleOffPaths}
+            blanketLockedPaths={blanketLockedPaths}
+            pathModule={pathModule}
+            user={user}
           />
-          <aside className="absolute inset-y-0 left-0 flex w-64 flex-col border-r border-sidebar-border bg-sidebar">
-            <SidebarInner
-              items={items}
-              pathname={pathname}
-              onNavigate={() => setMobileOpen(false)}
-              onLogout={onLogout}
-              locked={!isAdmin && isLocked}
-              moduleOffPaths={moduleOffPaths}
-              blanketLockedPaths={blanketLockedPaths}
-              pathModule={pathModule}
-            />
-          </aside>
-        </div>
-      ) : null}
+        </aside>
 
-      <div className="lg:pl-64">
-        <TopBar onMenuClick={() => setMobileOpen(true)} />
-        <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-          {isAdmin && <div className="sr-only">admin</div>}
-          {/*
+        {/* Mobile drawer */}
+        {mobileOpen ? (
+          <div className="fixed inset-0 z-40 lg:hidden">
+            <div
+              className="absolute inset-0 bg-foreground/40 backdrop-blur-sm"
+              onClick={() => setMobileOpen(false)}
+            />
+            <aside className="absolute inset-y-0 left-0 flex w-64 flex-col border-r border-sidebar-border bg-sidebar">
+              <SidebarInner
+                items={items}
+                accountItems={accountItems}
+                pathname={pathname}
+                onNavigate={() => setMobileOpen(false)}
+                onLogout={onLogout}
+                locked={!isAdmin && isLocked}
+                moduleOffPaths={moduleOffPaths}
+                blanketLockedPaths={blanketLockedPaths}
+                pathModule={pathModule}
+                user={user}
+              />
+            </aside>
+          </div>
+        ) : null}
+
+        <div className="lg:pl-64">
+          <TopBar onMenuClick={() => setMobileOpen(true)} />
+          <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+            {isAdmin && <div className="sr-only">admin</div>}
+            {/*
             Blanket banner: reserved for a genuinely broken/absent subscription.
             A Free-plan org is active, so this must never appear for one -- the
             per-module "upgrade to unlock" affordances in the sidebar and on the
             locked feature cards cover the normal upgrade case instead.
           */}
-          {!isAdmin && isLocked && <SubscriptionBanner />}
-          {children}
-        </main>
+            {!isAdmin && isLocked && <SubscriptionBanner />}
+            {children}
+          </main>
+        </div>
       </div>
-    </div>
     </PlanPickerProvider>
   );
 }
 
-function SidebarInner({
+/**
+ * Exported for the sidebar render test, which is the only way to verify what an
+ * org_admin actually SEES rather than what the composition functions return.
+ *
+ * The composition tests in lib/sidebarRoles.test.ts pin the item lists; this one
+ * renders the menu and asserts on the DOM, so a regression that puts a personal
+ * link back into the primary nav -- by editing this component rather than
+ * navItems -- still fails here.
+ */
+export function SidebarInner({
   items,
+  accountItems,
   pathname,
   onNavigate,
   onLogout,
@@ -224,8 +274,25 @@ function SidebarInner({
   moduleOffPaths,
   blanketLockedPaths,
   pathModule,
+  user: userProp,
 }: {
   items: NavItem[];
+  /**
+   * The caller's own employee pages, shown as a collapsible group ABOVE sign out.
+   *
+   * Empty for an employee (they have these in their primary menu) and for a
+   * platform admin (no employee record exists for them). Non-empty for a staff
+   * member who is also on the roster.
+   */
+  /**
+   * Settings / Payments / Support, already filtered by `accountItemsFor`.
+   *
+   * Passed in rather than recomputed from the auth store here, for the same reason
+   * `primaryNavItemsFor` is: the sidebar should render what it is given, so the decision
+   * about which links a role gets stays in one testable function instead of drifting
+   * into the component.
+   */
+  accountItems: NavItem[];
   pathname: string;
   onNavigate: () => void;
   onLogout: () => void;
@@ -235,9 +302,21 @@ function SidebarInner({
   /** Paths locked because the subscription itself is inactive. */
   blanketLockedPaths: Set<string>;
   pathModule: Record<string, keyof ModuleFlags>;
+  /** The current user, for showing avatar in account section. */
+  user?: ReturnType<typeof useAuth>["user"];
 }) {
   const { t } = useTranslation();
   const { openPicker } = usePlanPicker();
+  /**
+   * Collapsed by default, and STAYS collapsed once the user has been here.
+   *
+   * The complaint was that personal links crowded the management menu, so opening
+   * this group must cost the same one click as any other link and must not persist
+   * across renders -- otherwise an org_admin who once opened it comes back to a
+   * sidebar with their expenses showing again, and the change has quietly undone
+   * itself.
+   */
+  const [accountOpen, setAccountOpen] = useState(false);
   return (
     <>
       <div className="flex h-16 items-center justify-between border-b border-sidebar-border px-5">
@@ -256,7 +335,7 @@ function SidebarInner({
             pathname === it.to || (it.to !== "/dashboard" && pathname.startsWith(it.to));
           const moduleKey = pathModule[it.to];
           const moduleLabel = moduleKey
-            ? MODULE_FEATURES.find((m) => m.key === moduleKey)?.label ?? moduleKey
+            ? (MODULE_FEATURES.find((m) => m.key === moduleKey)?.label ?? moduleKey)
             : null;
           // The org is subscribed but this plan does not include the module:
           // offer the upgrade inline instead of a dead-end page.
@@ -280,7 +359,7 @@ function SidebarInner({
               }}
               title={
                 needsUpgrade
-                  ? `${moduleLabel} â€” ${t("moduleLocked.navLockedTitle", { module: moduleLabel ?? "" })}`
+                  ? `${moduleLabel} —” ${t("moduleLocked.navLockedTitle", { module: moduleLabel ?? "" })}`
                   : needsRenewal
                     ? t("subscriptionLocked.notActive")
                     : undefined
@@ -308,9 +387,11 @@ function SidebarInner({
                 <Lock className="ml-auto h-3.5 w-3.5 text-muted-foreground/60" />
               ) : null}
               {it.badge !== undefined && it.badge > 0 ? (
-                <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground"
+                <span
+                  className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground"
                   aria-label={`${it.badge} new`}
-                  role="status">
+                  role="status"
+                >
                   {it.badge > 99 ? "99+" : it.badge}
                 </span>
               ) : null}
@@ -319,6 +400,82 @@ function SidebarInner({
         })}
       </nav>
       <div className="border-t border-sidebar-border p-3">
+        {/*
+          ACCOUNT, BILLING AND SUPPORT — the second collapsible group, and the one
+          that is not about a person's job.
+
+          Same "only when there is something behind it" rule as Personal ESS, for the
+          same reason: an employee gets Settings alone, because /payments is
+          org_admin-only and /org/support is staff-only, so the group would otherwise
+          advertise two pages that bounce. An org_admin gets all three.
+
+          SEPARATE FROM Personal ESS rather than merged into it. They answer different
+          questions — "what is mine" versus "about me and my company" — and folding
+          six links into one group would put the job-and-payslips links next to the
+          subscription one, which is how a person ends up looking for their payslip
+          under "Payments".
+
+          The two toggles are independent: expanding one does not expand the other.
+        */}
+        {accountItems.length ? (
+          <div className="mb-2">
+            <button
+              type="button"
+              onClick={() => setAccountOpen((v) => !v)}
+              aria-expanded={accountOpen}
+              aria-controls="sidebar-account"
+              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs font-semibold uppercase tracking-wide text-sidebar-foreground/50 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
+            >
+              <Avatar className="h-5 w-5 shrink-0">
+                <AvatarImage
+                  src={resolveAssetUrl(userProp?.profile_image) ?? undefined}
+                  alt={userProp?.full_name}
+                />
+                <AvatarFallback className="bg-primary/15 text-[8px] font-semibold text-primary">
+                  {(userProp?.full_name ?? "U")
+                    .split(" ")
+                    .map((p) => p[0])
+                    .slice(0, 2)
+                    .join("")
+                    .toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              {t("nav.account")}
+              <ChevronDown
+                className={cn(
+                  "ml-auto h-3.5 w-3.5 transition-transform",
+                  accountOpen && "rotate-180",
+                )}
+              />
+            </button>
+
+            {accountOpen ? (
+              <ul id="sidebar-account" className="mt-0.5 space-y-0.5">
+                {accountItems.map((it) => (
+                  <li key={it.to}>
+                    <Link
+                      to={it.to}
+                      onClick={onNavigate}
+                      className={cn(
+                        "flex items-center gap-2.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors",
+                        pathname === it.to || pathname.startsWith(`${it.to}/`)
+                          ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                          : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground",
+                      )}
+                    >
+                      <it.icon className="h-3.5 w-3.5 shrink-0" />
+                      {t(it.labelKey)}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+
+
+
+          </div>
+        ) : null}
+
         <button
           onClick={onLogout}
           className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-xs font-medium text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-destructive"

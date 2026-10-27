@@ -190,7 +190,7 @@ function OrgLeavesContent() {
                   {(types.data ?? []).map((lt) => (
                     <div key={lt.id} className="flex items-center justify-between px-3 py-2">
                       <div className="flex items-center gap-2 text-sm">
-                        <span className="font-medium text-foreground">{lt.name}</span>
+                        <span className="font-medium text-foreground">{lt.name}</span><span className="rounded bg-muted px-1.5 py-0.5 text-[10px]">{lt.is_paid === "no" ? "Unpaid" : "Paid"}</span>
                       </div>
                       <div className="flex items-center gap-1">
                         <Button
@@ -452,6 +452,8 @@ function AllocationsTab() {
   const [allocSearch, setAllocSearch] = useState("");
   const [allocDepartment, setAllocDepartment] = useState("");
   const [allocDesignation, setAllocDesignation] = useState("");
+  const [bulkLeaveType, setBulkLeaveType] = useState("");
+  const [bulkDays, setBulkDays] = useState("");
 
   const availableYears = Array.from(
     new Set([thisYear, thisYear - 1].concat(year)),
@@ -493,6 +495,22 @@ function AllocationsTab() {
       toast.error(e?.response?.data?.message ?? t("orgLeaves.allocSaveFailed")),
   });
 
+  const setDesignationAllocation = useMutation({
+    mutationFn: () =>
+      orgLeaveAllocationService.setByDesignation({
+        designation_uuid: allocDesignation,
+        leave_type_id: Number(bulkLeaveType),
+        year,
+        allocated_days: Number(bulkDays),
+      }),
+    onSuccess: (result) => {
+      toast.success(t("orgLeaves.allocBulkSaved", { count: result.employee_count }));
+      qc.invalidateQueries({ queryKey: ["orgLeaveAllocations", year] });
+    },
+    onError: (e: any) =>
+      toast.error(e?.response?.data?.message ?? t("orgLeaves.allocSaveFailed")),
+  });
+
   const leaveTypes = allocations.data?.leaveTypes ?? [];
   const employees = allocations.data?.employees ?? [];
 
@@ -504,19 +522,13 @@ function AllocationsTab() {
     ),
   ).sort((a, b) => a.localeCompare(b));
 
-  const designations = Array.from(
-    new Set(
-      employees
-        .map((e) => e.designation?.trim())
-        .filter((d): d is string => !!d),
-    ),
-  ).sort((a, b) => a.localeCompare(b));
+  const designations = allocations.data?.designations ?? [];
 
   const query = allocSearch.trim().toLowerCase();
   const filteredEmployees = employees.filter((e) => {
     if (query && !e.full_name?.toLowerCase().includes(query)) return false;
     if (allocDepartment && e.department !== allocDepartment) return false;
-    if (allocDesignation && e.designation !== allocDesignation) return false;
+    if (allocDesignation && e.designation_uuid !== allocDesignation) return false;
     return true;
   });
 
@@ -535,6 +547,8 @@ function AllocationsTab() {
               setAllocSearch("");
               setAllocDepartment("");
               setAllocDesignation("");
+              setBulkLeaveType("");
+              setBulkDays("");
             }}
           >
             <SelectTrigger className="w-32">
@@ -579,12 +593,35 @@ function AllocationsTab() {
             <SelectContent>
               <SelectItem value="">{t("orgLeaves.allocAllDesignations")}</SelectItem>
               {designations.map((d) => (
-                <SelectItem key={d} value={d}>
-                  {d}
+                <SelectItem key={d.uuid} value={d.uuid}>
+                  {d.name}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
+        </div>
+
+        <div className="mb-4 flex flex-col gap-3 rounded-md border border-border p-3 sm:flex-row sm:items-end">
+          <div className="min-w-48 flex-1">
+            <Label className="mb-1.5 block text-xs">{t("orgLeaves.allocBulkType")}</Label>
+            <Select value={bulkLeaveType} onValueChange={setBulkLeaveType}>
+              <SelectTrigger><SelectValue placeholder={t("orgLeaves.allocBulkTypePlaceholder")} /></SelectTrigger>
+              <SelectContent>
+                {leaveTypes.map((lt) => <SelectItem key={lt.id} value={String(lt.id)}>{lt.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="w-full sm:w-32">
+            <Label htmlFor="designation-allocation-days" className="mb-1.5 block text-xs">{t("orgLeaves.allocated")}</Label>
+            <Input id="designation-allocation-days" type="number" min={0} step={1} value={bulkDays} onChange={(e) => setBulkDays(e.target.value)} />
+          </div>
+          <Button
+            type="button"
+            disabled={isLocked || !allocDesignation || !bulkLeaveType || bulkDays === "" || !/^\d+$/.test(bulkDays) || setDesignationAllocation.isPending}
+            onClick={() => setDesignationAllocation.mutate()}
+          >
+            {setDesignationAllocation.isPending ? t("orgLeaves.allocBulkSaving") : t("orgLeaves.allocBulkApply")}
+          </Button>
         </div>
 
         {allocations.isLoading ? (
@@ -845,16 +882,17 @@ function LeaveTypeDialog({
   const qc = useQueryClient();
   const { t } = useTranslation();
   const [name, setName] = useState("");
+  const [isPaid, setIsPaid] = useState<"" | "yes" | "no">("");
 
   useEffect(() => {
-    if (open) setName(editing?.name ?? "");
+    if (open) { setName(editing?.name ?? ""); setIsPaid(editing?.is_paid ?? ""); }
   }, [open, editing]);
 
   const save = useMutation({
     mutationFn: () =>
       editing
-        ? orgLeavesService.updateType(editing.id, { name })
-        : orgLeavesService.createType({ name }),
+        ? orgLeavesService.updateType(editing.id, { name, is_paid: isPaid as "yes" | "no" })
+        : orgLeavesService.createType({ name, is_paid: isPaid as "yes" | "no" }),
     onSuccess: () => {
       toast.success(editing ? t("orgLeaves.leaveTypeUpdated") : t("orgLeaves.leaveTypeCreated"));
       qc.invalidateQueries({ queryKey: ["orgLeaveTypes"] });
@@ -865,6 +903,7 @@ function LeaveTypeDialog({
 
   const submit = () => {
     if (!name.trim()) return toast.error(t("orgLeaves.nameRequired"));
+    if (!isPaid) return toast.error("Select whether this leave is paid or unpaid.");
     save.mutate();
   };
 
@@ -886,6 +925,13 @@ function LeaveTypeDialog({
               onChange={(e) => setName(e.target.value)}
               placeholder={t("orgLeaves.namePlaceholder")}
             />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="lt-paid-status">Payroll treatment</Label>
+            <Select value={isPaid} onValueChange={(v) => setIsPaid(v as "yes" | "no")}>
+              <SelectTrigger id="lt-paid-status"><SelectValue placeholder="Choose paid or unpaid" /></SelectTrigger>
+              <SelectContent><SelectItem value="yes">Paid leave ? does not reduce base salary</SelectItem><SelectItem value="no">Unpaid leave ? eligible for policy-based deduction</SelectItem></SelectContent>
+            </Select>
           </div>
         </div>
         <DialogFooter>

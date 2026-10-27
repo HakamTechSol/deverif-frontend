@@ -1,9 +1,9 @@
-﻿import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { MoreVertical, Lock, Plus, ShieldCheck, ShieldOff, Trash2, Pencil, Ban } from "lucide-react";
+import { MoreVertical, Lock, Plus, ShieldCheck, Trash2, Pencil, Ban, Check } from "lucide-react";
 
 import { PageHeader } from "@/components/common/PageHeader";
 import { SearchInput } from "@/components/common/SearchInput";
@@ -15,6 +15,11 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Dialog,
   DialogContent,
@@ -40,11 +45,12 @@ import {
 } from "@/components/ui/table";
 import { TableSkeleton } from "./_app.requests";
 import { authStore } from "@/lib/auth";
-import { canAccessRoute } from "@/lib/routeAccess";
+import { canAccessRoute, DELEGATED_FEATURE_KEYS, type FeatureKey } from "@/lib/routeAccess";
 import { useOrgSubscription } from "@/hooks/useOrgSubscription";
 import { ModuleFeatureLockedCard } from "@/components/common/SubscriptionLocked";
 import { orgService, type OrgAdminUserRecord, type UUID } from "@/services";
 import { digitsOnly, formatCNIC, parseFeatureAccess } from "@/lib/utils";
+import { cnicError, normalizeCNIC } from "@/lib/contactFormat";
 
 export const Route = createFileRoute("/_app/org/admins")({
   beforeLoad: () => {
@@ -59,7 +65,20 @@ export const Route = createFileRoute("/_app/org/admins")({
   component: OrgAdminsPage,
 });
 
-type ElevatedKey = "manage_employees" | "generate_request" | "approve_request";
+/**
+ * The permissions an org admin can delegate to a sub-admin.
+ *
+ * A SUBSET of FeatureKey on purpose: attendance/leave/payroll are absent because they
+ * default to granted for every org user and are an employee's own self-service, so
+ * there is nothing to delegate. Everything listed here defaults to DENIED, which is
+ * what makes this list the whole of what a sub-admin can be given.
+ *
+ * The four HR-module keys were missing, which is how the modules ended up both
+ * ungated on the server and ungrantable here: an org admin had no control over who
+ * could issue letters, spend money on expenses, or terminate an employment, because
+ * there was no dial for it.
+ */
+type ElevatedKey = FeatureKey;
 
 const ELEVATED_PERMISSIONS: { key: ElevatedKey; label: string; description: string }[] = [
   {
@@ -77,15 +96,52 @@ const ELEVATED_PERMISSIONS: { key: ElevatedKey; label: string; description: stri
     label: "Approve Request",
     description: "Review, verify and reject inbox verification requests",
   },
+  {
+    key: "hr_letters",
+    label: "HR Letters",
+    description:
+      "Issue employment, increment and confirmation letters. These attest to someone's employment to a third party.",
+  },
+  {
+    key: "manage_assets",
+    label: "Assets",
+    description: "Hand equipment out, take it back, and run repairs",
+  },
+  {
+    key: "manage_separation",
+    label: "Offboarding",
+    description:
+      "Run exit checklists, asset clearance and final-settlement. The highest-consequence module in the product.",
+  },
+  {
+    key: "approve_expenses",
+    label: "Expense Approvals",
+    description: "Review expense claims and settle reimbursements",
+  },
+  {
+    key: "manage_recruitment",
+    label: "Recruitment",
+    description:
+      "Job openings, the candidate pipeline, interviews, and one-click hire. Hiring creates a real employee record.",
+  },
+  {
+    key: "override_failed_interview",
+    label: "Failed Interview Exception",
+    description: "Allow a documented, audited offer exception after a failed final interview.",
+  },
 ];
 
+/**
+ * The permissions a sub-admin currently holds.
+ *
+ * Returns the WHOLE parsed map rather than picking out the three keys this page used
+ * to name. It was returning a literal of three booleans, which is why widening
+ * ElevatedKey to FeatureKey failed to compile here — and that failure is the useful
+ * part: it showed the page's shape was pinned to the old permission set, so adding a
+ * permission would have produced a checkbox with no state to read from.
+ */
 function elevatedAccess(u?: OrgAdminUserRecord["feature_access"]) {
-  const fa = parseFeatureAccess(u);
-  return {
-    manage_employees: fa.manage_employees,
-    generate_request: fa.generate_request,
-    approve_request: fa.approve_request,
-  };
+  return parseFeatureAccess(u);
 }
 
 function apiErrorMessage(e: unknown, fallback: string) {
@@ -101,11 +157,7 @@ function OrgAdminsPage() {
   const [search, setSearch] = useState("");
   const [openForm, setOpenForm] = useState(false);
   const [editing, setEditing] = useState<OrgAdminUserRecord | null>(null);
-  const [revoking, setRevoking] = useState<{
-    uuid: UUID;
-    name: string;
-    action: "demote" | "deactivate";
-  } | null>(null);
+  const [revoking, setRevoking] = useState<{ uuid: UUID; name: string } | null>(null);
   const [cancelling, setCancelling] = useState<{ uuid: UUID; name: string } | null>(null);
   const [removing, setRemoving] = useState<{ uuid: UUID; name: string } | null>(null);
 
@@ -117,15 +169,12 @@ function OrgAdminsPage() {
   const invalidate = () => qc.invalidateQueries({ queryKey: ["org-admin-users"] });
 
   const revokeMut = useMutation({
-    mutationFn: ({ uuid, action }: { uuid: UUID; action: "demote" | "deactivate" }) =>
-      orgService.adminUsers.revoke(uuid, action),
-    onSuccess: (_d, variables) => {
-      toast.success(
-        variables.action === "deactivate" ? "Sub-admin deactivated" : "Sub-admin demoted to member",
-      );
+    mutationFn: (uuid: UUID) => orgService.adminUsers.deactivate(uuid),
+    onSuccess: () => {
+      toast.success("Sub-admin deactivated");
       invalidate();
     },
-    onError: (e) => toast.error(apiErrorMessage(e, "Revoke failed")),
+    onError: (e) => toast.error(apiErrorMessage(e, "Deactivate failed")),
   });
 
   const updatePerfMut = useMutation({
@@ -252,17 +301,87 @@ function OrgAdminsPage() {
                         <TableCell data-label="Permissions">
                           {granted.length === 0 ? (
                             <span className="text-xs text-muted-foreground">—</span>
-                          ) : (
-                            <div className="flex flex-wrap gap-1">
+                          ) : granted.length === ELEVATED_PERMISSIONS.length ? (
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <button
+                                  type="button"
+                                  className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary hover:bg-primary/20 transition-colors cursor-pointer"
+                                >
+                                  <ShieldCheck className="h-3 w-3" />
+                                  All Permissions ({granted.length})
+                                </button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-80 p-3 text-sm shadow-xl" align="start">
+                                <div className="font-semibold text-xs text-muted-foreground uppercase tracking-wider mb-2">
+                                  All Permissions Granted ({granted.length})
+                                </div>
+                                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                                  {granted.map((p) => (
+                                    <div key={p.key} className="flex items-start gap-2 text-xs">
+                                      <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                                      <div>
+                                        <span className="font-medium text-foreground">{p.label}</span>
+                                        <p className="text-[11px] text-muted-foreground leading-tight">
+                                          {p.description}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </PopoverContent>
+                            </Popover>
+                          ) : granted.length <= 2 ? (
+                            <div className="flex flex-wrap gap-1.5 items-center">
                               {granted.map((p) => (
                                 <Badge
                                   key={p.key}
                                   variant="outline"
-                                  className="rounded-full border-primary/30 bg-primary/10 text-primary"
+                                  className="rounded-full border-primary/30 bg-primary/10 text-primary font-normal text-xs py-0.5"
                                 >
                                   {p.label}
                                 </Badge>
                               ))}
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1.5 flex-nowrap">
+                              {granted.slice(0, 2).map((p) => (
+                                <Badge
+                                  key={p.key}
+                                  variant="outline"
+                                  className="rounded-full border-primary/30 bg-primary/10 text-primary font-normal text-xs py-0.5 whitespace-nowrap"
+                                >
+                                  {p.label}
+                                </Badge>
+                              ))}
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <button
+                                    type="button"
+                                    className="inline-flex items-center rounded-full border border-border bg-muted/60 px-2 py-0.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer whitespace-nowrap"
+                                  >
+                                    +{granted.length - 2} more
+                                  </button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-80 p-3 text-sm shadow-xl" align="start">
+                                  <div className="font-semibold text-xs text-muted-foreground uppercase tracking-wider mb-2">
+                                    Granted Permissions ({granted.length})
+                                  </div>
+                                  <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                                    {granted.map((p) => (
+                                      <div key={p.key} className="flex items-start gap-2 text-xs">
+                                        <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                                        <div>
+                                          <span className="font-medium text-foreground">{p.label}</span>
+                                          <p className="text-[11px] text-muted-foreground leading-tight">
+                                            {p.description}
+                                          </p>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </PopoverContent>
+                              </Popover>
                             </div>
                           )}
                         </TableCell>
@@ -288,11 +407,11 @@ function OrgAdminsPage() {
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             {/* A sub-admin who has not accepted yet is not an
-                                account to demote or deactivate — it is an
-                                invitation, and the two things you can actually do
-                                with an invitation are call it off or delete it.
-                                Once accepted these disappear and the ordinary
-                                revoke actions below take over unchanged. */}
+                                account to deactivate - it is an invitation, and
+                                the two things you can actually do with an
+                                invitation are call it off or delete it. Once
+                                accepted these disappear and deactivation takes
+                                over. */}
                             {u.is_verified === "no" ? (
                               <>
                                 <DropdownMenuItem
@@ -318,28 +437,14 @@ function OrgAdminsPage() {
                                 </DropdownMenuItem>
                               </>
                             ) : (
-                              <>
-                                <DropdownMenuItem
-                                  disabled={isLocked}
-                                  className="text-destructive focus:text-destructive"
-                                  onClick={() =>
-                                    setRevoking({ uuid: u.uuid, name: u.full_name, action: "demote" })
-                                  }
-                                >
-                                  {isLocked ? <Lock className="mr-2 h-4 w-4" /> : <ShieldOff className="mr-2 h-4 w-4" />}
-                                  Demote to Member
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  disabled={isLocked}
-                                  className="text-destructive focus:text-destructive"
-                                  onClick={() =>
-                                    setRevoking({ uuid: u.uuid, name: u.full_name, action: "deactivate" })
-                                  }
-                                >
-                                  {isLocked ? <Lock className="mr-2 h-4 w-4" /> : <Ban className="mr-2 h-4 w-4" />}
-                                  Deactivate Account
-                                </DropdownMenuItem>
-                              </>
+                              <DropdownMenuItem
+                                disabled={isLocked}
+                                className="text-destructive focus:text-destructive"
+                                onClick={() => setRevoking({ uuid: u.uuid, name: u.full_name })}
+                              >
+                                {isLocked ? <Lock className="mr-2 h-4 w-4" /> : <Ban className="mr-2 h-4 w-4" />}
+                                Deactivate Account
+                              </DropdownMenuItem>
                             )}
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -380,15 +485,11 @@ function OrgAdminsPage() {
       <ConfirmDialog
         open={!!revoking}
         onOpenChange={(o) => !o && setRevoking(null)}
-        title={revoking?.action === "deactivate" ? "Deactivate this sub-admin?" : "Demote this sub-admin?"}
-        description={
-          revoking?.action === "deactivate"
-            ? `${revoking?.name} will lose the ability to log in immediately. Their sub-admin permissions remain stored but the account is disabled.`
-            : `${revoking?.name} will become a regular member with default permissions. No elevated permission will survive the demotion.`
-        }
-        confirmLabel={revoking?.action === "deactivate" ? "Deactivate" : "Demote"}
+        title="Deactivate this sub-admin?"
+        description={`${revoking?.name} will lose the ability to log in immediately. Their sub-admin permissions remain stored but the account is disabled.`}
+        confirmLabel="Deactivate"
         onConfirm={() => {
-          if (revoking) revokeMut.mutate(revoking);
+          if (revoking) revokeMut.mutate(revoking.uuid);
           setRevoking(null);
         }}
       />
@@ -447,11 +548,19 @@ function FeatureCheckboxes({
   );
 }
 
-const EMPTY_ELEVATED: Record<ElevatedKey, boolean> = {
-  manage_employees: false,
-  generate_request: false,
-  approve_request: false,
-};
+/**
+ * Built from the key list rather than hand-written.
+ *
+ * This was a literal of three booleans typed `Record<ElevatedKey, boolean>`, so
+ * widening ElevatedKey to the full FeatureKey made TypeScript demand the four new
+ * keys — which is exactly the failure mode this whole audit is about: a permission
+ * exists on the server, the grant form has no field for it, and an org admin cannot
+ * delegate it no matter what they type. Deriving it means a new permission appears
+ * here automatically, and the dialog's checkboxes are driven off the same array.
+ */
+const EMPTY_ELEVATED: Record<ElevatedKey, boolean> = Object.fromEntries(
+  DELEGATED_FEATURE_KEYS.map((k) => [k, false]),
+) as Record<ElevatedKey, boolean>;
 
 function EditSubAdminPermissionsDialog({
   subAdmin,
@@ -545,7 +654,8 @@ function CreateSubAdminDialog({
     const e: Record<string, string> = {};
     if (!fullName.trim()) e.fullName = "Name is required";
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) e.email = "A valid email is required";
-    if (!/^\d{13}$/.test(cnic.replace(/\D/g, ""))) e.cnic = "A valid 13-digit CNIC is required";
+    if (!normalizeCNIC(cnic)) e.cnic = "CNIC is required";
+    else if (cnicError(cnic)) e.cnic = cnicError(cnic)!;
     if (phone && !/^[0-9+\-() ]{6,30}$/.test(phone)) e.phone = "Invalid phone number";
     setErrors(e);
     if (Object.keys(e).length) return;
@@ -555,7 +665,7 @@ function CreateSubAdminDialog({
       const res = await orgService.adminUsers.create({
         full_name: fullName.trim(),
         email: email.trim(),
-        cnic: cnic.replace(/\D/g, ""),
+        cnic: normalizeCNIC(cnic),
         phone: phone.trim() || undefined,
         feature_access: access,
       });
