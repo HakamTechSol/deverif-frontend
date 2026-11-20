@@ -53,9 +53,10 @@ export type OrgRole = "org_admin" | "sub_admin" | "employee";
  *
  * DEFAULT-DENY, and the split is deliberate: attendance/leave/payroll are an
  * employee's own self-service and default to granted, whereas hr_letters,
- * manage_assets, manage_separation and approve_expenses let someone attest to a
- * third party about another person's employment, spend the company's money, or end a
- * job. Those four did not exist at all until this change — every one of those modules
+ * manage_assets, manage_separation, approve_expenses and create_expenses let someone
+ * attest to another person's employment, spend the company's money, or file claims.
+ * Those keys default to denied, preventing permissionless access to these modules.
+ * Before these permissions existed, each of those modules
  * was reachable by any sub-admin regardless of feature_access — so default-deny is
  * the only defensible starting point for them.
  */
@@ -64,23 +65,16 @@ const ALL_ORG_ROLES: readonly OrgRole[] = ["org_admin", "sub_admin", "employee"]
 const STAFF_ROLES: readonly OrgRole[] = ["org_admin", "sub_admin"];
 
 /**
- * Roles that can be ON THE ROSTER — i.e. have an employee record of their own.
+ * Employee-facing role set. This is a role allowlist, not a database roster check.
  *
  * `org_admin` is deliberately absent, and that is the whole point of this constant.
  *
- * The Personal ESS pages (/my-assets, /my-expenses, /my-resignation) each resolve the
- * caller to an employee record via the JWT, and when there is none they return an
- * EMPTY list rather than an error — `callerEmployee` returning null is a normal
- * answer, not a failure. An org_admin is the person who administers the company; they
- * are not on its payroll, so they have no asset assigned to them, no taxi they spent
- * their own money on, and no employment to resign from. Those pages are, for them,
- * three permanent empty shells dressed up as features.
+ * The asset and resignation pages resolve the caller to an employee record. My
+ * Expenses also supports a standalone sub-admin claim, gated by Create Own Expense.
  *
- * `sub_admin` stays, and the difference is not seniority — it is whether the person is
- * on the roster. A sub-admin can genuinely be an employee who was also granted
- * delegated permissions, and that person really is holding a company laptop. Removing
- * it from them would gate an employee out of their own reimbursement, which is the bug
- * the original "all org roles" rule was written to avoid.
+ * `sub_admin` stays for its linked-employee pages and permitted own-expense claims;
+ * employees keep the employee-facing pages. Org-admins review, rather than file,
+ * expense claims.
  *
  * This is a UI and ROUTE_ACCESS decision only. The backend mounts these routes behind
  * `authUser` with no role check, and it should keep doing so: the server's job is to
@@ -97,12 +91,16 @@ export type RouteRule = {
    * Omit for pages that are purely role-gated.
    */
   feature?: FeatureKey;
+  /** Exact action permission required when a granular matrix has been saved. */
+  granular?: string;
   /**
    * Roles that pass without holding `feature`. org_admin is the only role that
    * appears here, and only where the backend treats it as unconditionally
    * entitled.
    */
   always?: readonly OrgRole[];
+  /** Required data scope for shared resources such as organization templates. */
+  scope?: string;
 };
 
 /**
@@ -127,9 +125,9 @@ export const ROUTE_ACCESS: Readonly<Record<string, RouteRule>> = {
   "/settings": { roles: ALL_ORG_ROLES },
 
   // --- Verification product -------------------------------------------------
-  "/requests": { roles: ALL_ORG_ROLES, feature: "generate_request", always: ["org_admin"] },
-  "/inbox": { roles: ALL_ORG_ROLES, feature: "approve_request", always: ["org_admin"] },
-  "/auto-verified": { roles: ALL_ORG_ROLES, feature: "approve_request", always: ["org_admin"] },
+  "/requests": { roles: ALL_ORG_ROLES, granular: "document_verification.generate_request", always: ["org_admin"] },
+  "/inbox": { roles: ALL_ORG_ROLES, granular: "document_verification.view_requests", always: ["org_admin"] },
+  "/auto-verified": { roles: ALL_ORG_ROLES, granular: "document_verification.view_requests", always: ["org_admin"] },
 
   // --- Self-service: employees only ----------------------------------------
   // The API mounts these three behind requireRole("employee"), so staff must
@@ -159,19 +157,15 @@ export const ROUTE_ACCESS: Readonly<Record<string, RouteRule>> = {
   "/my-assets": { roles: ON_ROSTER_ROLES },
 
   // --- My expenses -----------------------------------------------------------
-  // ON_ROSTER_ROLES, for the same reason as /my-assets immediately above: a sub-admin
-  // on the roster can reclaim their own taxi, an org_admin has no claim to file.
-  // The backend still mounts this behind authUser with NO role check, and correctly
-  // so - it answers the question it was asked, and for an org_admin the answer is an
-  // empty list rather than an error.
-  //
-  // A sub-admin who is also on the roster gets a taxi to a client visit paid for
-  // on their own time, exactly like a colleague, and gating them out of their own
-  // reimbursement would be a bug rather than a policy. Someone with no employee
-  // record gets an empty list, which is the correct answer rather than a 403.
+  // Employees keep their self-service page; sub-admins need Create Own Expense.
+  // The backend derives the claimant and supports sub-admins without employee rows.
   //
   // Plan-level access is ModuleGate via module_flags (expense_management).
-  "/my-expenses": { roles: ON_ROSTER_ROLES },
+  "/my-expenses": {
+    roles: ON_ROSTER_ROLES,
+    granular: "expenses.create_own",
+    always: ["employee"],
+  },
 
   // --- Org operations ------------------------------------------------------
   // Support is the one org page every role can open: employees raise tier-1
@@ -179,12 +173,11 @@ export const ROUTE_ACCESS: Readonly<Record<string, RouteRule>> = {
   // System Admin, and sub-admins do the employee flow. The API enforces which
   // rows each role can actually see (own / org inbound / platform inbound).
   "/org/support": { roles: ALL_ORG_ROLES },
-  "/org/team": { roles: STAFF_ROLES, feature: "manage_employees", always: ["org_admin"] },
+  "/org/team": { roles: STAFF_ROLES, granular: "employees.view", always: ["org_admin"] },
   "/org/admins": { roles: ["org_admin"] },
-  "/org/leaves": { roles: STAFF_ROLES, feature: "leave", always: ["org_admin"] },
-  "/org/attendance": { roles: STAFF_ROLES, feature: "attendance", always: ["org_admin"] },
-  "/org/salary-components": { roles: STAFF_ROLES, feature: "payroll", always: ["org_admin"] },
-  "/org/payroll": { roles: STAFF_ROLES, feature: "payroll", always: ["org_admin"] },
+  "/org/leaves": { roles: STAFF_ROLES, granular: "leave_management.view", always: ["org_admin"] },
+  "/org/attendance": { roles: STAFF_ROLES, granular: "attendance.view", always: ["org_admin"] },
+  "/org/payroll": { roles: STAFF_ROLES, granular: "payroll.view", always: ["org_admin"] },
 
   // --- HR letters ------------------------------------------------------------
   // STAFF_ROLES + the `hr_letters` permission.
@@ -203,12 +196,16 @@ export const ROUTE_ACCESS: Readonly<Record<string, RouteRule>> = {
   // could, unconditionally. The only real decision available was whether an org
   // admin could WITHHOLD it per sub-admin. That is strictly more secure than what
   // was there, because it turns an unavoidable grant into a revocable one.
-  "/org/letter-templates": { roles: STAFF_ROLES, feature: "hr_letters", always: ["org_admin"] },
-  "/org/hr-letters": { roles: STAFF_ROLES, feature: "hr_letters", always: ["org_admin"] },
+  "/org/letter-templates": {
+    roles: STAFF_ROLES,
+    granular: "hr_letters.view",
+    always: ["org_admin"],
+    scope: "hr_letters",
+  },
+  "/org/hr-letters": { roles: STAFF_ROLES, granular: "hr_letters.view", always: ["org_admin"] },
 
   // --- Assets ------------------------------------------------------------------
   // Two different gates on purpose, mirroring the backend's assetMgmt versus
-  // assetCategoryMgmt.
   //
   // Inventory is operational: handing a laptop to someone and taking it back is
   // day-to-day work a sub-admin does, so /org/assets is STAFF_ROLES.
@@ -221,8 +218,7 @@ export const ROUTE_ACCESS: Readonly<Record<string, RouteRule>> = {
   // Both now carry `manage_assets`. Before, both named only a role, so any sub-admin
   // with every permission switched off could still open both — the one place where
   // the sidebar and the guard agreed with each other and BOTH were wrong.
-  "/org/assets": { roles: STAFF_ROLES, feature: "manage_assets", always: ["org_admin"] },
-  "/org/asset-categories": { roles: ["org_admin"] },
+  "/org/assets": { roles: STAFF_ROLES, granular: "assets.view", always: ["org_admin"] },
 
   // --- Recruitment ------------------------------------------------------------
   // STAFF_ROLES + `manage_recruitment`, mirroring the backend's recruitmentMgmt gate.
@@ -240,27 +236,27 @@ export const ROUTE_ACCESS: Readonly<Record<string, RouteRule>> = {
   // role-only gate quietly blocked the person who owns the company.
   "/org/recruitment/openings": {
     roles: STAFF_ROLES,
-    feature: "manage_recruitment",
+    granular: "recruitment.view",
     always: ["org_admin"],
   },
   "/org/recruitment/candidates": {
     roles: STAFF_ROLES,
-    feature: "manage_recruitment",
+    granular: "recruitment.view",
     always: ["org_admin"],
   },
   "/org/recruitment/pipeline": {
     roles: STAFF_ROLES,
-    feature: "manage_recruitment",
+    granular: "recruitment.view",
     always: ["org_admin"],
   },
   "/org/recruitment/interviews": {
     roles: STAFF_ROLES,
-    feature: "manage_recruitment",
+    granular: "recruitment.view",
     always: ["org_admin"],
   },
   "/org/recruitment/offers": {
     roles: STAFF_ROLES,
-    feature: "manage_recruitment",
+    granular: "recruitment.view",
     always: ["org_admin"],
   },
 
@@ -273,19 +269,21 @@ export const ROUTE_ACCESS: Readonly<Record<string, RouteRule>> = {
   // highest-consequence module in the product — it ends someone's employment — and
   // until this permission existed every sub-admin could reach it regardless of what
   // an org admin had configured.
-  "/org/offboarding": { roles: STAFF_ROLES, feature: "manage_separation", always: ["org_admin"] },
+  "/org/offboarding": { roles: STAFF_ROLES, granular: "offboarding.view", always: ["org_admin"] },
 
   // --- Expense claims (staff) -------------------------------------------------
   // STAFF_ROLES + `approve_expenses`. This is the review-and-settle queue: it can
   // approve a reimbursement and, for direct-mode claims, mark money as paid. Also
   // previously role-only, so any sub-admin could approve expenses.
-  "/org/expense-claims": { roles: STAFF_ROLES, feature: "approve_expenses", always: ["org_admin"] },
+  "/org/expense-claims": { roles: STAFF_ROLES, granular: "expenses.view", always: ["org_admin"] },
 
   // The employee's own resignation. ON_ROSTER_ROLES: the backend mounts this with
   // authUser and no role check so a sub-admin who is also on the roster can serve
   // notice, and that person still can. An org_admin cannot — they have no employment
   // to resign from, so the page would be empty for them rather than forbidden, which
   // is the confusing version. See ON_ROSTER_ROLES.
+  "/my-interviews": { roles: ALL_ORG_ROLES },
+
   "/my-resignation": { roles: ON_ROSTER_ROLES },
 
   // --- Billing --------------------------------------------------------------
@@ -361,9 +359,68 @@ export function canAccessRoute(user: AuthUser | null | undefined, path: string):
   if (!rule) return false;
   if (!rule.roles.includes(orgRole)) return false;
 
-  if (!rule.feature) return true;
   if (rule.always?.includes(orgRole)) return true;
 
+  if (rule.scope) {
+    let raw: unknown = user.feature_access;
+    if (typeof raw === "string") {
+      try { raw = JSON.parse(raw); } catch { raw = null; }
+    }
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return false;
+    const scopes = (raw as Record<string, unknown>).data_scopes;
+    if (!scopes || typeof scopes !== "object" || Array.isArray(scopes)) return false;
+    if ((scopes as Record<string, unknown>)[rule.scope] !== "entire_organization") return false;
+  }
+
+  if (rule.granular) {
+    let raw: unknown = user.feature_access;
+    if (typeof raw === "string") {
+      try { raw = JSON.parse(raw); } catch { raw = null; }
+    }
+    if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+      const matrix = (raw as Record<string, unknown>).granular_permissions;
+      if (matrix && typeof matrix === "object" && !Array.isArray(matrix)) {
+        const grants = matrix as Record<string, unknown>;
+        if (grants[rule.granular] === true) return true;
+        if (
+          rule.granular === "hr_letters.view" &&
+          [
+            "hr_letters.create_draft",
+            "hr_letters.edit_draft",
+            "hr_letters.issue",
+            "hr_letters.revoke",
+            "hr_letters.manage_templates",
+          ].some((permission) => grants[permission] === true)
+        ) return true;
+        return rule.granular === "payroll.view"
+          && (
+            grants["payroll.generate"] === true
+            || grants["payroll.manage_settings"] === true
+            || grants["payroll.manage_employee_components"] === true
+            || grants["payroll.adjust_salary"] === true
+          );
+      }
+    }
+    // Existing accounts without a granular matrix keep the legacy route decision
+    // until their Org Admin explicitly saves granular permissions.
+    const legacyKey: FeatureKey | undefined = ({
+      "employees.view": "manage_employees",
+      "attendance.view": "attendance",
+      "leave_management.view": "leave",
+      "payroll.view": "payroll",
+      "document_verification.generate_request": "generate_request",
+      "document_verification.view_requests": "approve_request",
+      "hr_letters.view": "hr_letters",
+      "assets.view": "manage_assets",
+      "offboarding.view": "manage_separation",
+      "expenses.view": "approve_expenses",
+      "expenses.create_own": "create_expenses",
+      "recruitment.view": "manage_recruitment",
+    } as Record<string, FeatureKey>)[rule.granular];
+    return legacyKey ? parseFeatureAccess(user.feature_access)[legacyKey] : false;
+  }
+
+  if (!rule.feature) return true;
   return parseFeatureAccess(user.feature_access)[rule.feature];
 }
 

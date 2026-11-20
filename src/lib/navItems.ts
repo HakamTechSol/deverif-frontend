@@ -6,13 +6,13 @@ import {
   BadgeCheck,
   Building2,
   CalendarClock,
+  CalendarCheck,
   CalendarDays,
   ClipboardCheck,
   CreditCard,
   FileCheck2,
   FileSignature,
   FileText,
-  FolderTree,
   Headset,
   History,
   Hourglass,
@@ -117,13 +117,11 @@ export const userNavItems: NavItem[] = [
 
 /** Employee self-service. Staff reach these through the Personal ESS footer group. */
 export const memberNavItems: NavItem[] = [
+  { to: "/my-interviews", labelKey: "nav.myAssignedInterviews", icon: CalendarCheck, audience: "self-service" },
   { to: "/attendance", labelKey: "nav.attendance", icon: ClipboardCheck, audience: "self-service" },
   { to: "/my-letters", labelKey: "nav.myLetters", icon: FileSignature, audience: "self-service" },
-  // Self-service, and NOT shown in a staff member's primary menu even though
-  // ROUTE_ACCESS opens it to every org role: a sub-admin who is also on the roster
-  // really is holding a company laptop and really can file for their own taxi.
-  // They reach both through "Personal ESS" rather than having them crowd the
-  // modules they administer.
+  // Employees reach their own assets through the self-service menu. Sub-admins
+  // use the separate management-menu entry below when they have that permission.
   { to: "/my-assets", labelKey: "nav.myAssets", icon: Package, audience: "self-service" },
   { to: "/my-expenses", labelKey: "nav.myExpenses", icon: Receipt, audience: "self-service" },
   { to: "/payroll", labelKey: "nav.payroll", icon: Wallet, audience: "self-service" },
@@ -136,17 +134,15 @@ export const orgAdminNavItems: NavItem[] = [
   { to: "/org/admins", labelKey: "nav.orgAdmins", icon: ShieldCheck },
   { to: "/org/leaves", labelKey: "nav.leaveRequests", icon: CalendarClock },
   { to: "/org/attendance", labelKey: "nav.attendance", icon: ClipboardCheck },
-  { to: "/org/salary-components", labelKey: "nav.payrollComponents", icon: Wallet },
   { to: "/org/payroll", labelKey: "nav.payroll", icon: Wallet },
   { to: "/org/letter-templates", labelKey: "nav.letterTemplates", icon: FileText },
-  { to: "/org/hr-letters", labelKey: "nav.hrLetters", icon: FileSignature },
   // Expense claims sit after payroll and before assets, because the money ops
   // read in that order: payroll decides what is paid, expense claims are what
   // reimburses on top of it, and assets is the register of what was bought.
   { to: "/org/expense-claims", labelKey: "nav.expenseClaims", icon: Receipt },
-  // Asset categories sit before inventory because they are the filter the
-  // inventory is read through, and because only an org_admin sees the first one.
-  { to: "/org/asset-categories", labelKey: "nav.assetCategories", icon: FolderTree },
+  // A separate self-claim page, not a create action on the employee review queue.
+  // ROUTE_ACCESS exposes it to sub-admins only when Create Own Expense is granted.
+  { to: "/my-expenses", labelKey: "nav.myExpenses", icon: Receipt, audience: "management" },
   { to: "/org/assets", labelKey: "nav.assets", icon: Package },
   // Offboarding sits after payroll because the FnF settlement is where the two
   // meet, and next to assets because the clearance checklist is what stands
@@ -162,6 +158,7 @@ export const orgAdminNavItems: NavItem[] = [
   // twenty is the clutter this module's siblings were just cleaned up for, and a
   // recruiter's day is one pipeline, not four destinations.
   { to: "/org/recruitment/pipeline", labelKey: "nav.recruitment", icon: UserPlus },
+  { to: "/my-interviews", labelKey: "nav.myAssignedInterviews", icon: CalendarCheck },
   // /org/support and /payments are NOT here: both moved into the account group
   // (accountNavItems) — support because it is where a person raises a ticket rather
   // than a queue they work through, and payments because it is the org's subscription

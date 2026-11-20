@@ -23,6 +23,7 @@ import { Route as AppInboxRouteImport } from './routes/_app.inbox'
 import { Route as AppLeavesRouteImport } from './routes/_app.leaves'
 import { Route as AppMyAssetsRouteImport } from './routes/_app.my-assets'
 import { Route as AppMyExpensesRouteImport } from './routes/_app.my-expenses'
+import { Route as AppMyInterviewsRouteImport } from './routes/_app.my-interviews'
 import { Route as AppMyLettersRouteImport } from './routes/_app.my-letters'
 import { Route as AppMyResignationRouteImport } from './routes/_app.my-resignation'
 import { Route as AppPaymentsRouteImport } from './routes/_app.payments'
@@ -45,7 +46,6 @@ import { Route as AppAdminUnresponsiveRouteImport } from './routes/_app.admin.un
 import { Route as AppAdminUsersRouteImport } from './routes/_app.admin.users'
 import { Route as AppAutoVerifiedUuidRouteImport } from './routes/_app.auto-verified_.$uuid'
 import { Route as AppOrgAdminsRouteImport } from './routes/_app.org.admins'
-import { Route as AppOrgAssetCategoriesRouteImport } from './routes/_app.org.asset-categories'
 import { Route as AppOrgAssetsRouteImport } from './routes/_app.org.assets'
 import { Route as AppOrgAttendanceRouteImport } from './routes/_app.org.attendance'
 import { Route as AppOrgExpenseClaimsRouteImport } from './routes/_app.org.expense-claims'
@@ -138,6 +138,11 @@ const AppMyAssetsRoute = AppMyAssetsRouteImport.update({
 const AppMyExpensesRoute = AppMyExpensesRouteImport.update({
   id: '/my-expenses',
   path: '/my-expenses',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppMyInterviewsRoute = AppMyInterviewsRouteImport.update({
+  id: '/my-interviews',
+  path: '/my-interviews',
   getParentRoute: () => AppRoute,
 } as any)
 const AppMyLettersRoute = AppMyLettersRouteImport.update({
@@ -250,11 +255,6 @@ const AppAutoVerifiedUuidRoute = AppAutoVerifiedUuidRouteImport.update({
 const AppOrgAdminsRoute = AppOrgAdminsRouteImport.update({
   id: '/org/admins',
   path: '/org/admins',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppOrgAssetCategoriesRoute = AppOrgAssetCategoriesRouteImport.update({
-  id: '/org/asset-categories',
-  path: '/org/asset-categories',
   getParentRoute: () => AppRoute,
 } as any)
 const AppOrgAssetsRoute = AppOrgAssetsRouteImport.update({
@@ -396,6 +396,7 @@ export interface FileRoutesByFullPath {
   '/leaves': typeof AppLeavesRoute
   '/my-assets': typeof AppMyAssetsRoute
   '/my-expenses': typeof AppMyExpensesRoute
+  '/my-interviews': typeof AppMyInterviewsRoute
   '/my-letters': typeof AppMyLettersRoute
   '/my-resignation': typeof AppMyResignationRoute
   '/payments': typeof AppPaymentsRoute
@@ -418,7 +419,6 @@ export interface FileRoutesByFullPath {
   '/admin/users': typeof AppAdminUsersRoute
   '/auto-verified/$uuid': typeof AppAutoVerifiedUuidRoute
   '/org/admins': typeof AppOrgAdminsRoute
-  '/org/asset-categories': typeof AppOrgAssetCategoriesRoute
   '/org/assets': typeof AppOrgAssetsRoute
   '/org/attendance': typeof AppOrgAttendanceRoute
   '/org/expense-claims': typeof AppOrgExpenseClaimsRoute
@@ -458,6 +458,7 @@ export interface FileRoutesByTo {
   '/leaves': typeof AppLeavesRoute
   '/my-assets': typeof AppMyAssetsRoute
   '/my-expenses': typeof AppMyExpensesRoute
+  '/my-interviews': typeof AppMyInterviewsRoute
   '/my-letters': typeof AppMyLettersRoute
   '/my-resignation': typeof AppMyResignationRoute
   '/payments': typeof AppPaymentsRoute
@@ -479,7 +480,6 @@ export interface FileRoutesByTo {
   '/admin/users': typeof AppAdminUsersRoute
   '/auto-verified/$uuid': typeof AppAutoVerifiedUuidRoute
   '/org/admins': typeof AppOrgAdminsRoute
-  '/org/asset-categories': typeof AppOrgAssetCategoriesRoute
   '/org/assets': typeof AppOrgAssetsRoute
   '/org/attendance': typeof AppOrgAttendanceRoute
   '/org/expense-claims': typeof AppOrgExpenseClaimsRoute
@@ -519,6 +519,7 @@ export interface FileRoutesById {
   '/_app/leaves': typeof AppLeavesRoute
   '/_app/my-assets': typeof AppMyAssetsRoute
   '/_app/my-expenses': typeof AppMyExpensesRoute
+  '/_app/my-interviews': typeof AppMyInterviewsRoute
   '/_app/my-letters': typeof AppMyLettersRoute
   '/_app/my-resignation': typeof AppMyResignationRoute
   '/_app/payments': typeof AppPaymentsRoute
@@ -541,7 +542,6 @@ export interface FileRoutesById {
   '/_app/admin/users': typeof AppAdminUsersRoute
   '/_app/auto-verified_/$uuid': typeof AppAutoVerifiedUuidRoute
   '/_app/org/admins': typeof AppOrgAdminsRoute
-  '/_app/org/asset-categories': typeof AppOrgAssetCategoriesRoute
   '/_app/org/assets': typeof AppOrgAssetsRoute
   '/_app/org/attendance': typeof AppOrgAttendanceRoute
   '/_app/org/expense-claims': typeof AppOrgExpenseClaimsRoute
@@ -583,6 +583,7 @@ export interface FileRouteTypes {
     | '/leaves'
     | '/my-assets'
     | '/my-expenses'
+    | '/my-interviews'
     | '/my-letters'
     | '/my-resignation'
     | '/payments'
@@ -605,7 +606,6 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/auto-verified/$uuid'
     | '/org/admins'
-    | '/org/asset-categories'
     | '/org/assets'
     | '/org/attendance'
     | '/org/expense-claims'
@@ -645,6 +645,7 @@ export interface FileRouteTypes {
     | '/leaves'
     | '/my-assets'
     | '/my-expenses'
+    | '/my-interviews'
     | '/my-letters'
     | '/my-resignation'
     | '/payments'
@@ -666,7 +667,6 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/auto-verified/$uuid'
     | '/org/admins'
-    | '/org/asset-categories'
     | '/org/assets'
     | '/org/attendance'
     | '/org/expense-claims'
@@ -705,6 +705,7 @@ export interface FileRouteTypes {
     | '/_app/leaves'
     | '/_app/my-assets'
     | '/_app/my-expenses'
+    | '/_app/my-interviews'
     | '/_app/my-letters'
     | '/_app/my-resignation'
     | '/_app/payments'
@@ -727,7 +728,6 @@ export interface FileRouteTypes {
     | '/_app/admin/users'
     | '/_app/auto-verified_/$uuid'
     | '/_app/org/admins'
-    | '/_app/org/asset-categories'
     | '/_app/org/assets'
     | '/_app/org/attendance'
     | '/_app/org/expense-claims'
@@ -867,6 +867,13 @@ declare module '@tanstack/react-router' {
       path: '/my-expenses'
       fullPath: '/my-expenses'
       preLoaderRoute: typeof AppMyExpensesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/my-interviews': {
+      id: '/_app/my-interviews'
+      path: '/my-interviews'
+      fullPath: '/my-interviews'
+      preLoaderRoute: typeof AppMyInterviewsRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/my-letters': {
@@ -1021,13 +1028,6 @@ declare module '@tanstack/react-router' {
       path: '/org/admins'
       fullPath: '/org/admins'
       preLoaderRoute: typeof AppOrgAdminsRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/org/asset-categories': {
-      id: '/_app/org/asset-categories'
-      path: '/org/asset-categories'
-      fullPath: '/org/asset-categories'
-      preLoaderRoute: typeof AppOrgAssetCategoriesRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/org/assets': {
@@ -1251,6 +1251,7 @@ interface AppRouteChildren {
   AppLeavesRoute: typeof AppLeavesRoute
   AppMyAssetsRoute: typeof AppMyAssetsRoute
   AppMyExpensesRoute: typeof AppMyExpensesRoute
+  AppMyInterviewsRoute: typeof AppMyInterviewsRoute
   AppMyLettersRoute: typeof AppMyLettersRoute
   AppMyResignationRoute: typeof AppMyResignationRoute
   AppPaymentsRoute: typeof AppPaymentsRoute
@@ -1269,7 +1270,6 @@ interface AppRouteChildren {
   AppAdminUsersRoute: typeof AppAdminUsersRoute
   AppAutoVerifiedUuidRoute: typeof AppAutoVerifiedUuidRoute
   AppOrgAdminsRoute: typeof AppOrgAdminsRoute
-  AppOrgAssetCategoriesRoute: typeof AppOrgAssetCategoriesRoute
   AppOrgAssetsRoute: typeof AppOrgAssetsRoute
   AppOrgAttendanceRoute: typeof AppOrgAttendanceRoute
   AppOrgExpenseClaimsRoute: typeof AppOrgExpenseClaimsRoute
@@ -1297,6 +1297,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppLeavesRoute: AppLeavesRoute,
   AppMyAssetsRoute: AppMyAssetsRoute,
   AppMyExpensesRoute: AppMyExpensesRoute,
+  AppMyInterviewsRoute: AppMyInterviewsRoute,
   AppMyLettersRoute: AppMyLettersRoute,
   AppMyResignationRoute: AppMyResignationRoute,
   AppPaymentsRoute: AppPaymentsRoute,
@@ -1315,7 +1316,6 @@ const AppRouteChildren: AppRouteChildren = {
   AppAdminUsersRoute: AppAdminUsersRoute,
   AppAutoVerifiedUuidRoute: AppAutoVerifiedUuidRoute,
   AppOrgAdminsRoute: AppOrgAdminsRoute,
-  AppOrgAssetCategoriesRoute: AppOrgAssetCategoriesRoute,
   AppOrgAssetsRoute: AppOrgAssetsRoute,
   AppOrgAttendanceRoute: AppOrgAttendanceRoute,
   AppOrgExpenseClaimsRoute: AppOrgExpenseClaimsRoute,

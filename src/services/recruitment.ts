@@ -73,6 +73,8 @@ export type Candidate = {
   opening_title?: string | null;
   full_name: string;
   email: string | null;
+  /** True when this email already belongs to another candidate or org account. */
+  email_duplicate?: boolean;
   phone: string | null;
   cnic: string | null;
   cover_letter?: string | null;
@@ -125,6 +127,9 @@ export type Interview = {
   candidate_uuid: UUID;
   candidate_name?: string | null;
   interviewer_uuid: string | null;
+  interviewer_name?: string | null;
+  interviewer_email?: string | null;
+  interviewer_designation?: string | null;
   scheduled_at: string;
   mode: InterviewMode | null;
   location: string | null;
@@ -257,6 +262,8 @@ export const candidatesService = {
       opening_uuid?: UUID;
       stage?: CandidateStage;
       search?: string;
+      from_date?: string;
+      to_date?: string;
     } = {},
   ) =>
     api
@@ -339,13 +346,6 @@ export const candidatesService = {
   prepareOffer: (uuid: UUID, data: { offer_template_uuid: UUID; offer_values: Record<string, string> }) =>
     api.post<{ candidate: Candidate }>(`/org/applications/${uuid}/start-offer`, data)
       .then((r) => r.data),
-  prepareOfferWithInterviewOverride: (uuid: UUID, data: { reason: string; offer_template_uuid: UUID; offer_values: Record<string, string> }) =>
-    api.post<{ candidate: Candidate }>(`/org/applications/${uuid}/start-offer/override`, {
-      override_failed_interview_reason: data.reason,
-      offer_template_uuid: data.offer_template_uuid,
-      offer_values: data.offer_values,
-    }).then((r) => r.data),
-
 
   uploadResume: (uuid: UUID, files: File[]) => {
     const form = new FormData();
@@ -398,6 +398,19 @@ export const candidatesService = {
 };
 
 export const interviewsService = {
+  interviewers: () =>
+    api
+      .get<{ items?: { uuid: UUID; full_name: string; email: string; org_role: string; designation: string | null; department: string | null }[] }>("/org/interviewers")
+      .then((r) => Array.isArray(r.data?.items) ? r.data.items : []),
+
+  myAssigned: (params: { page?: number; limit?: number; search?: string; status?: string; from_date?: string; to_date?: string } = {}) =>
+    api.get<Paginated<Interview>>("/org/my/interviews", { params: { ...params, limit: params.limit ?? 100 } }).then((r) => r.data.items ?? []),
+
+  recordMyFeedback: (
+    uuid: UUID,
+    data: { status?: "completed" | "cancelled"; outcome?: "pending" | "passed" | "failed"; rating?: number | null; feedback_notes?: string },
+  ) => api.post<{ interview: Interview }>(`/org/my/interviews/${uuid}/feedback`, data).then((r) => r.data.interview),
+
   /**
    * PAGINATED, and now genuinely necessary where it was not before.
    *
@@ -439,7 +452,7 @@ export const interviewsService = {
 
   schedule: (data: {
     candidate_uuid: UUID;
-    interviewer_uuid?: UUID;
+    interviewer_uuid: UUID;
     scheduled_at: string;
     mode?: InterviewMode;
     location?: string;
@@ -510,7 +523,7 @@ export const offersService = {
   downloadPdf: (candidateUuid: UUID) =>
     api.get(`/org/offers/${candidateUuid}/pdf`, { responseType: "blob" }).then((r) => r.data as Blob),
   /** Mark the candidate as hired and create their employee record. */
-  hire: (candidateUuid: UUID, data: { cnic?: string | null; joining_date?: string; comments?: string } = {}) =>
+  hire: (candidateUuid: UUID, data: { cnic?: string | null; email?: string; joining_date?: string; comments?: string } = {}) =>
     api.post<{ candidate: Candidate; employee_uuid: UUID | null }>(
       "/org/offers/" + candidateUuid + "/hire",
       data,

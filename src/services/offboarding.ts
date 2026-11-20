@@ -105,7 +105,6 @@ export type OutstandingAsset = {
   asset_uuid: UUID;
   asset_tag: string;
   name: string;
-  category_name: string | null;
   serial_number: string | null;
   asset_status: string;
   purchase_cost: number | string | null;
@@ -212,7 +211,7 @@ export type MyExit = {
 
 export const offboardingService = {
   // ---- staff ----
-  list: (params: { page?: number; limit?: number; status?: string; search?: string } = {}) =>
+  list: (params: { page?: number; limit?: number; status?: string; search?: string; employee_uuid?: UUID; department?: string; from_date?: string; to_date?: string; clearance_status?: "pending" | "cleared" } = {}) =>
     api
       .get<Paginated<ExitRequestListRow>>("/org/offboarding/exit-requests", { params })
       .then((r) => r.data),
@@ -294,6 +293,21 @@ export const offboardingService = {
       )
       .then((r) => r.data.exit_request),
 
+
+  listClearanceTemplates: () =>
+    api.get<{ items: ClearanceTemplateTask[] }>("/org/offboarding/clearance-templates").then((r) => r.data.items),
+
+  createClearanceTemplate: (data: { department: ClearanceDepartment; task_name: string }) =>
+    api.post<{ item: ClearanceTemplateTask }>("/org/offboarding/clearance-templates", data).then((r) => r.data.item),
+
+  updateClearanceTemplate: (uuid: UUID, data: { department: ClearanceDepartment; task_name: string; is_active: boolean }) =>
+    api.put<{ item: ClearanceTemplateTask }>(`/org/offboarding/clearance-templates/${uuid}`, {
+      department: data.department, task_name: data.task_name, is_active: data.is_active,
+    }).then((r) => r.data.item),
+
+  deleteClearanceTemplate: (uuid: UUID) =>
+    api.delete(`/org/offboarding/clearance-templates/${uuid}`).then((r) => r.data),
+
   clearanceQueue: () =>
     api
       .get<{ items: ClearanceQueueRow[]; count: number }>("/org/offboarding/clearances")
@@ -317,3 +331,13 @@ export const myResignationService = {
       .post<{ exit_request: ExitRequestDetail; _email_warning?: string | null }>("/my/resignation", data)
       .then((r) => r.data),
 };
+
+
+export type ClearanceTemplateTask = {
+  uuid: UUID;
+  department: ClearanceDepartment;
+  task_name: string;
+  is_active: boolean | number;
+  sort_order: number;
+};
+

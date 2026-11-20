@@ -28,7 +28,7 @@ import type { AuthUser } from "@/lib/auth";
  * sub-admin's JWT, so the "restriction" was cosmetic: it removed a link and bounced
  * navigation, and did nothing to the API.
  *
- * The four module permissions did not exist anywhere — not in the backend's
+ * The delegated module permissions did not exist anywhere — not in the backend's
  * PERMISSION_KEYS, not in the client's FeatureKey, not in the org-admin grant form —
  * so there was nothing for the guards to check. Delegation with no dial on it.
  *
@@ -68,6 +68,8 @@ type Expectation = {
   path: string;
   /** Backend requirePermission() key, or null when the route is role-only. */
   permission: FeatureKey | null;
+  /** Required data scope for shared resources. */
+  scope?: string;
   /** Personas that may open it. */
   allowed: Persona[];
 };
@@ -81,6 +83,7 @@ const MATRIX: Expectation[] = [
   {
     path: "/org/letter-templates",
     permission: "hr_letters",
+    scope: "hr_letters",
     allowed: ["org_admin", "sub_admin_permitted"],
   },
   {
@@ -164,15 +167,16 @@ const MATRIX: Expectation[] = [
 const ALL_ON = Object.fromEntries(FEATURE_KEYS.map((k) => [k, true])) as FeatureAccessMap;
 const ALL_OFF = Object.fromEntries(FEATURE_KEYS.map((k) => [k, false])) as FeatureAccessMap;
 
-/** The four permissions this audit added. Named once so a typo cannot half-pin a check. */
+/** The delegated permissions this audit added. Named once so a typo cannot half-pin a check. */
 const MODULE_PERMISSION_KEYS: FeatureKey[] = [
   "hr_letters",
   "manage_assets",
   "manage_separation",
   "approve_expenses",
+  "create_expenses",
 ];
 
-function user(orgRole: OrgRole, feature_access: FeatureAccessMap | null): AuthUser {
+function user(orgRole: OrgRole, feature_access: AuthUser["feature_access"]): AuthUser {
   return {
     uuid: "u-1",
     full_name: "Test",
@@ -185,7 +189,7 @@ function user(orgRole: OrgRole, feature_access: FeatureAccessMap | null): AuthUs
 }
 
 /** The persona a row grants its permission to, holding nothing else. */
-function persona(p: Persona, grant?: FeatureKey): AuthUser {
+function persona(p: Persona, grant?: FeatureKey, scope?: string): AuthUser {
   switch (p) {
     case "org_admin":
       // Deliberately ALL_OFF: org_admin must pass on the ROLE alone. If a test only
@@ -193,8 +197,18 @@ function persona(p: Persona, grant?: FeatureKey): AuthUser {
       // a permission would pass and org_admins would be locked out of their own
       // company in production.
       return user("org_admin", ALL_OFF);
-    case "sub_admin_permitted":
-      return user("sub_admin", { ...ALL_OFF, [grant!]: true });
+    case "sub_admin_permitted": {
+      const access = { ...ALL_OFF, [grant!]: true };
+      return user(
+        "sub_admin",
+        scope
+          ? {
+              ...access,
+              data_scopes: { [scope]: "entire_organization" },
+            } as unknown as AuthUser["feature_access"]
+          : access,
+      );
+    }
     case "sub_admin_unpermitted":
       return user("sub_admin", ALL_OFF);
     case "employee":
@@ -218,7 +232,7 @@ describe("every audited HR module route answers identically for all four persona
     for (const p of PERSONAS) {
       it(`${p} ${p === "sub_admin_permitted" ? "WITH" : "without"} ${row.permission ?? "a permission"} -> ${row.path} = ${row.allowed.includes(p)}`, () => {
         expect(
-          canAccessRoute(persona(p, row.permission ?? undefined), row.path),
+          canAccessRoute(persona(p, row.permission ?? undefined, row.scope), row.path),
           `${p} -> ${row.path}`,
         ).toBe(row.allowed.includes(p));
       });
@@ -241,6 +255,16 @@ describe("the specific failures this audit found are closed", () => {
     ]) {
       expect(canAccessRoute(bare, p), `bare sub-admin reached ${p}`).toBe(false);
     }
+  });
+
+  it("a sub-admin with HR Letters View and Own Records scope cannot open shared templates", () => {
+    const scoped = user("sub_admin", {
+      ...ALL_OFF,
+      hr_letters: true,
+      data_scopes: { hr_letters: "own_records" },
+    } as unknown as AuthUser["feature_access"]);
+    expect(canAccessRoute(scoped, "/org/hr-letters")).toBe(true);
+    expect(canAccessRoute(scoped, "/org/letter-templates")).toBe(false);
   });
 
   it("an employee is refused EVERY org module, permission or not", () => {

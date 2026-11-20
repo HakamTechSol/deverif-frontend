@@ -81,6 +81,8 @@ export function CandidatesPage() {
   const [search, setSearch] = useState("");
   const [stage, setStage] = useState<CandidateStage | "">("");
   const [openingUuid, setOpeningUuid] = useState("");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
   const [adding, setAdding] = useState(false);
   const [editingCandidate, setEditingCandidate] = useState<Candidate | null>(null);
   const [viewing, setViewing] = useState<Candidate | null>(null);
@@ -91,7 +93,7 @@ export function CandidatesPage() {
   });
 
   const list = useQuery({
-    queryKey: ["recruitment-candidates-list", page, stage, openingUuid, search],
+    queryKey: ["recruitment-candidates-list", page, stage, openingUuid, search, fromDate, toDate],
     queryFn: () =>
       candidatesService.list({
         page,
@@ -99,6 +101,8 @@ export function CandidatesPage() {
         stage: stage || undefined,
         opening_uuid: openingUuid || undefined,
         search: search || undefined,
+        from_date: fromDate || undefined,
+        to_date: toDate || undefined,
       }),
   });
 
@@ -212,6 +216,8 @@ export function CandidatesPage() {
               </option>
             ))}
           </select>
+          <input type="date" aria-label="Applications from date" value={fromDate} onChange={(e) => resetPage(setFromDate)(e.target.value)} className="h-9 rounded-md border border-input bg-transparent px-2 text-sm" />
+          <input type="date" aria-label="Applications to date" min={fromDate || undefined} value={toDate} onChange={(e) => resetPage(setToDate)(e.target.value)} className="h-9 rounded-md border border-input bg-transparent px-2 text-sm" />
           <select
             value={openingUuid}
             onChange={(e) => resetPage(setOpeningUuid)(e.target.value)}
@@ -573,20 +579,19 @@ function AddCandidateDialog({
     onSuccess: (result) => {
       onDone();
       onOpenChange(false);
-      if (result.resumeAttached === false) {
-        // Candidate saved, CV not attached. Both halves said out loud, so the
-        // recruiter knows to retry the CV on the candidate's row rather than
-        // assuming the whole save failed.
-        toast.warning(`${t(editing ? "recruitment.candidateUpdated" : "recruitment.candidateCreated")} ${t("recruitment.resumeAttachFailed")}`);
+      const savedMessage = t(editing ? "recruitment.candidateUpdated" : "recruitment.candidateCreated");
+      if (result.candidate.email_duplicate) {
+        toast.warning(`${savedMessage} Email already exists in DVerif. Update it to a unique email before preparing an offer.`);
+      } else if (result.resumeAttached === false) {
+        toast.warning(`${savedMessage} ${t("recruitment.resumeAttachFailed")}`);
       } else if (result.resumeAttached === null) {
         toast.success(t(editing ? "recruitment.candidateUpdated" : "recruitment.candidateCreatedWithoutResume"));
       } else {
         toast.success(t(editing ? "recruitment.candidateUpdated" : "recruitment.candidateCreated"));
       }
     },
-    // The duplicate-application case lands here: one row per candidate per opening is
-    // enforced by a unique index, so re-adding the same person is a 409 the recruiter
-    // needs told about rather than a form that appears to ignore them.
+    // Phone/CNIC conflicts still refuse creation. Duplicate email is a warning only:
+    // the application is retained, then the email must be changed before an offer.
     //
     // The shape marker is checked first and quietly dropped: a CNIC that is 12
     // digits long is already reported on the input itself, and a toast saying

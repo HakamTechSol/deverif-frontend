@@ -12,6 +12,7 @@ import {
   Lock,
   Pencil,
   Plus,
+  RefreshCw,
   Trash2,
   Users,
   XCircle,
@@ -20,6 +21,7 @@ import {
 import { authStore } from "@/lib/auth";
 import { canAccessRoute } from "@/lib/routeAccess";
 import { useAuth } from "@/lib/auth";
+import { usePermissions } from "@/lib/permissions";
 import { useOrgSubscription } from "@/hooks/useOrgSubscription";
 import { ModuleFeatureLockedCard } from "@/components/common/SubscriptionLocked";
 import { LeaveRequestDetailsDialog } from "@/components/leaves/LeaveRequestDetailsDialog";
@@ -64,7 +66,7 @@ import {
   type LeaveRequest,
   type LeaveType,
 } from "@/services";
-import { countDays, formatDate, formatDateTime, parseFeatureAccess } from "@/lib/utils";
+import { countDays, formatDate, formatDateTime, formatLeaveDays } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/org/leaves")({
   beforeLoad: () => {
@@ -85,10 +87,9 @@ const PAGE_SIZE = 10;
 function OrgLeavesPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const isStaff =
-    user?.role === "user" &&
-    (user?.org_role === "org_admin" ||
-      (user?.org_role === "sub_admin" && parseFeatureAccess(user.feature_access).leave));
+  const isStaff = user?.role === "user" &&
+    canAccessRoute(user, "/org/leaves") &&
+    (user.org_role === "org_admin" || user.org_role === "sub_admin");
 
   useEffect(() => {
     if (user && !isStaff) navigate({ to: "/dashboard" });
@@ -102,20 +103,43 @@ function OrgLeavesPage() {
 function OrgLeavesContent() {
   const { t } = useTranslation();
   const { user } = useAuth();
+  const permissions = usePermissions();
   const qc = useQueryClient();
   const { isLocked, isModuleFlagOff } = useOrgSubscription();
   const canDelete = user?.org_role === "org_admin";
+  const canApprove = permissions.hasGranular("leave_management.approve", "leave");
+  const canReject = permissions.hasGranular("leave_management.reject", "leave");
+  const canManageLeaveTypes = permissions.hasGranular("leave_management.manage_leave_types", "leave");
+  const canAllocateBalance = permissions.hasGranular("leave_management.allocate_balance", "leave");
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
+  const [employeeUuid, setEmployeeUuid] = useState("");
+  const [leaveTypeId, setLeaveTypeId] = useState("");
   const [selectedLeave, setSelectedLeave] = useState<LeaveRequest | null>(null);
   const [confirming, setConfirming] = useState<LeaveRequest | null>(null);
   const [decideAction, setDecideAction] = useState<"approved" | "rejected">("approved");
+  const [approvalTreatment, setApprovalTreatment] = useState<"paid" | "unpaid">("paid");
   const [typeDialog, setTypeDialog] = useState<{ open: boolean; editing: LeaveType | null }>({
     open: false,
     editing: null,
   });
   const [deletingType, setDeletingType] = useState<LeaveType | null>(null);
+  const [visibleLeaveTypes, setVisibleLeaveTypes] = useState(5);
+  const [activeTab, setActiveTab] = useState("requests");
+
+  useEffect(() => {
+    if (!canAllocateBalance && activeTab === "allocations") setActiveTab("requests");
+  }, [activeTab, canAllocateBalance]);
+
+  const employees = useQuery({
+    queryKey: ["orgLeaveFilterEmployees", user?.uuid],
+    queryFn: orgLeavesService.filterEmployees,
+    enabled: !!user?.uuid,
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
+    refetchOnMount: "always",
+  });
 
   const types = useQuery({
     queryKey: ["orgLeaveTypes"],
@@ -123,13 +147,21 @@ function OrgLeavesContent() {
   });
 
   const list = useQuery({
-    queryKey: ["orgLeaves", page, search, status],
-    queryFn: () => orgLeavesService.list({ page, limit: PAGE_SIZE, search, status }),
+    queryKey: ["orgLeaves", page, search, status, employeeUuid, leaveTypeId],
+    queryFn: () => orgLeavesService.list({ page, limit: PAGE_SIZE, search, status, employee_uuid: employeeUuid || undefined, leave_type_id: leaveTypeId ? Number(leaveTypeId) : undefined, include_all: true }),
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
   });
 
   const decide = useMutation({
-    mutationFn: ({ uuid, decision }: { uuid: string; decision: "approved" | "rejected" }) =>
-      orgLeavesService.decide(uuid, { status: decision }),
+    mutationFn: ({ uuid, decision, treatment }: {
+      uuid: string;
+      decision: "approved" | "rejected";
+      treatment?: "paid" | "unpaid";
+    }) => orgLeavesService.decide(uuid, {
+      status: decision,
+      ...(decision === "approved" && treatment ? { approved_treatment: treatment } : {}),
+    }),
     onSuccess: (_data, vars) => {
       toast.success(
         vars.decision === "approved" ? t("orgLeaves.leaveApproved") : t("orgLeaves.leaveRejected"),
@@ -152,6 +184,14 @@ function OrgLeavesContent() {
   });
 
   const items = list.data?.items ?? [];
+  const listErrorMessage = (
+    list.error as { response?: { data?: { message?: unknown } }; message?: unknown } | null
+  )?.response?.data?.message;
+  const listErrorText = typeof listErrorMessage === "string"
+    ? listErrorMessage
+    : list.error instanceof Error && list.error.message
+      ? list.error.message
+      : t("orgLeaves.loadFailed");
 
   const moduleLocked = isModuleFlagOff("leave_management");
   if (moduleLocked) return <ModuleFeatureLockedCard feature="leave_management" />;
@@ -160,25 +200,29 @@ function OrgLeavesContent() {
     <div>
       <PageHeader title={t("orgLeaves.title")} description={t("orgLeaves.description")} />
 
-      <Tabs defaultValue="requests">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="requests">{t("orgLeaves.tabRequests")}</TabsTrigger>
-          <TabsTrigger value="allocations">{t("orgLeaves.tabAllocations")}</TabsTrigger>
+          {canAllocateBalance ? (
+            <TabsTrigger value="allocations">{t("orgLeaves.tabAllocations")}</TabsTrigger>
+          ) : null}
         </TabsList>
 
         <TabsContent value="requests">
           <Card className="border-border/70 shadow-none">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
               <CardTitle className="text-base">{t("orgLeaves.leaveTypes")}</CardTitle>
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={isLocked}
-                onClick={() => setTypeDialog({ open: true, editing: null })}
-              >
-                {isLocked ? <Lock className="mr-1 h-3 w-3" /> : <Plus className="mr-1 h-3 w-3" />}
-                {isLocked ? "Subscription Required" : t("orgLeaves.addType")}
-              </Button>
+              {canManageLeaveTypes ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={isLocked}
+                  onClick={() => setTypeDialog({ open: true, editing: null })}
+                >
+                  {isLocked ? <Lock className="mr-1 h-3 w-3" /> : <Plus className="mr-1 h-3 w-3" />}
+                  {isLocked ? "Subscription Required" : t("orgLeaves.addType")}
+                </Button>
+              ) : null}
             </CardHeader>
             <CardContent>
               {types.isLoading ? (
@@ -187,22 +231,26 @@ function OrgLeavesContent() {
                 <p className="text-sm text-muted-foreground">{t("orgLeaves.noTypesYet")}</p>
               ) : (
                 <div className="divide-y divide-border rounded-md border border-border">
-                  {(types.data ?? []).map((lt) => (
+                  {(types.data ?? []).slice(0, visibleLeaveTypes).map((lt) => (
                     <div key={lt.id} className="flex items-center justify-between px-3 py-2">
                       <div className="flex items-center gap-2 text-sm">
-                        <span className="font-medium text-foreground">{lt.name}</span><span className="rounded bg-muted px-1.5 py-0.5 text-[10px]">{lt.is_paid === "no" ? "Unpaid" : "Paid"}</span>
+                        <span className="font-medium text-foreground">{lt.name}</span>
+                        <span className="text-xs text-muted-foreground">{lt.is_paid === "no" ? t("orgLeaves.unpaidLeave") : t("orgLeaves.paidLeave")}</span>
                       </div>
                       <div className="flex items-center gap-1">
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                          disabled={isLocked}
-                          onClick={() => setTypeDialog({ open: true, editing: lt })}
-                        >
-                          {isLocked ? <Lock className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}
-                        </Button>
-                        {canDelete ? (
+                        {canManageLeaveTypes ? (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                            disabled={isLocked}
+                            onClick={() => setTypeDialog({ open: true, editing: lt })}
+                            aria-label={`Edit ${lt.name} leave type`}
+                          >
+                            {isLocked ? <Lock className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}
+                          </Button>
+                        ) : null}
+                        {canDelete && canManageLeaveTypes ? (
                           <Button
                             size="icon"
                             variant="ghost"
@@ -218,20 +266,47 @@ function OrgLeavesContent() {
                   ))}
                 </div>
               )}
+              {(types.data ?? []).length > visibleLeaveTypes ? (
+                <div className="mt-3 flex justify-center">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setVisibleLeaveTypes((current) => current + 5)}
+                  >
+                    Show more ({Math.min(5, (types.data ?? []).length - visibleLeaveTypes)})
+                  </Button>
+                </div>
+              ) : null}
             </CardContent>
           </Card>
 
           <Card className="mt-4 border-border/70 shadow-none">
             <CardContent className="p-0">
-              <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center">
-                <SearchInput
-                  value={search}
-                  onChange={(v) => {
-                    setSearch(v);
-                    setPage(1);
-                  }}
-                  placeholder={t("orgLeaves.searchPlaceholder")}
-                />
+              <div className="grid min-w-0 grid-cols-1 gap-3 border-b border-border p-4 sm:grid-cols-2 xl:grid-cols-8">
+                <div className="min-w-0 sm:col-span-2 xl:col-span-3 [&>div]:!w-full">
+                  <SearchInput
+                    value={search}
+                    onChange={(v) => {
+                      setSearch(v);
+                      setPage(1);
+                    }}
+                    placeholder={t("orgLeaves.searchPlaceholder")}
+                  />
+                </div>
+                <div className="min-w-0 xl:col-span-2">
+                  <Select value={employeeUuid || "all"} onValueChange={(v) => { setEmployeeUuid(v === "all" ? "" : v); setPage(1); }}>
+                    <SelectTrigger className="w-full min-w-0"><SelectValue placeholder="All employees" /></SelectTrigger>
+                    <SelectContent><SelectItem value="all">All employees</SelectItem>{(employees.data ?? []).map((e) => <SelectItem key={e.uuid} value={e.uuid}>{e.full_name}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div className="min-w-0 xl:col-span-2">
+                  <Select value={leaveTypeId || "all"} onValueChange={(v) => { setLeaveTypeId(v === "all" ? "" : v); setPage(1); }}>
+                    <SelectTrigger className="w-full min-w-0"><SelectValue placeholder="All leave types" /></SelectTrigger>
+                    <SelectContent><SelectItem value="all">All leave types</SelectItem>{(types.data ?? []).map((lt) => <SelectItem key={lt.id} value={String(lt.id)}>{lt.name}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div className="min-w-0 xl:col-span-2">
                 <Select
                   value={status || "all"}
                   onValueChange={(v) => {
@@ -239,20 +314,40 @@ function OrgLeavesContent() {
                     setPage(1);
                   }}
                 >
-                  <SelectTrigger className="w-full sm:w-44">
+                  <SelectTrigger className="w-full min-w-0">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="pending">{t("status.pending")}</SelectItem>
                     <SelectItem value="approved">{t("status.approved")}</SelectItem>
                     <SelectItem value="rejected">{t("status.rejected")}</SelectItem>
+                    <SelectItem value="cancelled">{t("status.cancelled")}</SelectItem>
                     <SelectItem value="all">{t("orgLeaves.all")}</SelectItem>
                   </SelectContent>
                 </Select>
+                </div>
+              </div>
+
+              <div className="flex justify-end border-b border-border px-4 py-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={list.isFetching}
+                  onClick={() => void list.refetch()}
+                >
+                  <RefreshCw className={`mr-2 h-3.5 w-3.5${list.isFetching ? " animate-spin" : ""}`} />
+                  {t("orgLeaves.refresh")}
+                </Button>
               </div>
 
               {list.isLoading ? (
                 <TableSkeleton />
+              ) : list.isError ? (
+                <div role="alert" className="p-6 text-center text-sm text-destructive">
+                  <p>{t("orgLeaves.loadFailed")}</p>
+                  <p className="mt-1 break-words text-xs">{listErrorText}</p>
+                </div>
               ) : items.length === 0 ? (
                 <div className="p-6">
                   <EmptyState
@@ -285,6 +380,9 @@ function OrgLeavesContent() {
                             {t("orgLeaves.days")}
                           </TableHead>
                           <TableHead className="whitespace-nowrap">
+                            {t("orgLeaves.payrollTreatment")}
+                          </TableHead>
+                          <TableHead className="whitespace-nowrap">
                             {t("orgLeaves.status")}
                           </TableHead>
                           <TableHead className="text-right whitespace-nowrap">
@@ -313,7 +411,21 @@ function OrgLeavesContent() {
                               {formatDate(r.start_date)} → {formatDate(r.end_date)}
                             </TableCell>
                             <TableCell data-label="Days" className="whitespace-nowrap text-sm text-foreground">
-                              {countDays(r.start_date, r.end_date)}
+                              {(() => {
+                                const days = r.approved_days ?? (
+                                  r.day_portion && r.day_portion !== "full"
+                                    ? 0.5
+                                    : r.working_days ?? (r.status === "pending" ? null : countDays(r.start_date, r.end_date))
+                                );
+                                return days === null ? "—" : formatLeaveDays(days);
+                              })()}
+                            </TableCell>
+                            <TableCell data-label="Payroll treatment" className="whitespace-nowrap text-sm">
+                              {(r.approved_treatment ?? r.requested_treatment) === "paid"
+                                ? <span className="text-success">{t("orgLeaves.paidLeave")}</span>
+                                : (r.approved_treatment ?? r.requested_treatment) === "unpaid"
+                                  ? <span className="text-warning">{t("orgLeaves.unpaidLeave")}</span>
+                                  : "—"}
                             </TableCell>
                             <TableCell data-label="Status" className="whitespace-nowrap">
                               <StatusBadge status={r.status} />
@@ -333,20 +445,21 @@ function OrgLeavesContent() {
                                 </Button>
                                 {r.status === "pending" ? (
                                   <>
-                                    <Button
+                                    {canApprove ? <Button
                                       size="sm"
                                       variant="outline"
                                       className="h-7 text-xs"
                                       disabled={isLocked}
                                       onClick={() => {
                                         setDecideAction("approved");
+                                        setApprovalTreatment(r.requested_treatment === "unpaid" ? "unpaid" : "paid");
                                         setConfirming(r);
                                       }}
                                     >
                                       {isLocked ? <Lock className="mr-1 h-3.5 w-3.5" /> : <CheckCircle2 className="mr-1 h-3.5 w-3.5 text-success" />}
                                       {t("orgLeaves.approve")}
-                                    </Button>
-                                    <Button
+                                    </Button> : null}
+                                    {canReject ? <Button
                                       size="sm"
                                       variant="outline"
                                       className="h-7 text-xs"
@@ -358,7 +471,7 @@ function OrgLeavesContent() {
                                     >
                                       {isLocked ? <Lock className="mr-1 h-3.5 w-3.5" /> : <XCircle className="mr-1 h-3.5 w-3.5 text-destructive" />}
                                       {t("orgLeaves.reject")}
-                                    </Button>
+                                    </Button> : null}
                                   </>
                                 ) : (
                                   <span className="px-2 text-xs text-muted-foreground">
@@ -384,13 +497,51 @@ function OrgLeavesContent() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="allocations">
-          <AllocationsTab />
-        </TabsContent>
+        {canAllocateBalance ? (
+          <TabsContent value="allocations">
+            <AllocationsTab canAllocate={canAllocateBalance} />
+          </TabsContent>
+        ) : null}
       </Tabs>
 
-      <ConfirmDialog
-        open={!!confirming}
+      {canApprove ? <Dialog open={!!confirming && decideAction === "approved"} onOpenChange={(o) => !o && setConfirming(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t("orgLeaves.approveTitle")}</DialogTitle>
+            <DialogDescription>
+              {t("orgLeaves.approveTreatment")}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <Label htmlFor="leave-approval-treatment">{t("orgLeaves.payrollTreatment")}</Label>
+            <Select
+              value={approvalTreatment}
+              onValueChange={(value) => setApprovalTreatment(value as "paid" | "unpaid")}
+            >
+              <SelectTrigger id="leave-approval-treatment"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="paid">{t("orgLeaves.paidLeave")}</SelectItem>
+                <SelectItem value="unpaid">{t("orgLeaves.unpaidLeave")}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirming(null)}>Cancel</Button>
+            <Button
+              onClick={() => confirming && decide.mutate({
+                uuid: confirming.uuid,
+                decision: "approved",
+                treatment: approvalTreatment,
+              })}
+              disabled={decide.isPending}
+            >
+              Confirm Approval
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog> : null}
+      {canReject ? <ConfirmDialog
+        open={!!confirming && decideAction === "rejected"}
         onOpenChange={(o) => !o && setConfirming(null)}
         title={
           decideAction === "approved" ? t("orgLeaves.approveTitle") : t("orgLeaves.rejectTitle")
@@ -400,40 +551,42 @@ function OrgLeavesContent() {
             ? decideAction === "approved"
               ? t("orgLeaves.approveDescription", {
                   name: confirming.employee_name ?? t("orgLeaves.thisEmployee"),
-                  days: countDays(confirming.start_date, confirming.end_date),
+                  days: confirming.approved_days ?? confirming.working_days ?? countDays(confirming.start_date, confirming.end_date),
                   leaveType: confirming.leave_type_name,
                   startDate: confirming.start_date,
                   endDate: confirming.end_date,
                 })
               : t("orgLeaves.rejectDescription", {
                   name: confirming.employee_name ?? t("orgLeaves.thisEmployee"),
-                  days: countDays(confirming.start_date, confirming.end_date),
+                  days: confirming.approved_days ?? confirming.working_days ?? countDays(confirming.start_date, confirming.end_date),
                   leaveType: confirming.leave_type_name,
                   startDate: confirming.start_date,
                   endDate: confirming.end_date,
                 })
             : undefined
         }
-        confirmLabel={decideAction === "approved" ? t("common.approve") : t("common.reject")}
-        destructive={decideAction === "rejected"}
+        confirmLabel={t("common.reject")}
+        destructive
         onConfirm={() =>
-          confirming && decide.mutate({ uuid: confirming.uuid, decision: decideAction })
+          confirming && decide.mutate({ uuid: confirming.uuid, decision: "rejected" })
         }
-      />
+      /> : null}
 
-      <ConfirmDialog
+      {canDelete && canManageLeaveTypes ? <ConfirmDialog
         open={!!deletingType}
         onOpenChange={(o) => !o && setDeletingType(null)}
         title={t("orgLeaves.deleteTypeTitle")}
         description={t("orgLeaves.deleteTypeDescription", { name: deletingType?.name ?? "" })}
         onConfirm={() => deletingType && deleteType.mutate(deletingType.id)}
-      />
+      /> : null}
 
-      <LeaveTypeDialog
-        open={typeDialog.open}
-        editing={typeDialog.editing}
-        onOpenChange={(o) => setTypeDialog({ open: o, editing: null })}
-      />
+      {canManageLeaveTypes ? (
+        <LeaveTypeDialog
+          open={typeDialog.open}
+          editing={typeDialog.editing}
+          onOpenChange={(o) => setTypeDialog({ open: o, editing: null })}
+        />
+      ) : null}
       <LeaveRequestDetailsDialog
         request={selectedLeave}
         onOpenChange={(open) => !open && setSelectedLeave(null)}
@@ -442,7 +595,7 @@ function OrgLeavesContent() {
   );
 }
 
-function AllocationsTab() {
+function AllocationsTab({ canAllocate }: { canAllocate: boolean }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const { isLocked } = useOrgSubscription();
@@ -469,30 +622,6 @@ function AllocationsTab() {
     queryFn: () =>
       historyEmp ? orgLeaveAllocationService.employeeHistory(historyEmp) : Promise.resolve(null),
     enabled: !!historyEmp,
-  });
-
-  const setCell = useMutation({
-    mutationFn: ({
-      employee_uuid,
-      leave_type_id,
-      allocated_days,
-    }: {
-      employee_uuid: string;
-      leave_type_id: number;
-      allocated_days: number;
-    }) =>
-      orgLeaveAllocationService.set({
-        employee_uuid,
-        leave_type_id,
-        year,
-        allocated_days,
-      }),
-    onSuccess: () => {
-      toast.success(t("orgLeaves.allocSaved"));
-      qc.invalidateQueries({ queryKey: ["orgLeaveAllocations", year] });
-    },
-    onError: (e: any) =>
-      toast.error(e?.response?.data?.message ?? t("orgLeaves.allocSaveFailed")),
   });
 
   const setDesignationAllocation = useMutation({
@@ -601,28 +730,30 @@ function AllocationsTab() {
           </Select>
         </div>
 
-        <div className="mb-4 flex flex-col gap-3 rounded-md border border-border p-3 sm:flex-row sm:items-end">
-          <div className="min-w-48 flex-1">
-            <Label className="mb-1.5 block text-xs">{t("orgLeaves.allocBulkType")}</Label>
-            <Select value={bulkLeaveType} onValueChange={setBulkLeaveType}>
-              <SelectTrigger><SelectValue placeholder={t("orgLeaves.allocBulkTypePlaceholder")} /></SelectTrigger>
-              <SelectContent>
-                {leaveTypes.map((lt) => <SelectItem key={lt.id} value={String(lt.id)}>{lt.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
+        {canAllocate ? (
+          <div className="mb-4 flex flex-col gap-3 rounded-md border border-border p-3 sm:flex-row sm:items-end">
+            <div className="min-w-48 flex-1">
+              <Label className="mb-1.5 block text-xs">{t("orgLeaves.allocBulkType")}</Label>
+              <Select value={bulkLeaveType} onValueChange={setBulkLeaveType}>
+                <SelectTrigger><SelectValue placeholder={t("orgLeaves.allocBulkTypePlaceholder")} /></SelectTrigger>
+                <SelectContent>
+                  {leaveTypes.map((lt) => <SelectItem key={lt.id} value={String(lt.id)}>{lt.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="w-full sm:w-32">
+              <Label htmlFor="designation-allocation-days" className="mb-1.5 block text-xs">{t("orgLeaves.allocated")}</Label>
+              <Input id="designation-allocation-days" type="number" min={0} step={1} value={bulkDays} onChange={(e) => setBulkDays(e.target.value)} />
+            </div>
+            <Button
+              type="button"
+              disabled={isLocked || !allocDesignation || !bulkLeaveType || bulkDays === "" || !/^\d+$/.test(bulkDays) || setDesignationAllocation.isPending}
+              onClick={() => setDesignationAllocation.mutate()}
+            >
+              {setDesignationAllocation.isPending ? t("orgLeaves.allocBulkSaving") : t("orgLeaves.allocBulkApply")}
+            </Button>
           </div>
-          <div className="w-full sm:w-32">
-            <Label htmlFor="designation-allocation-days" className="mb-1.5 block text-xs">{t("orgLeaves.allocated")}</Label>
-            <Input id="designation-allocation-days" type="number" min={0} step={1} value={bulkDays} onChange={(e) => setBulkDays(e.target.value)} />
-          </div>
-          <Button
-            type="button"
-            disabled={isLocked || !allocDesignation || !bulkLeaveType || bulkDays === "" || !/^\d+$/.test(bulkDays) || setDesignationAllocation.isPending}
-            onClick={() => setDesignationAllocation.mutate()}
-          >
-            {setDesignationAllocation.isPending ? t("orgLeaves.allocBulkSaving") : t("orgLeaves.allocBulkApply")}
-          </Button>
-        </div>
+        ) : null}
 
         {allocations.isLoading ? (
           <TableSkeleton />
@@ -668,32 +799,16 @@ function AllocationsTab() {
                       <div className="text-xs text-muted-foreground">{emp.email}</div>
                     </TableCell>
                     {emp.allocations.map((a) => {
-                      const cellsState =
-                        setCell.variables &&
-                        setCell.variables.employee_uuid === emp.employee_uuid &&
-                        setCell.variables.leave_type_id === a.leave_type_id &&
-                        setCell.isPending
-                          ? setCell.variables.allocated_days
-                          : null;
                       return (
                         <TableCell
                           key={a.leave_type_id}
                           data-label={leaveTypes.find((lt) => lt.id === a.leave_type_id)?.name ?? ""}
                           className="whitespace-nowrap"
                         >
-                          <AllocationCell
-                            value={a.allocated_days}
-                            remaining={a.remaining_days}
-                            busy={cellsState !== null}
-                            locked={isLocked}
-                            onCommit={(val) =>
-                              setCell.mutate({
-                                employee_uuid: emp.employee_uuid,
-                                leave_type_id: a.leave_type_id,
-                                allocated_days: val,
-                              })
-                            }
-                          />
+                          <div className="text-sm font-medium text-foreground">{a.allocated_days}</div>
+                          <div className="text-[10px] text-muted-foreground">
+                            {a.remaining_days} {a.remaining_days === 1 ? "day" : "days"} left
+                          </div>
                         </TableCell>
                       );
                     })}
@@ -726,64 +841,6 @@ function AllocationsTab() {
   );
 }
 
-function AllocationCell({
-  value,
-  remaining,
-  busy,
-  locked,
-  onCommit,
-}: {
-  value: number;
-  remaining: number;
-  busy: boolean;
-  locked?: boolean;
-  onCommit: (allocated_days: number) => void;
-}) {
-  const [local, setLocal] = useState<string>(String(value));
-  const [editing, setEditing] = useState(false);
-
-  useEffect(() => {
-    setLocal(String(value));
-  }, [value]);
-
-  const commit = () => {
-    setEditing(false);
-    const v = parseInt(local, 10);
-    if (isNaN(v) || v < 0 || v === value) {
-      setLocal(String(value));
-      return;
-    }
-    onCommit(v);
-  };
-
-  return (
-    <div className="flex flex-col gap-0.5">
-      <input
-        type="number"
-        min={0}
-        value={editing ? local : String(value)}
-        onChange={(e) => {
-          setLocal(e.target.value);
-          setEditing(true);
-        }}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-        }}
-        disabled={busy || locked}
-        className="h-7 w-20 rounded-md border border-border bg-transparent px-2 text-sm text-foreground outline-none focus:border-ring disabled:opacity-50"
-      />
-      <span
-        className={`text-[10px] leading-none ${
-          remaining <= 0 ? "text-amber-600" : "text-muted-foreground"
-        }`}
-      >
-        {remaining} {remaining === 1 ? "day left" : "days left"}
-      </span>
-    </div>
-  );
-}
-
 function HistoryDialog({
   empUuid,
   onClose,
@@ -795,12 +852,30 @@ function HistoryDialog({
   history:
     | {
         employee_name: string;
-        allocations: {
+        balances: {
           year: number;
-          allocated_days: number;
-          used_days: number;
-          remaining_days: number;
+          allocated_days: number | string;
+          used_days: number | string;
+          remaining_days: number | string;
           leave_type_name: string;
+        }[];
+        leave_history: {
+          uuid: string;
+          leave_type_name: string;
+          start_date: string;
+          end_date: string;
+          days: number;
+          status: "pending" | "approved" | "rejected" | "cancelled";
+        }[];
+        balance_ledger: {
+          id: number;
+          transaction_type: string;
+          credited_days: number | string;
+          debited_days: number | string;
+          previous_balance: number | string;
+          updated_balance: number | string;
+          transaction_at: string;
+          reason: string;
         }[];
       }
     | null
@@ -820,44 +895,83 @@ function HistoryDialog({
         </DialogHeader>
         {isLoading ? (
           <TableSkeleton />
-        ) : !history || history.allocations.length === 0 ? (
+        ) : !history || (history.balances.length === 0 && history.leave_history.length === 0 && history.balance_ledger.length === 0) ? (
           <p className="text-sm text-muted-foreground">{t("orgLeaves.allocNoHistory")}</p>
         ) : (
-          <div className="max-h-[50vh] overflow-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="whitespace-nowrap">{t("orgLeaves.year")}</TableHead>
-                  <TableHead className="whitespace-nowrap">
-                    {t("orgLeaves.leaveType")}
-                  </TableHead>
-                  <TableHead className="whitespace-nowrap">{t("orgLeaves.allocated")}</TableHead>
-                  <TableHead className="whitespace-nowrap">{t("orgLeaves.used")}</TableHead>
-                  <TableHead className="whitespace-nowrap">{t("orgLeaves.remaining")}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {history.allocations.map((a, i) => (
-                  <TableRow key={`${a.year}-${a.leave_type_name}-${i}`}>
-                    <TableCell data-label="Year" className="whitespace-nowrap text-sm text-foreground">
-                      {a.year}
-                    </TableCell>
-                    <TableCell data-label="Leave Type" className="whitespace-nowrap text-sm text-muted-foreground">
-                      {a.leave_type_name}
-                    </TableCell>
-                    <TableCell data-label="Allocated" className="whitespace-nowrap text-sm text-foreground">
-                      {a.allocated_days}
-                    </TableCell>
-                    <TableCell data-label="Used" className="whitespace-nowrap text-sm text-muted-foreground">
-                      {a.used_days}
-                    </TableCell>
-                    <TableCell data-label="Remaining" className="whitespace-nowrap text-sm text-foreground">
-                      {a.remaining_days}
-                    </TableCell>
-                  </TableRow>
+          <div className="max-h-[55vh] space-y-4 overflow-auto">
+            {history.balances.length > 0 && (
+              <div className="grid gap-2 sm:grid-cols-2">
+                {history.balances.map((balance) => (
+                  <div
+                    key={`${balance.year}-${balance.leave_type_name}`}
+                    className="rounded-md border border-border p-3 text-sm"
+                  >
+                    <div className="font-medium text-foreground">
+                      {balance.leave_type_name} · {balance.year}
+                    </div>
+                    <div className="mt-1 text-muted-foreground">
+                      Used: {balance.used_days} · Remaining: {balance.remaining_days}
+                    </div>
+                  </div>
                 ))}
-              </TableBody>
-            </Table>
+              </div>
+            )}
+            {history.leave_history.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No leave requests recorded.</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="whitespace-nowrap">{t("orgLeaves.leaveType")}</TableHead>
+                    <TableHead className="whitespace-nowrap">From</TableHead>
+                    <TableHead className="whitespace-nowrap">To</TableHead>
+                    <TableHead className="whitespace-nowrap">Days</TableHead>
+                    <TableHead className="whitespace-nowrap">{t("orgLeaves.status")}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {history.leave_history.map((leave) => (
+                    <TableRow key={leave.uuid}>
+                      <TableCell className="whitespace-nowrap">{leave.leave_type_name}</TableCell>
+                      <TableCell className="whitespace-nowrap">{formatDate(leave.start_date)}</TableCell>
+                      <TableCell className="whitespace-nowrap">{formatDate(leave.end_date)}</TableCell>
+                      <TableCell className="whitespace-nowrap">{leave.days}</TableCell>
+                      <TableCell className="whitespace-nowrap capitalize">{leave.status}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+            {history.balance_ledger.length > 0 && (
+              <div>
+                <h3 className="mb-2 text-sm font-medium">Leave balance ledger</h3>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="whitespace-nowrap">Transaction</TableHead>
+                      <TableHead className="whitespace-nowrap">Credit</TableHead>
+                      <TableHead className="whitespace-nowrap">Debit</TableHead>
+                      <TableHead className="whitespace-nowrap">Balance</TableHead>
+                      <TableHead className="whitespace-nowrap">Date / reason</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {history.balance_ledger.map((entry) => (
+                      <TableRow key={entry.id}>
+                        <TableCell className="whitespace-nowrap">{entry.transaction_type.replace(/_/g, " ")}</TableCell>
+                        <TableCell>{entry.credited_days}</TableCell>
+                        <TableCell>{entry.debited_days}</TableCell>
+                        <TableCell>{entry.previous_balance} → {entry.updated_balance}</TableCell>
+                        <TableCell className="min-w-48 text-xs">
+                          <div>{formatDateTime(entry.transaction_at)}</div>
+                          <div className="text-muted-foreground">{entry.reason}</div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
           </div>
         )}
         <DialogFooter>
@@ -882,17 +996,20 @@ function LeaveTypeDialog({
   const qc = useQueryClient();
   const { t } = useTranslation();
   const [name, setName] = useState("");
-  const [isPaid, setIsPaid] = useState<"" | "yes" | "no">("");
+  const [isPaid, setIsPaid] = useState<"yes" | "no">("yes");
 
   useEffect(() => {
-    if (open) { setName(editing?.name ?? ""); setIsPaid(editing?.is_paid ?? ""); }
+    if (open) {
+      setName(editing?.name ?? "");
+      setIsPaid(editing?.is_paid ?? "yes");
+    }
   }, [open, editing]);
 
   const save = useMutation({
     mutationFn: () =>
       editing
-        ? orgLeavesService.updateType(editing.id, { name, is_paid: isPaid as "yes" | "no" })
-        : orgLeavesService.createType({ name, is_paid: isPaid as "yes" | "no" }),
+        ? orgLeavesService.updateType(editing.id, { name, is_paid: isPaid })
+        : orgLeavesService.createType({ name, is_paid: isPaid }),
     onSuccess: () => {
       toast.success(editing ? t("orgLeaves.leaveTypeUpdated") : t("orgLeaves.leaveTypeCreated"));
       qc.invalidateQueries({ queryKey: ["orgLeaveTypes"] });
@@ -903,7 +1020,6 @@ function LeaveTypeDialog({
 
   const submit = () => {
     if (!name.trim()) return toast.error(t("orgLeaves.nameRequired"));
-    if (!isPaid) return toast.error("Select whether this leave is paid or unpaid.");
     save.mutate();
   };
 
@@ -927,10 +1043,13 @@ function LeaveTypeDialog({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="lt-paid-status">Payroll treatment</Label>
-            <Select value={isPaid} onValueChange={(v) => setIsPaid(v as "yes" | "no")}>
-              <SelectTrigger id="lt-paid-status"><SelectValue placeholder="Choose paid or unpaid" /></SelectTrigger>
-              <SelectContent><SelectItem value="yes">Paid leave ? does not reduce base salary</SelectItem><SelectItem value="no">Unpaid leave ? eligible for policy-based deduction</SelectItem></SelectContent>
+            <Label htmlFor="lt-paid">{t("orgLeaves.payrollTreatment")}</Label>
+            <Select value={isPaid} onValueChange={(value) => setIsPaid(value as "yes" | "no")}>
+              <SelectTrigger id="lt-paid"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="yes">{t("orgLeaves.paidLeave")}</SelectItem>
+                <SelectItem value="no">{t("orgLeaves.unpaidLeave")}</SelectItem>
+              </SelectContent>
             </Select>
           </div>
         </div>

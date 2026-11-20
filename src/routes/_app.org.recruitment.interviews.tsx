@@ -4,22 +4,20 @@ import { useForm } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { CalendarClock, Video } from "lucide-react";
+import { CalendarClock, Video, Eye } from "lucide-react";
 
 import { ModuleGate } from "@/components/hr/ModuleGate";
 import { DataTable, type DataTableColumn } from "@/components/hr/DataTable";
 import { FormDialog } from "@/components/hr/FormDialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/common/PageHeader";
 import { SearchInput } from "@/components/common/SearchInput";
-import { SearchableSelect } from "@/components/common/SearchableSelect";
 import { RecruitmentTabs } from "@/components/hr/RecruitmentTabs";
 import {
-  CURRENT_EMPLOYEE_STATUSES,
   candidatesService,
   interviewsService,
-  orgService,
   type Interview,
   type InterviewMode,
 } from "@/services";
@@ -57,6 +55,7 @@ export function InterviewsPage() {
   const qc = useQueryClient();
   const [scheduling, setScheduling] = useState(false);
   const [feedbackFor, setFeedbackFor] = useState<Interview | null>(null);
+  const [detailsFor, setDetailsFor] = useState<Interview | null>(null);
   const [search, setSearch] = useState("");
 
   const list = useQuery({
@@ -68,10 +67,15 @@ export function InterviewsPage() {
     queryKey: ["recruitment-candidates-all"],
     queryFn: () => candidatesService.list({ limit: 200 }),
   });
+  const schedulableCandidates = useMemo(
+    () => (candidates.data?.items ?? []).filter((candidate) => Number(candidate.completed_interviews ?? 0) === 0),
+    [candidates.data?.items],
+  );
 
   const invalidate = () => {
     void qc.invalidateQueries({ queryKey: ["recruitment-interviews"] });
     void qc.invalidateQueries({ queryKey: ["recruitment-candidates"] });
+    void qc.invalidateQueries({ queryKey: ["recruitment-candidates-all"] });
   };
 
   /**
@@ -132,6 +136,11 @@ export function InterviewsPage() {
       render: (i) => <span className="font-medium">{i.candidate_name ?? "—"}</span>,
     },
     {
+      key: "interviewer_name",
+      header: "Interviewer",
+      render: (i) => <span className="text-sm">{i.interviewer_name ?? "Unassigned"}</span>,
+    },
+    {
       key: "mode",
       header: t("recruitment.interviewMode"),
       render: (i) => (
@@ -140,11 +149,6 @@ export function InterviewsPage() {
           {i.mode ?? "—"}
         </span>
       ),
-    },
-    {
-      key: "location",
-      header: t("recruitment.interviewLocation"),
-      render: (i) => <span className="text-sm">{i.location ?? "—"}</span>,
     },
     {
       key: "status",
@@ -181,6 +185,10 @@ export function InterviewsPage() {
       header: t("recruitment.actions"),
       render: (i) => (
         <div className="flex items-center justify-end gap-1">
+          <Button variant="ghost" size="sm" onClick={() => setDetailsFor(i)}>
+            <Eye className="mr-1 h-3.5 w-3.5" />
+            Details
+          </Button>
           {i.status === "scheduled" ? (
             <>
               <Button variant="ghost" size="sm" onClick={() => setFeedbackFor(i)}>
@@ -278,10 +286,12 @@ export function InterviewsPage() {
 
       <ScheduleDialog
         open={scheduling}
-        candidates={candidates.data?.items ?? []}
+        candidates={schedulableCandidates}
         onOpenChange={setScheduling}
         onDone={invalidate}
       />
+
+      <InterviewDetailsDialog interview={detailsFor} onOpenChange={(open) => !open && setDetailsFor(null)} />
 
       <FeedbackDialog
         interview={feedbackFor}
@@ -293,6 +303,32 @@ export function InterviewsPage() {
 }
 
 // ---------------------------------------------------------------------------
+
+function InterviewDetailsDialog({ interview, onOpenChange }: { interview: Interview | null; onOpenChange: (open: boolean) => void }) {
+  const { t } = useTranslation();
+  return (
+    <Dialog open={!!interview} onOpenChange={onOpenChange}>
+      <DialogContent className="w-[calc(100vw-1rem)] max-h-[calc(100dvh-1rem)] overflow-y-auto sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Interview details</DialogTitle>
+          <DialogDescription>Full meeting information and interview conclusion.</DialogDescription>
+        </DialogHeader>
+        {interview ? (
+          <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+            <div className="min-w-0 rounded-md border p-3"><p className="text-xs text-muted-foreground">Candidate</p><p className="break-words font-medium">{interview.candidate_name || "—"}</p></div>
+            <div className="min-w-0 rounded-md border p-3"><p className="text-xs text-muted-foreground">Interviewer</p><p className="break-words font-medium">{interview.interviewer_name || "Unassigned"}</p>{interview.interviewer_designation ? <p className="break-words text-xs text-muted-foreground">{interview.interviewer_designation}</p> : null}</div>
+            <div className="rounded-md border p-3"><p className="text-xs text-muted-foreground">Date and time</p><p className="font-medium">{formatDateTime(interview.scheduled_at)}</p></div>
+            <div className="rounded-md border p-3"><p className="text-xs text-muted-foreground">Mode</p><p className="font-medium capitalize">{interview.mode || "—"}</p></div>
+            <div className="min-w-0 rounded-md border p-3 sm:col-span-2"><p className="text-xs text-muted-foreground">Meeting point</p><p className="break-words font-medium">{interview.location || "Not specified"}</p></div>
+            <div className="rounded-md border p-3"><p className="text-xs text-muted-foreground">Status</p><Badge variant={interview.status === "completed" ? "secondary" : interview.status === "cancelled" ? "destructive" : "outline"}>{t(`recruitment.interviewStatusLabel.${interview.status}`)}</Badge></div>
+            <div className="rounded-md border p-3"><p className="text-xs text-muted-foreground">Outcome</p><Badge variant={interview.outcome === "passed" ? "default" : interview.outcome === "failed" ? "destructive" : "outline"}>{t(`recruitment.interviewOutcomeLabel.${interview.outcome}`)}</Badge></div>
+            <div className="rounded-md border p-3 sm:col-span-2"><p className="text-xs text-muted-foreground">Feedback / conclusion</p><p className="whitespace-pre-wrap break-words">{interview.feedback_notes || "No feedback recorded yet."}</p>{interview.rating !== null ? <p className="mt-2 text-xs text-muted-foreground">Rating: {interview.rating}/5</p> : null}</div>
+          </div>
+        ) : null}
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 type ScheduleForm = {
   candidate_uuid: string;
@@ -316,10 +352,8 @@ type ScheduleForm = {
  * user's typing rather than at the form. A control that cannot be filled correctly by
  * knowing what the thing is should not exist.
  *
- * `scope: "org"` on the lookup is load-bearing. Without it an org_admin sees only the
- * employee records they personally added, so a colleague another admin onboarded does
- * not exist as far as this picker is concerned — and the interviewer list silently
- * omits most of the company.
+ * The explicit organization-roster scope is retained for compatibility with the
+ * picker API; the server enforces the tenant boundary and any sub-admin data scope.
  *
  * The interviewer stays OPTIONAL on purpose. `interviewer_uuid: undefined` is allowed
  * by the server (an interview can be booked before a panel is assigned), which is a
@@ -341,9 +375,16 @@ function ScheduleDialog({
 
   const interviewers = useQuery({
     queryKey: ["recruitment-interviewers"],
-    queryFn: () => orgService.employees({ scope: "org", limit: 100 }),
+    queryFn: () => interviewsService.interviewers(),
     enabled: open,
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
+
+  useEffect(() => {
+    if (open) void interviewers.refetch();
+  }, [open, interviewers.refetch]);
 
   const form = useForm<ScheduleForm>({
     defaultValues: {
@@ -355,20 +396,16 @@ function ScheduleDialog({
     },
   });
   const { reset } = form;
-  const interviewerUuid = form.watch("interviewer_uuid");
   const interviewerOptions = useMemo(
     () => [
-      { value: "", label: t("recruitment.interviewerUnassigned") },
-      ...(interviewers.data?.items ?? [])
-        .filter((employee) => CURRENT_EMPLOYEE_STATUSES.includes(employee.status))
-        .map((employee) => ({
-          value: employee.uuid,
-          label: employee.full_name,
-          hint: employee.designation ?? undefined,
-          keywords: employee.email ?? undefined,
-        })),
+      ...(interviewers.data ?? []).map((person) => ({
+        value: person.uuid,
+        label: String(person.full_name ?? "").trim() || person.email,
+        hint: [person.designation, person.department, String(person.org_role ?? "").replaceAll("_", " ")].filter(Boolean).join(" · "),
+        keywords: person.email,
+      })),
     ],
-    [interviewers.data?.items, t],
+    [interviewers.data, t],
   );
 
   useEffect(() => {
@@ -386,7 +423,7 @@ function ScheduleDialog({
     mutationFn: (v: ScheduleForm) =>
       interviewsService.schedule({
         candidate_uuid: v.candidate_uuid,
-        interviewer_uuid: v.interviewer_uuid || undefined,
+        interviewer_uuid: v.interviewer_uuid,
         // A `datetime-local` string is wall-clock time with no zone. Sending it
         // verbatim would have the server store it as UTC and shift every interview by
         // the browser's offset.
@@ -429,13 +466,17 @@ function ScheduleDialog({
       // people with the same name in the list indistinguishable. The extra width buys
       // the whole designation.
       size="lg"
-      onSubmit={(v) => schedule.mutate(v)}
+      onSubmit={(v) => {
+        if (!v.interviewer_uuid) { toast.error("Select an interviewer before scheduling"); return; }
+        schedule.mutate(v);
+      }}
     >
       <div className="space-y-3">
         <label className="block space-y-1 text-sm">
           <span className="font-medium">{t("recruitment.interviewFor")}</span>
           <select
             {...form.register("candidate_uuid", { required: true })}
+            disabled={!candidates.length}
             className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
           >
             {candidates.length ? (
@@ -445,21 +486,33 @@ function ScheduleDialog({
                 </option>
               ))
             ) : (
-              <option value="">{t("recruitment.noCandidates")}</option>
+              <option value="">{t("recruitment.noCandidates", "No candidates awaiting an interview")}</option>
             )}
           </select>
         </label>
 
         <label className="block space-y-1 text-sm">
           <span className="font-medium">{t("recruitment.interviewer")}</span>
-          <SearchableSelect
-            items={interviewerOptions}
-            value={interviewerUuid}
-            onChange={(value) => form.setValue("interviewer_uuid", value, { shouldDirty: true })}
-            placeholder={t("recruitment.interviewerUnassigned")}
-            searchPlaceholder={t("recruitment.searchInterviewer", "Search interviewer...")}
-            emptyText={t("recruitment.noInterviewersFound", "No interviewers found.")}
-          />
+          <select
+            {...form.register("interviewer_uuid", { required: true })}
+            disabled={interviewers.isLoading || interviewers.isError || interviewerOptions.length === 0}
+            className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+          >
+            <option value="">
+              {interviewers.isLoading
+                ? "Loading interviewers..."
+                : interviewers.isError
+                  ? "Could not load interviewers. Reopen this form to retry."
+                  : interviewerOptions.length
+                    ? "Select an interviewer"
+                    : t("recruitment.noInterviewersFound", "No interviewers found.")}
+            </option>
+            {interviewerOptions.map((person) => (
+              <option key={person.value} value={person.value}>
+                {person.label}{person.hint ? ` — ${person.hint}` : ""}
+              </option>
+            ))}
+          </select>
         </label>
         <label className="block space-y-1 text-sm">
           <span className="font-medium">{t("recruitment.scheduledAt")}</span>

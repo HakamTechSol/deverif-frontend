@@ -49,25 +49,17 @@ import { useOrgSubscription } from "@/hooks/useOrgSubscription";
 import { SubscriptionBanner } from "@/components/common/SubscriptionLocked";
 import { PlanPickerProvider, usePlanPicker } from "@/components/common/PlanPickerProvider";
 import { canAccessRoute } from "@/lib/routeAccess";
+import { ROUTE_MODULES } from "@/lib/routeModules";
 import { adminNav, accountItemsFor, primaryNavItemsFor, type NavItem } from "@/lib/navItems";
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
+  const queryClient = useQueryClient();
   const { t } = useTranslation();
   const { openPicker } = usePlanPicker();
   const { isLocked, isModuleFlagOff } = useOrgSubscription();
-  const pathModule: Record<string, keyof ModuleFlags> = {
-    "/org/team": "employee_management",
-    "/org/admins": "user_management",
-    "/org/leaves": "leave_management",
-    "/org/attendance": "attendance_management",
-    "/org/salary-components": "payroll_management",
-    "/org/payroll": "payroll_management",
-    "/leaves": "leave_management",
-    "/attendance": "attendance_management",
-    "/payroll": "payroll_management",
-  };
+  const pathModule = ROUTE_MODULES;
   const modulePaths = Object.keys(pathModule);
   // Two different reasons a nav item can be locked, and they need different
   // affordances:
@@ -84,8 +76,15 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [mounted, setMounted] = useState(false);
   const router = useRouter();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const canOpenCurrentRoute = !user || canAccessRoute(user, pathname);
 
   useEffect(() => setMounted(true), []);
+
+  useEffect(() => {
+    if (canOpenCurrentRoute || !user) return;
+    queryClient.clear();
+    void router.navigate({ to: "/dashboard", replace: true });
+  }, [canOpenCurrentRoute, pathname, queryClient, router, user]);
 
   const onLogout = async () => {
     try {
@@ -123,6 +122,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     queryKey: ["me-sync"],
     queryFn: () => authService.me(),
     enabled: mounted && !!user && !isAdmin,
+    refetchInterval: user?.org_role === "sub_admin" ? 30_000 : false,
+    refetchOnWindowFocus: true,
     retry: false,
   });
 
@@ -193,6 +194,8 @@ export function AppShell({ children }: { children: ReactNode }) {
    */
   const accountItems = isAdmin ? [] : accountItemsFor(user);
 
+  if (!canOpenCurrentRoute) return null;
+
   return (
     <PlanPickerProvider>
       <div className="min-h-screen bg-background">
@@ -241,12 +244,13 @@ export function AppShell({ children }: { children: ReactNode }) {
           <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
             {isAdmin && <div className="sr-only">admin</div>}
             {/*
-            Blanket banner: reserved for a genuinely broken/absent subscription.
-            A Free-plan org is active, so this must never appear for one -- the
-            per-module "upgrade to unlock" affordances in the sidebar and on the
-            locked feature cards cover the normal upgrade case instead.
+            Mounted for every non-admin, not only when `isLocked`: the component
+            renders the blanket banner only for a genuinely broken/absent
+            subscription, but it also hosts the plan-chooser dialog that the
+            sidebar's "upgrade" badges and the locked module cards open. A Free
+            plan is active, so the banner itself must not appear for one.
           */}
-            {!isAdmin && isLocked && <SubscriptionBanner />}
+            {!isAdmin && <SubscriptionBanner />}
             {children}
           </main>
         </div>
@@ -470,9 +474,6 @@ export function SidebarInner({
                 ))}
               </ul>
             ) : null}
-
-
-
           </div>
         ) : null}
 

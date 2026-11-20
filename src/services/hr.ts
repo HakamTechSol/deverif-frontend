@@ -18,7 +18,9 @@ import type {
   LeaveBalance,
   EmployeeLeaveAllocation,
   EmployeeLeaveAllocationHistory,
+  LeaveBalanceLedgerEntry,
   AttendanceRecord,
+  MissingAttendanceRecord,
   IpRule,
   SalaryRecord,
   SalaryComponent,
@@ -27,6 +29,15 @@ import type {
 } from "./core";
 export const leavesService = {
   types: () => api.get<{ leaveTypes: LeaveType[] }>("/leaves/types").then((r) => r.data.leaveTypes),
+  calendar: (params: { month: number; year: number; from?: string; to?: string }) =>
+    api.get<{
+      month: number;
+      year: number;
+      working_dates: string[];
+      busy_ranges: { start_date: string; end_date: string }[];
+      range_working_days: number | null;
+      range_overlaps: boolean;
+    }>("/leaves/calendar", { params }).then((r) => r.data),
   balance: () =>
     api.get<{ balances: LeaveBalance[] }>("/leaves/balance").then((r) => r.data.balances),
   mine: (
@@ -39,26 +50,32 @@ export const leavesService = {
     } = {},
   ) => api.get<Paginated<LeaveRequest>>("/leaves/mine", { params }).then((r) => r.data),
   create: (data: {
-    leave_type_id: number;
+    leave_type_id?: number;
+    default_unpaid?: boolean;
     start_date: string;
     end_date: string;
+    day_portion?: "full" | "half";
     reason?: string;
   }) => api.post<{ leaveRequest: LeaveRequest }>("/leaves", data).then((r) => r.data.leaveRequest),
-  decide: (uuid: UUID, data: { status: "approved" | "rejected" }) =>
+  cancel: (uuid: UUID) =>
+    api.patch<{ leaveRequest: LeaveRequest }>(`/leaves/${uuid}/cancel`).then((r) => r.data.leaveRequest),
+  decide: (uuid: UUID, data: { status: "approved" | "rejected"; approved_treatment?: "paid" | "unpaid" }) =>
     api
       .patch<{ leaveRequest: LeaveRequest }>(`/leaves/${uuid}/decide`, data)
       .then((r) => r.data.leaveRequest),
 };
 
 export const orgLeavesService = {
+  filterEmployees: () =>
+    api.get<{ employees: { uuid: UUID; full_name: string }[] }>("/org/leave-employees").then((r) => r.data.employees),
   types: () =>
     api.get<{ leaveTypes: LeaveType[] }>("/org/leave-types").then((r) => r.data.leaveTypes),
-  createType: (data: { name: string; days_allowed_per_year?: number; is_paid: "yes" | "no" }) =>
+  createType: (data: { name: string; days_allowed_per_year?: number; is_paid?: "yes" | "no" }) =>
     api.post<{ leaveType: LeaveType }>("/org/leave-types", data).then((r) => r.data.leaveType),
-  updateType: (id: number, data: { name: string; days_allowed_per_year?: number; is_paid: "yes" | "no" }) =>
+  updateType: (id: number, data: { name: string; days_allowed_per_year?: number; is_paid?: "yes" | "no" }) =>
     api.put<{ leaveType: LeaveType }>(`/org/leave-types/${id}`, data).then((r) => r.data.leaveType),
   deleteType: (id: number) => api.delete(`/org/leave-types/${id}`).then((r) => r.data),
-  list: (params: { page?: number; limit?: number; status?: string; search?: string } = {}) =>
+  list: (params: { page?: number; limit?: number; status?: string; search?: string; dateFrom?: string; dateTo?: string; employee_uuid?: UUID; leave_type_id?: number; include_all?: boolean } = {}) =>
     api.get<Paginated<LeaveRequest>>("/org/leaves", { params }).then((r) => r.data),
   decide: (uuid: UUID, data: { status: "approved" | "rejected" }) =>
     api
@@ -100,7 +117,21 @@ export const orgLeaveAllocationService = {
         employee_uuid: UUID;
         employee_name: string;
         employee_email: string;
-        allocations: EmployeeLeaveAllocationHistory[];
+        balances: EmployeeLeaveAllocationHistory[];
+        leave_history: {
+          uuid: UUID;
+          leave_type_id: number;
+          leave_type_name: string;
+          start_date: string;
+          end_date: string;
+          days: number;
+          status: "pending" | "approved" | "rejected" | "cancelled";
+          day_portion?: "full" | "half";
+          approved_days?: number | string | null;
+          requested_treatment: "paid" | "unpaid";
+          approved_treatment: "paid" | "unpaid" | null;
+        }[];
+        balance_ledger: LeaveBalanceLedgerEntry[];
       }>(`/org/employees/${employee_uuid}/leave-allocations`)
       .then((r) => r.data),
 };
@@ -114,8 +145,13 @@ export const orgAttendanceService = {
       dateFrom?: string;
       dateTo?: string;
       status?: string;
+      employee_uuid?: UUID;
+      department?: string;
+      month?: string;
     } = {},
   ) => api.get<Paginated<AttendanceRecord>>("/org/attendance", { params }).then((r) => r.data),
+  missing: (params: { month: string; page?: number; limit?: number }) =>
+    api.get<Paginated<MissingAttendanceRecord>>("/org/attendance/missing", { params }).then((r) => r.data),
   ips: () =>
     api.get<{ allowedIps: string[]; rules: IpRule[] }>("/org/attendance/ips").then((r) => r.data),
   addIp: (ip: string) =>
@@ -141,11 +177,32 @@ removeIp: (id: number) =>
       date: string;
       check_in_time: string;
       check_out_time?: string;
+      break_duration_minutes?: number | null;
       reason: string;
     }) =>
       api
         .post<{ record: AttendanceRecord }>("/org/attendance/manual-entry", data)
         .then((r) => r.data),
+    manualMissingEntry: (data: {
+      employee_uuid: UUID;
+      date: string;
+      check_in_time: string;
+      check_out_time?: string;
+      break_duration_minutes?: number | null;
+      reason: string;
+    }) =>
+      api
+        .post<{ record: AttendanceRecord }>("/org/attendance/missing/manual-entry", data)
+        .then((r) => r.data),
+    correct: (uuid: UUID, data: {
+      check_in_time: string;
+      check_out_time?: string | null;
+      break_duration_minutes?: number | null;
+      reason: string;
+    }) =>
+      api
+        .patch<{ record: AttendanceRecord }>(`/org/attendance/${uuid}/correction`, data)
+        .then((r) => r.data.record),
   };
 
 /**
@@ -167,6 +224,9 @@ export type PayrollLine = {
     | "auto_absenteeism"
     | "auto_late"
     | "auto_overtime"
+    | "auto_expense"
+    | "manual_overtime"
+    | "monthly_variable"
     | "manual";
   amount: number;
   basis_value: number | null;
@@ -180,15 +240,59 @@ export type PayrollPreviewItem = {
   allowances: number | string;
   deductions: number | string;
   expense_reimbursement: number | string;
+  expense_reimbursement_details?: {
+    claim_count: number;
+    amount: number | string;
+    claims: {
+      uuid: UUID;
+      amount: number | string;
+      expense_date: string;
+      expense_name: string;
+    }[];
+  };
   net_salary: number | string;
   lines: PayrollLine[];
   attendance: {
+    /** The organization's scheduled working days for the whole month. */
     working_days: number;
+    calendar_days: number;
     attended_days: number;
+    worked_hours: number;
+    expected_working_hours: number;
+    actual_overtime_hours: number;
     absent_days: number;
     late_count: number;
     paid_leave_days: number;
     unpaid_leave_days: number;
+    leave_attendance_conflicts: {
+      date: string;
+      leave_request_uuid: UUID;
+      leave_type: string;
+      treatment: "paid" | "unpaid";
+      day_portion: "full" | "half";
+      resolution: "attendance_takes_precedence" | "attendance_record_present";
+    }[];
+    leave_calculation: {
+      paid_leave_days: number;
+      unpaid_leave_days: number;
+      requests: {
+        uuid: UUID;
+        leave_type: string;
+        treatment: "paid" | "unpaid";
+        start_date: string;
+        end_date: string;
+        day_portion: "full" | "half";
+        days_in_period: number;
+      }[];
+      attendance_conflicts: {
+        date: string;
+        leave_request_uuid: UUID;
+        leave_type: string;
+        treatment: "paid" | "unpaid";
+        day_portion: "full" | "half";
+        resolution: "attendance_takes_precedence" | "attendance_record_present";
+      }[];
+    };
     approved_overtime_hours: number;
     holidays_in_month: number;
   };
@@ -196,9 +300,12 @@ export type PayrollPreviewItem = {
     per_day: number;
     hourly: number;
     divisor: number;
-    daily_rate_basis: "actual_working_days" | "calendar_days" | "fixed_30";
+    salary_calculation_method: "hours" | "days";
+    salary_calculation_policy: PayrollSettings["salary_calculation_policy"];
+    expected_hours: number;
+    worked_hours: number;
+    payable_ratio: number;
     currency: string;
-    pay_frequency: "weekly" | "biweekly" | "semi_monthly" | "monthly";
     /**
      * Why there are no automatic lines: "no_working_days" or "no_basic_salary".
      * Surfaced rather than left as an unexplained empty list, which reads as
@@ -222,34 +329,52 @@ export type PayrollPreview = {
   count: number;
 };
 
-export type PayrollPolicy = {
-  /**
-   * Read-only. The API always reports the application's single currency (PKR);
-   * it is not an administrator-settable field and is deliberately absent from
-   * `PayrollPolicyInput`.
-   */
-  currency: string;
-  pay_frequency: "weekly" | "biweekly" | "semi_monthly" | "monthly";
-  daily_rate_basis: "actual_working_days" | "calendar_days" | "fixed_30";
+export type PayrollSettings = {
+  salary_calculation_policy:
+    | "working_days_only"
+    | "working_days_and_hours"
+    | "number_of_days_only"
+    | "number_of_days_and_hours";
+  /** Kept as the attendance-basis compatibility field for older clients. */
+  salary_calculation_method: "hours" | "days";
+  calculate_overtime: boolean;
   shift_start_time: string;
-  hours_per_workday: number;
-  late_grace_minutes: number;
-  late_arrivals_per_penalty: number;
-  late_penalty_days: number;
+  shift_end_time: string;
   overtime_multiplier: number;
-  deduct_unpaid_leave: boolean;
-  deduct_absences: boolean;
-  deduct_late_arrivals: boolean;
-  pay_approved_overtime: boolean;
-  work_week: Record<"mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun", boolean>;
+  deduct_salary_for_late_arrivals: boolean;
+  late_arrival_threshold: number;
+  late_grace_minutes: number;
 };
 
-/** What the policy form actually submits — everything except the currency. */
-export type PayrollPolicyInput = Omit<PayrollPolicy, "currency">;
+export type PayrollEmployeeRow = {
+  uuid: UUID;
+  full_name: string;
+  email: string | null;
+  designation: string | null;
+  department: string | null;
+  basic_salary: number | string | null;
+  allowance_items: { uuid: UUID; name: string; amount: number }[];
+  deduction_items: { uuid: UUID; name: string; amount: number }[];
+  allowances: number | string;
+  deductions: number | string;
+  overtime_amount: number | string;
+  net_salary: number | string;
+};
+
+export type MonthlyWorkDay = { schedule_date: string; day_type: "working" | "off" };
+export type PayrollRunDay = { date: string; day_type: "working" | "off" };
 
 export const orgSalaryService = {
-  policy: () => api.get<{ configured: boolean; policy: PayrollPolicy | null; work_week: Record<string, number> | null }>("/org/payroll-policy").then((r) => r.data),
-  savePolicy: (data: PayrollPolicyInput) => api.put<{ configured: true; policy: PayrollPolicy; work_week: Record<string, number> }>("/org/payroll-policy", data).then((r) => r.data),
+  employees: (params: { page?: number; limit?: number; month?: number; year?: number } = {}) =>
+    api.get<Paginated<PayrollEmployeeRow>>("/org/payroll-employees", { params }).then((r) => r.data),
+  settings: (month?: number, year?: number) =>
+    api.get<{ settings: PayrollSettings | null }>("/org/payroll-settings", {
+      params: month === undefined || year === undefined ? undefined : { month, year },
+    }).then((r) => r.data.settings),
+  saveSettings: (data: PayrollSettings & ({ scope: "organization" } | { scope: "month"; month: number; year: number })) =>
+    api.put<{ settings: PayrollSettings }>("/org/payroll-settings", data).then((r) => r.data.settings),
+  schedule: (month: number, year: number) => api.get<{ month: number; year: number; days: MonthlyWorkDay[] }>("/org/payroll-schedule", { params: { month, year } }).then((r) => r.data),
+  saveSchedule: (data: { month: number; year: number; days: { date: string; day_type: "working" | "off" }[] }) => api.put<{ month: number; year: number; days: MonthlyWorkDay[] }>("/org/payroll-schedule", data).then((r) => r.data),
   list: (
     params: {
       page?: number;
@@ -258,6 +383,7 @@ export const orgSalaryService = {
       employee_uuid?: string;
       month?: number;
       year?: number;
+      department?: string;
     } = {},
   ) => api.get<Paginated<SalaryRecord>>("/org/salary-records", { params }).then((r) => r.data),
   /**
@@ -270,13 +396,25 @@ export const orgSalaryService = {
    * the identical computation the generate path runs, so what is previewed and
    * what is committed cannot diverge.
    */
-  preview: (data: { month: number; year: number; employee_uuids?: UUID[] }) =>
+  preview: (data: {
+    month: number;
+    year: number;
+    employee_uuids?: UUID[];
+    settings?: PayrollSettings;
+    days?: PayrollRunDay[];
+    overtime_amounts?: Record<string, number>;
+    component_selections?: Record<string, { allowance_uuids: UUID[]; deduction_uuids: UUID[] }>;
+  }) =>
     api.post<PayrollPreview>("/org/payroll/preview", data).then((r) => r.data),
   generate: (data: {
     month: number;
     year: number;
     employee_uuids?: UUID[];
     regenerate?: boolean;
+    settings: PayrollSettings;
+    days: PayrollRunDay[];
+    overtime_amounts?: Record<string, number>;
+    component_selections?: Record<string, { allowance_uuids: UUID[]; deduction_uuids: UUID[] }>;
   }) =>
     api
       .post<{
@@ -400,6 +538,48 @@ export const orgEmployeeSalaryService = {
         `/org/employees/${employeeUuid}/salary-components/${assignUuid}`,
       )
       .then((r) => r.data.assignments),
+  monthlyVariables: (employeeUuid: UUID, month: number, year: number) =>
+    api
+      .get<{ items: MonthlySalaryVariable[] }>(
+        `/org/employees/${employeeUuid}/monthly-salary-variables`,
+        { params: { month, year } },
+      )
+      .then((r) => r.data.items),
+  addMonthlyVariable: (
+    employeeUuid: UUID,
+    data: { label: string; type: "allowance" | "deduction"; amount: number; month: number; year: number },
+  ) =>
+    api
+      .post<{ item: MonthlySalaryVariable }>(
+        `/org/employees/${employeeUuid}/monthly-salary-variables`,
+        data,
+      )
+      .then((r) => r.data.item),
+  updateMonthlyVariable: (
+    employeeUuid: UUID,
+    variableUuid: UUID,
+    data: { label: string; type: "allowance" | "deduction"; amount: number; month: number; year: number },
+  ) =>
+    api
+      .put<{ item: MonthlySalaryVariable }>(
+        `/org/employees/${employeeUuid}/monthly-salary-variables/${variableUuid}`,
+        data,
+      )
+      .then((r) => r.data.item),
+  removeMonthlyVariable: (employeeUuid: UUID, variableUuid: UUID) =>
+    api
+      .delete(`/org/employees/${employeeUuid}/monthly-salary-variables/${variableUuid}`)
+      .then((r) => r.data),
+};
+
+export type MonthlySalaryVariable = {
+  uuid: UUID;
+  label: string;
+  type: "allowance" | "deduction";
+  amount: number | string;
+  month: number;
+  year: number;
+  created_at: string;
 };
 
 /* ======================== HR LETTERS ======================== */
@@ -477,6 +657,8 @@ export type TemplatePreview = {
    * and the letter cannot be issued at all.
    */
   missing_manual: string[];
+  /** Tags used by the template, including values already saved on a draft. */
+  editable_tags: string[];
   /** Tag -> friendly label, e.g. cnic -> "CNIC". Presentation only. */
   tag_labels?: Record<string, string>;
 };
@@ -560,6 +742,16 @@ export const letterTemplatesService = {
       .put<{ template: LetterTemplate }>(`/org/letter-templates/${uuid}`, data)
       .then((r) => normalizeTemplates([r.data.template])[0]),
   remove: (uuid: UUID) => api.delete(`/org/letter-templates/${uuid}`).then((r) => r.data),
+  previewPdf: (
+    data: { letterType: HrLetterType; name: string; body: string },
+    signal?: AbortSignal,
+  ) =>
+    api
+      .post("/org/letter-templates/preview-pdf", data, {
+        responseType: "blob",
+        signal,
+      })
+      .then((r) => r.data as Blob),
   /** Render a template against an employee WITHOUT creating anything. */
   preview: (uuid: UUID, data: { employee_uuid: string; values?: Record<string, string> }) =>
     api.post<TemplatePreview>(`/org/letter-templates/${uuid}/preview`, data).then((r) => ({
@@ -567,6 +759,7 @@ export const letterTemplatesService = {
       unresolved: toStringArray(r.data.unresolved),
       unknown: toStringArray(r.data.unknown),
       missing_manual: toStringArray(r.data.missing_manual),
+      editable_tags: toStringArray(r.data.editable_tags),
       // A JSON column, so it can arrive as a string. Normalise, and tolerate its
       // absence so an older backend does not break the dialog.
       tag_labels: normaliseTagLabels(r.data.tag_labels),
@@ -584,6 +777,7 @@ export const hrLettersService = {
       search?: string;
     } = {},
   ) => api.get<Paginated<HrLetterListItem>>("/org/hr-letters", { params }).then((r) => r.data),
+  get: (uuid: UUID) => api.get<{ letter: HrLetter }>(`/org/hr-letters/${uuid}`).then((r) => r.data.letter),
   create: (data: {
     employee_uuid: string;
     template_uuid?: string;
@@ -596,6 +790,13 @@ export const hrLettersService = {
    * values here overrides what the draft stored, which is how a user fixes a
    * draft after seeing the preview.
    */
+  update: (uuid: UUID, data: Partial<{
+    title: string;
+    template_uuid: string | null;
+    letter_type: HrLetterType;
+    values: Record<string, string>;
+  }>) =>
+    api.put<{ letter: HrLetter }>(`/org/hr-letters/${uuid}`, data).then((r) => r.data.letter),
   issue: (uuid: UUID, values: Record<string, string> = {}) =>
     api
       .post<{ letter: HrLetter }>(`/org/hr-letters/${uuid}/issue`, { values })

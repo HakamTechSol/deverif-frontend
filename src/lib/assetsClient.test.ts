@@ -20,7 +20,6 @@ import { readFileSync } from "node:fs";
  *     "[object File]" and still report success.
  */
 const ASSETS_PAGE = readFileSync("src/routes/_app.org.assets.tsx", "utf8");
-const CATEGORIES_PAGE = readFileSync("src/routes/_app.org.asset-categories.tsx", "utf8");
 const SERVICE = readFileSync("src/services/assets.ts", "utf8");
 const ORG_SERVICE = readFileSync("src/services/org.ts", "utf8");
 const NAV = readFileSync("src/lib/navItems.ts", "utf8");
@@ -38,11 +37,7 @@ function code(src: string): string {
 /**
  * One member of a NAMED service object.
  *
- * Scoping to the object matters: assets.ts defines both assetCategoriesService
- * and assetsService, and both have a `create`. An unscoped search finds the
- * categories one first, so the assertion quietly validated the wrong service and
- * passed no matter what assetsService did — a test that can never fail is worse
- * than no test.
+ * The simplified assets client now exposes only the inventory service.
  */
 function member(objSrc: string, name: string): string {
   const start = objSrc.search(new RegExp(`^  ${name}:`, "m"));
@@ -78,8 +73,6 @@ describe("edit can actually clear a field", () => {
     // site had nowhere to send one even once someone noticed the bug.
     const body = member(serviceBlock(code(SERVICE), "assetsService"), "update");
     for (const field of [
-      "model_details",
-      "serial_number",
       "purchase_date",
       "purchase_cost",
       "vendor",
@@ -100,7 +93,7 @@ describe("edit can actually clear a field", () => {
     expect(edit).toContain("clear(values.notes)");
     // The bug: `values.vendor || undefined` types fine and skips server-side, so
     // clearing a vendor looked saved and the register kept the old value.
-    expect(edit).not.toMatch(/values\.(vendor|notes|serial_number)\s*\|\|\s*undefined/);
+    expect(edit).not.toMatch(/values\.(vendor|notes)\s*\|\|\s*undefined/);
   });
 
   it("the create branch still omits, because there is nothing to clear", () => {
@@ -115,12 +108,11 @@ describe("edit can actually clear a field", () => {
 describe("filter changes cannot strand the table on a page past its end", () => {
   const PAGE = code(ASSETS_PAGE);
 
-  it("search, status and category each reset to page 1", () => {
+  it("search and status reset to page 1", () => {
     // Narrowing a filter while sitting on page 4 renders an empty table, which
     // reads as "nothing matches" rather than "there is no page 4 of this".
     expect(PAGE).toMatch(/setSearch\(v\);\s*setPage\(1\);/);
     expect(PAGE).toMatch(/setStatus\([^)]*\);\s*setPage\(1\);/);
-    expect(PAGE).toMatch(/setCategory\([^)]*\);\s*setPage\(1\);/);
   });
 });
 
@@ -168,15 +160,8 @@ describe("file uploads", () => {
     expect(body).toContain("multipart/form-data");
   });
 
-  it("uploadInvoices posts multipart FormData", () => {
-    const body = member(code(SERVICE), "uploadInvoices");
-    expect(body).toContain("new FormData()");
-    expect(body).toContain("multipart/form-data");
-  });
-
   it("routes files to the attachment endpoints, never a path field", () => {
     expect(SERVICE).toContain("/org/assets/${uuid}/receipts");
-    expect(SERVICE).toContain("/org/asset-maintenance/${jobUuid}/invoices");
     expect(code(SERVICE)).not.toMatch(/receipt_path|invoice_path/);
   });
 
@@ -204,11 +189,11 @@ describe("asset actions match the server's transitions", () => {
     return next > 0 ? rest.slice(0, next) : rest.slice(0, 700);
   }
 
-  it("offers Assign and Send for maintenance only when available", () => {
+  it("offers Assign only when available", () => {
     const branch = branchFor("available");
     expect(branch.length, "available branch not found").toBeGreaterThan(40);
     expect(branch).toContain("assets.assign");
-    expect(branch).toContain("assets.sendForMaintenance");
+    expect(branch).not.toContain("maintenance");
   });
 
   it("offers Return only when assigned", () => {
@@ -217,19 +202,8 @@ describe("asset actions match the server's transitions", () => {
     expect(branch).toContain("assets.returnAsset");
   });
 
-  it("shows a placeholder, not an action, while an asset is in maintenance", () => {
-    // Assigning or returning something on a repair bench would 409. The honest
-    // option is to say why nothing is available.
-    expect(branchFor("maintenance")).toContain("assets.inMaintenance");
-    expect(branchFor("maintenance")).not.toContain("assets.assign");
-  });
-
   it("offers Retire only when available, and Reinstate only when retired", () => {
-    // retireAsset refuses an `assigned` asset ("Return this asset before retiring
-    // it") and a `maintenance` one ("Close the open maintenance job before
-    // retiring this asset"). The menu used to gate Retire on
-    // `status !== "retired"`, so on both of those rows it offered an action whose
-    // only possible outcome was a 409 - which teaches people the page is broken.
+    // retireAsset refuses an assigned asset, so return it before retiring.
     expect(ASSETS_PAGE).not.toContain('row.status !== "retired"');
     expect(ASSETS_PAGE).toMatch(
       /\{row\.status === "available" \? \(\s*<DropdownMenuItem onSelect=\{\(\) => onDialog\("retire"\)\}/,
@@ -241,10 +215,6 @@ describe("asset actions match the server's transitions", () => {
     expect(branchFor("assigned"), "a retire action leaked into the assigned row").not.toContain(
       "assets.retire",
     );
-    expect(
-      branchFor("maintenance"),
-      "a retire action leaked into the maintenance row",
-    ).not.toContain("assets.retire");
   });
 
   it("reports a failed action instead of doing nothing", () => {
@@ -265,29 +235,16 @@ describe("asset actions match the server's transitions", () => {
 });
 
 describe("the Assign picker can reach the whole company", () => {
-  it("asks for the org roster, not just the records this admin imported", () => {
-    // By default an org_admin's employee list is filtered to what they personally
-    // added, which is right for the Employees page and wrong for a picker over
-    // the company: a colleague another admin onboarded was not hidden behind a
-    // "show more", they were absent, so the only symptom was that the company's
-    // own employees seemed not to exist.
+  it("retains the explicit roster-picker scope", () => {
     expect(ASSETS_PAGE).toMatch(/orgService\.employees\(\{[^}]*scope: "org"/);
   });
 
-  it("the service can express the opt-out", () => {
+  it("the service supports the legacy picker scope", () => {
     expect(ORG_SERVICE).toMatch(/scope\?:\s*"org"/);
   });
 });
 
 describe("the summary cards show the server's figures", () => {
-  it("reads total_value and maintenance_spend off the summary response", () => {
-    // Summing the rows on screen would report only the current page's worth: the
-    // register is paginated, so a 10-page inventory would claim 1/10th of its
-    // value. The server already computes both across the whole org.
-    expect(ASSETS_PAGE).toContain("money?.total_value");
-    expect(ASSETS_PAGE).toContain("money?.maintenance_spend");
-  });
-
   it("does not compute a money total from the rows", () => {
     expect(ASSETS_PAGE).not.toMatch(/purchase_cost\s*\*\s*rows\.length/);
     expect(ASSETS_PAGE).not.toMatch(/rows\.reduce\([^)]*purchase_cost/);
@@ -297,43 +254,8 @@ describe("the summary cards show the server's figures", () => {
     // An unexplained total is how a register gets disbelieved: someone reconciles
     // it against the ledger, finds a difference, and stops reading the page.
     expect(ASSETS_PAGE).toContain("assets.totalValueHint");
-    expect(ASSETS_PAGE).toContain("assets.maintenanceSpendHint");
   });
 
-  it("surfaces open_jobs next to the status it explains", () => {
-    // "Maintenance" for two separate faults is one problem on a dashboard and two
-    // on a worklist. The count is what stops the asset being closed out after the
-    // first repair.
-    expect(ASSETS_PAGE).toContain("assets.openJobs");
-    expect(ASSETS_PAGE).toContain("r.open_jobs");
-  });
-});
-
-describe("a maintenance job can be closed either way", () => {
-  it("offers Cancel as well as Mark repaired", () => {
-    // Cancel is not the same as complete. With only "complete", a job raised in
-    // error could only be recorded as a repair that happened - and since
-    // maintenance_spend counts COMPLETED jobs, a wrongly completed job
-    // permanently inflated the money the dashboard reported as spent.
-    expect(ASSETS_PAGE).toContain("assets.markRepaired");
-    expect(ASSETS_PAGE).toContain("assets.cancelMaintenance");
-    expect(ASSETS_PAGE).toMatch(/status: "cancelled"/);
-    expect(ASSETS_PAGE).toMatch(/status: "completed"/);
-  });
-
-  it("passes the transition through, rather than always sending an empty body", () => {
-    const at = ASSETS_PAGE.indexOf("const closeJob = useMutation(");
-    expect(at, "the closeJob mutation was not found").toBeGreaterThan(-1);
-    const body = ASSETS_PAGE.slice(at, at + 400);
-    expect(body).toMatch(/completeMaintenance\(/);
-    expect(body).toMatch(/status: vars\.status/);
-  });
-
-  it("shows how the job closed", () => {
-    // Without completion_notes a cancelled job and a completed one look identical,
-    // which is the whole distinction the new button exists to record.
-    expect(ASSETS_PAGE).toContain("job.completion_notes");
-  });
 });
 
 describe("notes are readable, not just writable", () => {
@@ -350,36 +272,15 @@ describe("notes are readable, not just writable", () => {
   });
 });
 
-describe("asset category page", () => {
-  it("disables delete on a category that still holds assets", () => {
-    expect(CATEGORIES_PAGE).toMatch(/disabled=\{\(r\.asset_count \?\? 0\) > 0\}/);
-  });
-
-  it("surfaces a failed delete instead of closing as if it worked", () => {
-    expect(CATEGORIES_PAGE).toContain("apiErrorMessage(remove.error");
-  });
-
-  it("resets the form on open, so New is not a silent overwrite", () => {
-    expect(CATEGORIES_PAGE).toMatch(/wasOpen\.current/);
-    expect(CATEGORIES_PAGE).toMatch(/reset\(/);
-  });
-});
-
 describe("navigation and access control", () => {
-  it("exposes both pages in the sidebar", () => {
+  it("exposes only the inventory page in the sidebar", () => {
     expect(NAV).toContain('to: "/org/assets"');
-    expect(NAV).toContain('to: "/org/asset-categories"');
+    expect(NAV).not.toContain("/org/asset-categories");
   });
 
-  it("has a route-access row for both, or the sidebar links go nowhere", () => {
+  it("has an access rule for inventory and no category route", () => {
     expect(ACCESS).toContain('"/org/assets"');
-    expect(ACCESS).toContain('"/org/asset-categories"');
-  });
-
-  it("lets staff move stock but reserves category admin for org_admin", () => {
-    // Mirrors the backend's assetMgmt versus assetCategoryMgmt.
-    expect(ACCESS).toMatch(/"\/org\/assets":\s*\{\s*roles:\s*STAFF_ROLES,/);
-    expect(ACCESS).toMatch(/"\/org\/asset-categories":\s*\{\s*roles:\s*\["org_admin"\]\s*\}/);
+    expect(ACCESS).not.toContain("/org/asset-categories");
   });
 
   it("gates the inventory module on manage_assets, not on role alone", () => {
@@ -404,9 +305,8 @@ describe("navigation and access control", () => {
     expect(block).not.toMatch(/feature:\s*"hr_letters_management/);
   });
 
-  it("wraps both pages in the ModuleGate for asset_management", () => {
+  it("wraps the inventory page in the ModuleGate for asset_management", () => {
     expect(ASSETS_PAGE).toContain('<ModuleGate module="asset_management">');
-    expect(CATEGORIES_PAGE).toContain('<ModuleGate module="asset_management">');
   });
 });
 

@@ -13,6 +13,8 @@ import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -45,7 +47,7 @@ import {
 } from "@/components/ui/table";
 import { TableSkeleton } from "./_app.requests";
 import { authStore } from "@/lib/auth";
-import { canAccessRoute, DELEGATED_FEATURE_KEYS, type FeatureKey } from "@/lib/routeAccess";
+import { canAccessRoute } from "@/lib/routeAccess";
 import { useOrgSubscription } from "@/hooks/useOrgSubscription";
 import { ModuleFeatureLockedCard } from "@/components/common/SubscriptionLocked";
 import { orgService, type OrgAdminUserRecord, type UUID } from "@/services";
@@ -78,70 +80,81 @@ export const Route = createFileRoute("/_app/org/admins")({
  * could issue letters, spend money on expenses, or terminate an employment, because
  * there was no dial for it.
  */
-type ElevatedKey = FeatureKey;
+type PermissionPayload = {
+  granular_permissions: Record<string, boolean>;
+  data_scopes: Record<string, DataScope>;
+};
+type DataScope = "own_records" | "entire_organization";
 
-const ELEVATED_PERMISSIONS: { key: ElevatedKey; label: string; description: string }[] = [
-  {
-    key: "manage_employees",
-    label: "Manage Employees",
-    description: "Create, edit and view employees in My Team",
-  },
-  {
-    key: "generate_request",
-    label: "Generate Request",
-    description: "Create new document verification requests",
-  },
-  {
-    key: "approve_request",
-    label: "Approve Request",
-    description: "Review, verify and reject inbox verification requests",
-  },
-  {
-    key: "hr_letters",
-    label: "HR Letters",
-    description:
-      "Issue employment, increment and confirmation letters. These attest to someone's employment to a third party.",
-  },
-  {
-    key: "manage_assets",
-    label: "Assets",
-    description: "Hand equipment out, take it back, and run repairs",
-  },
-  {
-    key: "manage_separation",
-    label: "Offboarding",
-    description:
-      "Run exit checklists, asset clearance and final-settlement. The highest-consequence module in the product.",
-  },
-  {
-    key: "approve_expenses",
-    label: "Expense Approvals",
-    description: "Review expense claims and settle reimbursements",
-  },
-  {
-    key: "manage_recruitment",
-    label: "Recruitment",
-    description:
-      "Job openings, the candidate pipeline, interviews, and one-click hire. Hiring creates a real employee record.",
-  },
-  {
-    key: "override_failed_interview",
-    label: "Failed Interview Exception",
-    description: "Allow a documented, audited offer exception after a failed final interview.",
-  },
-];
+const PERMISSION_MODULES = [
+  { key: "employees", label: "Employees", actions: [["view","View"],["create","Create"],["edit","Edit"],["archive","Archive"],["manage_departments","Manage Departments"],["manage_designations","Manage Designations"]] },
+  { key: "document_verification", label: "Document Verification", actions: [["view_requests","View Requests"],["generate_request","Generate Request"],["edit_draft","Edit Draft"],["approve","Approve"],["reject","Reject"]] },
+  { key: "attendance", label: "Attendance", actions: [["view","View"],["manual_entry","Manual Entry"],["correct_check_in_out","Correct Check-in/out"],["manage_ips","Manage IPs"]] },
+  { key: "leave_management", label: "Leave Management", actions: [["view","View"],["approve","Approve"],["reject","Reject"],["allocate_balance","Allocate Balance"],["manage_leave_types","Manage Leave Types"]] },
+  { key: "payroll", label: "Payroll", actions: [["view","View"],["generate","Generate"],["manage_settings","Manage Payroll Settings"],["manage_employee_components","Manage Employee Salary Components"],["adjust_salary","Adjust Employee Salary"]] },
+  { key: "expenses", label: "Expenses", actions: [["view","View"],["create_own","Create Own Expense"],["approve_employee","Approve Employee Expenses"],["process_payment","Process Payment"]] },
+  { key: "hr_letters", label: "HR Letters", actions: [["view","View"],["create_draft","Create Letter"],["edit_draft","Edit Draft"],["issue","Issue"],["revoke","Revoke"],["manage_templates","Manage Templates"]] },
+  { key: "assets", label: "Assets", actions: [["view","View"],["create","Create"],["edit","Edit"],["assign","Assign"],["return","Return"],["retire","Retire"],["manage_categories","Manage Categories"]] },
+  { key: "offboarding", label: "Offboarding", actions: [["view","View"],["initiate","Initiate"],["manage_checklist","Manage Checklist"],["draft_settlement","Draft Settlement"],["approve_settlement","Approve Settlement"],["complete_exit","Complete Exit"]] },
+  { key: "recruitment", label: "Recruitment", actions: [["view","View"],["create_job","Create Job"],["edit_job","Edit Job"],["manage_candidates","Manage Candidates"],["schedule_interview","Schedule Interview"],["record_feedback","Record Feedback"],["manage_offers","Manage Offers"],["hire","Hire"]] },
+  { key: "reports", label: "Reports", actions: [["view","View Reports"],["export","Export Reports"],["view_org_analytics","View Organization-wide Analytics"]] },
+  { key: "organization_settings", label: "Organization Settings", actions: [["view","View Settings"],["edit","Edit Settings"]] },
+] as const;
 
-/**
- * The permissions a sub-admin currently holds.
- *
- * Returns the WHOLE parsed map rather than picking out the three keys this page used
- * to name. It was returning a literal of three booleans, which is why widening
- * ElevatedKey to FeatureKey failed to compile here — and that failure is the useful
- * part: it showed the page's shape was pinned to the old permission set, so adding a
- * permission would have produced a checkbox with no state to read from.
- */
-function elevatedAccess(u?: OrgAdminUserRecord["feature_access"]) {
-  return parseFeatureAccess(u);
+const ALL_GRANULAR_KEYS = PERMISSION_MODULES.flatMap((module) => module.actions.map(([action]) => `${module.key}.${action}`));
+const ACTION_REQUIRES_VIEW: Record<string, string> = {
+  "employees.create": "employees.view",
+  "document_verification.generate_request": "document_verification.view_requests",
+  "leave_management.allocate_balance": "leave_management.view",
+  "payroll.generate": "payroll.view",
+  "payroll.manage_settings": "payroll.view",
+  "payroll.manage_employee_components": "payroll.view",
+  "payroll.adjust_salary": "payroll.view",
+  "expenses.create_own": "expenses.view",
+  "hr_letters.create_draft": "hr_letters.view",
+  "hr_letters.edit_draft": "hr_letters.view",
+  "hr_letters.issue": "hr_letters.view",
+  "hr_letters.revoke": "hr_letters.view",
+  "hr_letters.manage_templates": "hr_letters.view",
+  "assets.create": "assets.view",
+  "recruitment.create_job": "recruitment.view",
+};
+const EMPTY_PERMISSION_PAYLOAD: PermissionPayload = {
+  granular_permissions: Object.fromEntries(ALL_GRANULAR_KEYS.map((key) => [key, false])),
+  data_scopes: Object.fromEntries(PERMISSION_MODULES.map((module) => [module.key, "own_records" as DataScope])),
+};
+
+function permissionAccess(raw?: OrgAdminUserRecord["feature_access"]): PermissionPayload {
+  let parsed: Record<string, unknown> = {};
+  if (typeof raw === "string") { try { parsed = JSON.parse(raw) as Record<string, unknown>; } catch { parsed = {}; } }
+  else if (raw && typeof raw === "object") parsed = raw as unknown as Record<string, unknown>;
+  const grants = parsed.granular_permissions && typeof parsed.granular_permissions === "object"
+    ? parsed.granular_permissions as Record<string, unknown> : {};
+  const scopes = parsed.data_scopes && typeof parsed.data_scopes === "object"
+    ? parsed.data_scopes as Record<string, unknown> : {};
+  const legacy: Record<string, string> = {
+    "employees.view":"manage_employees","employees.create":"manage_employees","employees.edit":"manage_employees","employees.archive":"manage_employees","employees.manage_departments":"manage_employees","employees.manage_designations":"manage_employees",
+    "document_verification.view_requests":"approve_request","document_verification.generate_request":"generate_request","document_verification.edit_draft":"generate_request","document_verification.approve":"approve_request","document_verification.reject":"approve_request",
+    "attendance.view":"attendance","attendance.manual_entry":"attendance","attendance.correct_check_in_out":"attendance","attendance.manage_ips":"attendance",
+    "leave_management.view":"leave","leave_management.approve":"leave","leave_management.reject":"leave","leave_management.allocate_balance":"leave","leave_management.manage_leave_types":"leave",
+    "payroll.view":"payroll","payroll.generate":"payroll","payroll.manage_settings":"payroll","payroll.manage_employee_components":"payroll","payroll.adjust_salary":"payroll",
+    "expenses.view":"approve_expenses","expenses.create_own":"create_expenses","expenses.approve_employee":"approve_expenses","expenses.process_payment":"approve_expenses",
+    "hr_letters.view":"hr_letters","hr_letters.create_draft":"hr_letters","hr_letters.edit_draft":"hr_letters","hr_letters.issue":"hr_letters","hr_letters.revoke":"hr_letters","hr_letters.manage_templates":"hr_letters",
+    "assets.view":"manage_assets","assets.create":"manage_assets","assets.edit":"manage_assets","assets.assign":"manage_assets","assets.return":"manage_assets","assets.retire":"manage_assets","assets.manage_categories":"manage_assets",
+    "offboarding.view":"manage_separation","offboarding.initiate":"manage_separation","offboarding.manage_checklist":"manage_separation","offboarding.draft_settlement":"manage_separation","offboarding.approve_settlement":"manage_separation","offboarding.complete_exit":"manage_separation",
+    "recruitment.view":"manage_recruitment","recruitment.create_job":"manage_recruitment","recruitment.edit_job":"manage_recruitment","recruitment.manage_candidates":"manage_recruitment","recruitment.schedule_interview":"manage_recruitment","recruitment.record_feedback":"manage_recruitment","recruitment.manage_offers":"manage_recruitment","recruitment.hire":"manage_recruitment",
+  };
+  const granular_permissions = Object.fromEntries(ALL_GRANULAR_KEYS.map((key) => [
+    key, parsed.granular_permissions ? grants[key] === true : Boolean(parsed[legacy[key]]),
+  ]));
+  for (const [action, view] of Object.entries(ACTION_REQUIRES_VIEW)) {
+    if (granular_permissions[action]) granular_permissions[view] = true;
+  }
+  const data_scopes = Object.fromEntries(PERMISSION_MODULES.map((module) => {
+    const scope = scopes[module.key];
+    return [module.key, scope === "entire_organization" ? scope : "own_records"];
+  })) as Record<string, DataScope>;
+  return { granular_permissions, data_scopes };
 }
 
 function apiErrorMessage(e: unknown, fallback: string) {
@@ -178,18 +191,11 @@ function OrgAdminsPage() {
   });
 
   const updatePerfMut = useMutation({
-    mutationFn: ({
-      uuid,
-      feature_access,
-    }: {
-      uuid: UUID;
-      feature_access: Record<ElevatedKey, boolean>;
-    }) => orgService.adminUsers.update(uuid, feature_access),
+    mutationFn: ({ uuid, permissions }: { uuid: UUID; permissions: PermissionPayload }) =>
+      orgService.adminUsers.update(uuid, permissions),
     onSuccess: () => {
-      toast.success("Sub-admin permissions updated");
       invalidate();
     },
-    onError: (e) => toast.error(apiErrorMessage(e, "Update failed")),
   });
 
   // Pending-invite lifecycle, mirroring the platform /admin/users page. Both are
@@ -275,8 +281,10 @@ function OrgAdminsPage() {
                 </TableHeader>
                 <TableBody>
                   {items.map((u, i) => {
-                    const perms = elevatedAccess(u.feature_access);
-                    const granted = ELEVATED_PERMISSIONS.filter((p) => perms[p.key]);
+                    const perms = permissionAccess(u.feature_access);
+                    const granted = PERMISSION_MODULES.flatMap((module) => module.actions
+                      .filter(([action]) => perms.granular_permissions[`${module.key}.${action}`])
+                      .map(([action, label]) => ({ key: `${module.key}.${action}`, label, description: module.label })));
                     return (
                       <TableRow key={u.uuid}>
                         <TableCell data-label="S.No" className="w-10 text-muted-foreground">
@@ -301,7 +309,7 @@ function OrgAdminsPage() {
                         <TableCell data-label="Permissions">
                           {granted.length === 0 ? (
                             <span className="text-xs text-muted-foreground">—</span>
-                          ) : granted.length === ELEVATED_PERMISSIONS.length ? (
+                          ) : granted.length === ALL_GRANULAR_KEYS.length ? (
                             <Popover>
                               <PopoverTrigger asChild>
                                 <button
@@ -477,7 +485,7 @@ function OrgAdminsPage() {
       <EditSubAdminPermissionsDialog
         subAdmin={editing}
         onOpenChange={() => setEditing(null)}
-        onSubmit={({ uuid, feature_access }) => updatePerfMut.mutateAsync({ uuid, feature_access })}
+        onSubmit={({ uuid, permissions }) => updatePerfMut.mutateAsync({ uuid, permissions })}
         submitting={updatePerfMut.isPending}
         onDone={() => setEditing(null)}
       />
@@ -521,46 +529,62 @@ function OrgAdminsPage() {
   );
 }
 
-function FeatureCheckboxes({
-  value,
-  onChange,
-}: {
-  value: Record<ElevatedKey, boolean>;
-  onChange: (v: Record<ElevatedKey, boolean>) => void;
-}) {
-  return (
-    <div className="space-y-2">
-      {ELEVATED_PERMISSIONS.map((p) => (
-        <label key={p.key} className="flex items-start gap-2 text-sm text-muted-foreground">
-          <input
-            type="checkbox"
-            checked={value[p.key]}
-            onChange={(e) => onChange({ ...value, [p.key]: e.target.checked })}
-            className="mt-0.5 h-4 w-4 rounded border-border"
-          />
-          <span>
-            {p.label}
-            <span className="block text-xs text-muted-foreground/70">{p.description}</span>
-          </span>
-        </label>
-      ))}
-    </div>
-  );
+function FeatureCheckboxes({ value, onChange }: { value: PermissionPayload; onChange: (v: PermissionPayload) => void }) {
+  const toggleAction = (key: string, checked: boolean) => {
+    const next = { ...value.granular_permissions, [key]: checked };
+    const requiredView = ACTION_REQUIRES_VIEW[key];
+    if (requiredView && checked) next[requiredView] = true;
+    for (const [action, view] of Object.entries(ACTION_REQUIRES_VIEW)) {
+      if (key === view && !checked) next[action] = false;
+    }
+    onChange({ ...value, granular_permissions: next });
+  };
+  const toggleModule = (moduleKey: string, checked: boolean) => {
+    const module = PERMISSION_MODULES.find((item) => item.key === moduleKey);
+    if (!module) return;
+    const next = { ...value.granular_permissions };
+    module.actions.forEach(([action]) => { next[`${moduleKey}.${action}`] = checked; });
+    onChange({ ...value, granular_permissions: next });
+  };
+  return <Accordion type="multiple" className="w-full">
+    {PERMISSION_MODULES.map((module) => {
+      const keys = module.actions.map(([action]) => `${module.key}.${action}`);
+      const count = keys.filter((key) => value.granular_permissions[key]).length;
+      return <AccordionItem key={module.key} value={module.key}>
+        <div className="flex items-center gap-3 py-2">
+          <Checkbox checked={count === keys.length ? true : count ? "indeterminate" : false}
+            onCheckedChange={(checked) => toggleModule(module.key, checked === true)} />
+          <div className="min-w-0 flex-1">
+            <AccordionTrigger className="py-1 hover:no-underline">
+              <span className="flex items-center gap-2"><span>{module.label}</span>
+                <span className="text-xs text-muted-foreground">{count}/{keys.length}</span></span>
+            </AccordionTrigger>
+          </div>
+        </div>
+        <AccordionContent>
+          <div className="grid gap-3 border-l-2 border-border pl-5 sm:grid-cols-2">
+            {module.actions.map(([action,label]) => {
+              const key = `${module.key}.${action}`;
+              return <label key={key} className="flex cursor-pointer items-center gap-2 text-sm">
+                <Checkbox checked={value.granular_permissions[key] === true}
+                  onCheckedChange={(checked) => toggleAction(key, checked === true)} />
+                <span>{label}</span>
+              </label>;
+            })}
+          </div>
+          <div className="mt-4 flex flex-col gap-1.5 sm:max-w-xs">
+            <Label className="text-xs">Data visibility scope</Label>
+            <select value={value.data_scopes[module.key] ?? "own_records"}
+              onChange={(event) => onChange({ ...value, data_scopes: { ...value.data_scopes, [module.key]: event.target.value as DataScope }})}
+              className="h-9 rounded-md border border-input bg-background px-3 text-sm">
+              <option value="own_records">Own Records</option><option value="entire_organization">Entire Organization</option>
+            </select>
+          </div>
+        </AccordionContent>
+      </AccordionItem>;
+    })}
+  </Accordion>;
 }
-
-/**
- * Built from the key list rather than hand-written.
- *
- * This was a literal of three booleans typed `Record<ElevatedKey, boolean>`, so
- * widening ElevatedKey to the full FeatureKey made TypeScript demand the four new
- * keys — which is exactly the failure mode this whole audit is about: a permission
- * exists on the server, the grant form has no field for it, and an org admin cannot
- * delegate it no matter what they type. Deriving it means a new permission appears
- * here automatically, and the dialog's checkboxes are driven off the same array.
- */
-const EMPTY_ELEVATED: Record<ElevatedKey, boolean> = Object.fromEntries(
-  DELEGATED_FEATURE_KEYS.map((k) => [k, false]),
-) as Record<ElevatedKey, boolean>;
 
 function EditSubAdminPermissionsDialog({
   subAdmin,
@@ -573,25 +597,25 @@ function EditSubAdminPermissionsDialog({
   onOpenChange: () => void;
   onSubmit: (vars: {
     uuid: UUID;
-    feature_access: Record<ElevatedKey, boolean>;
+    permissions: PermissionPayload;
   }) => Promise<unknown>;
   submitting: boolean;
   onDone: () => void;
 }) {
-  const [access, setAccess] = useState<Record<ElevatedKey, boolean>>(EMPTY_ELEVATED);
+  const [access, setAccess] = useState<PermissionPayload>(EMPTY_PERMISSION_PAYLOAD);
   const [seedKey, setSeedKey] = useState("");
 
   // Seed the checkboxes from the selected sub-admin whenever it changes.
   const key = subAdmin?.uuid ?? "";
   if (key !== seedKey) {
     setSeedKey(key);
-    setAccess(elevatedAccess(subAdmin?.feature_access));
+    setAccess(permissionAccess(subAdmin?.feature_access));
   }
 
   const submit = async () => {
     if (!subAdmin) return;
     try {
-      await onSubmit({ uuid: subAdmin.uuid, feature_access: access });
+      await onSubmit({ uuid: subAdmin.uuid, permissions: access });
       toast.success("Sub-admin permissions updated");
       onDone();
     } catch (err) {
@@ -614,9 +638,6 @@ function EditSubAdminPermissionsDialog({
           )}
           <div className="space-y-2 rounded-lg border border-border p-3">
             <Label className="text-sm font-medium">Permissions</Label>
-            <p className="text-xs text-muted-foreground">
-              Sub-admins gain exactly the permissions you grant here. Changes take effect immediately.
-            </p>
             <FeatureCheckboxes value={access} onChange={setAccess} />
           </div>
         </div>
@@ -646,7 +667,7 @@ function CreateSubAdminDialog({
   const [email, setEmail] = useState("");
   const [cnic, setCnic] = useState("");
   const [phone, setPhone] = useState("");
-  const [access, setAccess] = useState<Record<ElevatedKey, boolean>>(EMPTY_ELEVATED);
+  const [access, setAccess] = useState<PermissionPayload>(EMPTY_PERMISSION_PAYLOAD);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
 
@@ -667,7 +688,8 @@ function CreateSubAdminDialog({
         email: email.trim(),
         cnic: normalizeCNIC(cnic),
         phone: phone.trim() || undefined,
-        feature_access: access,
+        granular_permissions: access.granular_permissions,
+        data_scopes: access.data_scopes,
       });
       if (res._email_warning) toast.warning(res._email_warning);
       else toast.success("Sub-admin created. Set-password email sent.");
@@ -675,7 +697,7 @@ function CreateSubAdminDialog({
       setEmail("");
       setCnic("");
       setPhone("");
-      setAccess(EMPTY_ELEVATED);
+      setAccess(EMPTY_PERMISSION_PAYLOAD);
       onDone();
     } catch (err) {
       toast.error(apiErrorMessage(err, "Create failed"));
@@ -728,7 +750,7 @@ function CreateSubAdminDialog({
           <div className="space-y-2 rounded-lg border border-border p-3">
             <Label className="text-sm font-medium">Permissions</Label>
             <p className="text-xs text-muted-foreground">
-              Sub-admins never get full Org Admin power — they gain exactly the permissions you grant here.
+              Sub-admins never get full Org Admin power — they gain exactly the action permissions you grant here.
             </p>
             <FeatureCheckboxes value={access} onChange={setAccess} />
           </div>

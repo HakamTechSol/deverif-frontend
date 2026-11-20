@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/common/PageHeader";
 import { EmptyState } from "@/components/common/EmptyState";
 import { Pagination } from "@/components/common/Pagination";
 import { StatusBadge } from "@/components/common/StatusBadge";
+import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { TableSkeleton } from "./_app.requests";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -38,14 +39,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { leavesService, type LeaveRequest } from "@/services";
-import { countDays, formatDate, formatDateTime } from "@/lib/utils";
+import { countDays, formatDate, formatDateTime, formatLeaveDays } from "@/lib/utils";
 import { authStore } from "@/lib/auth";
 import { canAccessRoute } from "@/lib/routeAccess";
 import { useOrgSubscription } from "@/hooks/useOrgSubscription";
 import { ModuleFeatureLockedCard } from "@/components/common/SubscriptionLocked";
 import { LeaveRequestDetailsDialog } from "@/components/leaves/LeaveRequestDetailsDialog";
 import { LeaveReasonEditor } from "@/components/leaves/LeaveReasonEditor";
-import { FormattedLeaveReason } from "@/components/leaves/FormattedLeaveReason";
 
 export const Route = createFileRoute("/_app/leaves")({
   beforeLoad: () => {
@@ -73,6 +73,7 @@ function LeavesContent() {
   const [dateTo, setDateTo] = useState("");
   const [applyOpen, setApplyOpen] = useState(false);
   const [selectedLeave, setSelectedLeave] = useState<LeaveRequest | null>(null);
+  const [cancelling, setCancelling] = useState<LeaveRequest | null>(null);
 
   const balance = useQuery({
     queryKey: ["myLeaveBalance"],
@@ -82,6 +83,17 @@ function LeavesContent() {
   const history = useQuery({
     queryKey: ["myLeaves", page, status, dateFrom, dateTo],
     queryFn: () => leavesService.mine({ page, limit: PAGE_SIZE, status: status || undefined, dateFrom: dateFrom || undefined, dateTo: dateTo || undefined }),
+  });
+
+  const cancel = useMutation({
+    mutationFn: (uuid: string) => leavesService.cancel(uuid),
+    onSuccess: () => {
+      toast.success(t("leaves.requestCancelled"));
+      qc.invalidateQueries({ queryKey: ["myLeaves"] });
+      qc.invalidateQueries({ queryKey: ["myLeaveBalance"] });
+      setCancelling(null);
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.message ?? t("leaves.cancelFailed")),
   });
 
   const items = history.data?.items ?? [];
@@ -119,10 +131,10 @@ function LeavesContent() {
                 <div className="mt-2 flex items-end justify-between">
                   <div>
                     <div className="text-2xl font-semibold text-foreground">
-                      {b.remaining}
+                      {formatLeaveDays(b.remaining)}
                       <span className="text-sm font-normal text-muted-foreground">
                         {" "}
-                        / {b.total_allocated}
+                        / {formatLeaveDays(b.total_allocated)}
                       </span>
                     </div>
                     <div className="text-xs text-muted-foreground">
@@ -130,7 +142,7 @@ function LeavesContent() {
                     </div>
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    {t("leaves.usedCount", { count: b.used })}
+                    {t("leaves.usedCount", { count: formatLeaveDays(b.used) })}
                   </div>
                 </div>
               </CardContent>
@@ -147,6 +159,7 @@ function LeavesContent() {
             <SelectItem value="pending">{t("status.pending", "Pending")}</SelectItem>
             <SelectItem value="approved">{t("status.approved", "Approved")}</SelectItem>
             <SelectItem value="rejected">{t("status.rejected", "Rejected")}</SelectItem>
+            <SelectItem value="cancelled">{t("status.cancelled")}</SelectItem>
           </SelectContent>
         </Select>
         <Input type="date" aria-label={t("leaves.fromDate", "From date")} value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setPage(1); }} />
@@ -175,6 +188,7 @@ function LeavesContent() {
                       <TableHead className="whitespace-nowrap">{t("leaves.leaveType")}</TableHead>
                       <TableHead className="whitespace-nowrap">{t("leaves.dates")}</TableHead>
                       <TableHead className="whitespace-nowrap">{t("leaves.days")}</TableHead>
+                      <TableHead className="whitespace-nowrap">{t("leaves.payrollTreatment")}</TableHead>
                       <TableHead className="whitespace-nowrap">{t("leaves.status")}</TableHead>
                       <TableHead className="whitespace-nowrap">{t("leaves.submitted")}</TableHead>
                       <TableHead className="text-right whitespace-nowrap">{t("common.actions", "Actions")}</TableHead>
@@ -188,17 +202,19 @@ function LeavesContent() {
                         </TableCell>
                         <TableCell data-label="Leave type" className="whitespace-nowrap font-medium text-foreground">
                           {r.leave_type_name}
-                          {r.reason && (
-                            <div className="mt-0.5 max-w-[240px] truncate text-xs font-normal text-muted-foreground">
-                              <FormattedLeaveReason text={r.reason} />
-                            </div>
-                          )}
                         </TableCell>
                         <TableCell data-label="Dates" className="whitespace-nowrap text-sm text-muted-foreground">
                           {formatDate(r.start_date)} → {formatDate(r.end_date)}
                         </TableCell>
                         <TableCell data-label="Days" className="whitespace-nowrap text-sm text-foreground">
-                          {countDays(r.start_date, r.end_date)}
+                          {formatLeaveDays(r.approved_days ?? (r.day_portion && r.day_portion !== "full" ? 0.5 : countDays(r.start_date, r.end_date)))}
+                        </TableCell>
+                        <TableCell data-label="Payroll treatment" className="whitespace-nowrap text-sm">
+                          {(r.approved_treatment ?? r.requested_treatment) === "paid"
+                            ? <span className="text-success">{t("leaves.paid")}</span>
+                            : (r.approved_treatment ?? r.requested_treatment) === "unpaid"
+                              ? <span className="text-warning">{t("leaves.unpaid")}</span>
+                              : "—"}
                         </TableCell>
                         <TableCell data-label="Status" className="whitespace-nowrap">
                           <StatusBadge status={r.status} />
@@ -218,6 +234,19 @@ function LeavesContent() {
                           >
                             <Eye className="h-4 w-4" />
                           </Button>
+                          {(r.status === "pending" || r.status === "approved") && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              className="h-8"
+                              aria-label={t("leaves.cancelTitle")}
+                              onClick={() => setCancelling(r)}
+                            >
+                              <CalendarX2 className="mr-1 h-4 w-4" />
+                              {t("common.cancel")}
+                            </Button>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -240,6 +269,15 @@ function LeavesContent() {
         request={selectedLeave}
         onOpenChange={(open) => !open && setSelectedLeave(null)}
       />
+      <ConfirmDialog
+        open={!!cancelling}
+        onOpenChange={(open) => !open && setCancelling(null)}
+        title={t("leaves.cancelTitle")}
+        description={cancelling ? t("leaves.cancelDescription", { type: cancelling.leave_type_name, startDate: cancelling.start_date, endDate: cancelling.end_date }) : undefined}
+        confirmLabel={t("common.cancel")}
+        destructive
+        onConfirm={() => cancelling && cancel.mutate(cancelling.uuid)}
+      />
     </div>
   );
 }
@@ -257,6 +295,7 @@ function ApplyLeaveDialog({
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [reason, setReason] = useState("");
+  const [dayPortion, setDayPortion] = useState<"full" | "half">("full");
 
   const types = useQuery({
     queryKey: ["myLeaveTypes"],
@@ -264,12 +303,26 @@ function ApplyLeaveDialog({
     enabled: open,
   });
 
+  const calendar = useQuery({
+    queryKey: ["myLeaveCalendar", startDate, endDate],
+    queryFn: () => leavesService.calendar({
+      month: startDate ? Number(startDate.slice(5, 7)) : new Date().getMonth() + 1,
+      year: startDate ? Number(startDate.slice(0, 4)) : new Date().getFullYear(),
+      from: startDate && endDate ? startDate : undefined,
+      to: startDate && endDate ? endDate : undefined,
+    }),
+    enabled: open && Boolean(startDate && endDate && startDate <= endDate),
+  });
+
   const create = useMutation({
     mutationFn: () =>
       leavesService.create({
-        leave_type_id: Number(leaveTypeId),
+        ...(leaveTypeId === "default-unpaid"
+          ? { default_unpaid: true }
+          : { leave_type_id: Number(leaveTypeId) }),
         start_date: startDate,
         end_date: endDate,
+        day_portion: dayPortion,
         reason: reason.trim(),
       }),
     onSuccess: () => {
@@ -280,17 +333,40 @@ function ApplyLeaveDialog({
       setStartDate("");
       setEndDate("");
       setReason("");
+      setDayPortion("full");
       onOpenChange(false);
     },
     onError: (e: any) => toast.error(e?.response?.data?.message ?? t("leaves.submitFailed")),
   });
 
-  const days = startDate && endDate ? countDays(startDate, endDate) : 0;
+  const days = dayPortion === "full"
+    ? (startDate && endDate ? countDays(startDate, endDate) : 0)
+    : 0.5;
+  const serverScheduleError = (
+    calendar.error as { response?: { data?: { message?: unknown } }; message?: unknown } | null
+  )?.response?.data?.message;
+  const scheduleErrorMessage = typeof serverScheduleError === "string"
+    ? serverScheduleError
+    : calendar.error instanceof Error && calendar.error.message
+      ? calendar.error.message
+      : t("leaves.scheduleUnavailable");
 
   const submit = () => {
     if (!leaveTypeId) return toast.error(t("leaves.selectLeaveType"));
     if (!startDate || !endDate) return toast.error(t("leaves.selectDates"));
     if (endDate < startDate) return toast.error(t("leaves.endDateBeforeStart"));
+    if (dayPortion !== "full" && startDate !== endDate) {
+      return toast.error("Half-day leave must apply to exactly one date.");
+    }
+    if (calendar.isLoading || calendar.isError || !calendar.data) {
+      return toast.error("Working-day calendar is not available. Please try again.");
+    }
+    if (calendar.data.range_overlaps) {
+      return toast.error("This date range overlaps an existing pending or approved leave.");
+    }
+    if (!calendar.data.range_working_days) {
+      return toast.error("Selected date range contains no configured working days.");
+    }
     const reasonText = reason.replace(/\*\*/g, "").replace(/__/g, "").trim();
     if (!reasonText) return toast.error(t("leaves.reasonRequired"));
     create.mutate();
@@ -298,7 +374,7 @@ function ApplyLeaveDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-h-[90vh] w-[95vw] max-w-md overflow-y-auto sm:w-full">
         <DialogHeader>
           <DialogTitle>{t("leaves.applyForLeave")}</DialogTitle>
           <DialogDescription>{t("leaves.dialogDescription")}</DialogDescription>
@@ -311,37 +387,75 @@ function ApplyLeaveDialog({
                 <SelectValue placeholder={t("leaves.selectLeaveTypePlaceholder")} />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="default-unpaid">{t("leaves.defaultUnpaid", "Unpaid")}</SelectItem>
                 {(types.data ?? []).map((lt) => (
                   <SelectItem key={lt.id} value={String(lt.id)}>
-                    {lt.name}
+                    {lt.name} — {lt.is_paid === "no" ? "Unpaid" : "Paid"}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="leave-start">{t("leaves.startDate")}</Label>
-              <Input
-                id="leave-start"
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-              />
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="leave-start">{t("leaves.startDate")}</Label>
+                <Input
+                  id="leave-start"
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => {
+                    setStartDate(e.target.value);
+                    if (dayPortion !== "full") setEndDate(e.target.value);
+                  }}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="leave-end">{t("leaves.endDate")}</Label>
+                <Input
+                  id="leave-end"
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                />
+              </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="leave-end">{t("leaves.endDate")}</Label>
-              <Input
-                id="leave-end"
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-              />
+              <Label htmlFor="leave-day-portion">{t("leaves.leaveDuration")}</Label>
+              <Select
+                value={dayPortion}
+                onValueChange={(value) => {
+                  const portion = value as "full" | "half";
+                  setDayPortion(portion);
+                  if (portion !== "full" && startDate) setEndDate(startDate);
+                }}
+              >
+                <SelectTrigger id="leave-day-portion"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="full">{t("leaves.fullDay")}</SelectItem>
+                  <SelectItem value="half">{t("leaves.halfDay")}</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
+            {calendar.isError && startDate && endDate && (
+              <p className="text-xs text-destructive">
+                {scheduleErrorMessage}
+              </p>
+            )}
+            {calendar.data?.range_working_days != null && (
+              <p className="text-xs text-muted-foreground">
+                {calendar.data.range_working_days} configured working day(s)
+              </p>
+            )}
+            {calendar.data?.range_overlaps && (
+              <p className="text-xs text-destructive">
+                This range overlaps another pending or approved leave.
+              </p>
+            )}
           </div>
-          {days > 0 && (
+          {days > 0 && calendar.data?.range_working_days != null && (
             <p className="text-xs text-muted-foreground">
-              {t("leaves.daysRequested", { count: days })}
+              {t("leaves.daysRequested", { count: dayPortion === "full" ? calendar.data.range_working_days : 0.5 })}
             </p>
           )}
           <div className="space-y-2">
@@ -358,7 +472,7 @@ function ApplyLeaveDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={create.isPending}>
             {t("common.cancel")}
           </Button>
-          <Button onClick={submit} disabled={create.isPending}>
+          <Button onClick={submit} disabled={create.isPending || calendar.isLoading || calendar.isError || (startDate !== "" && endDate !== "" && calendar.data?.range_overlaps)}>
             {t("leaves.submitRequest")}
           </Button>
         </DialogFooter>

@@ -9,6 +9,7 @@ import {
 } from "@/lib/routeAccess";
 import { allNavPaths } from "@/lib/navItems";
 import type { AuthUser } from "@/lib/auth";
+import { hasGranularPermission } from "@/lib/permissions";
 
 // ---------------------------------------------------------------------------
 // canAccessRoute is the one place that answers "may this user open this page?".
@@ -44,6 +45,53 @@ function user(over: Partial<AuthUser> = {}): AuthUser {
 function withFlags(orgRole: OrgRole, flags: Record<FeatureKey, boolean>): AuthUser {
   return user({ org_role: orgRole, feature_access: flags });
 }
+
+describe("payroll route action dependencies", () => {
+  it.each([
+    "payroll.generate",
+    "payroll.manage_settings",
+    "payroll.manage_employee_components",
+    "payroll.adjust_salary",
+  ])("%s also grants Payroll View", (action) => {
+    const grants = {
+      granular_permissions: { [action]: true, "payroll.view": false },
+    } as unknown as AuthUser["feature_access"];
+    const subAdmin = user({ org_role: "sub_admin", feature_access: grants });
+    expect(canAccessRoute(subAdmin, "/org/payroll")).toBe(true);
+    expect(hasGranularPermission(subAdmin, "payroll.view", "payroll")).toBe(true);
+  });
+});
+
+describe("HR letter route action dependencies", () => {
+  it.each([
+    "hr_letters.create_draft",
+    "hr_letters.edit_draft",
+    "hr_letters.issue",
+    "hr_letters.revoke",
+    "hr_letters.manage_templates",
+  ])("%s also grants HR Letters View", (action) => {
+    const grants = {
+      granular_permissions: { [action]: true, "hr_letters.view": false },
+      data_scopes: { hr_letters: "entire_organization" },
+    } as unknown as AuthUser["feature_access"];
+    const subAdmin = user({ org_role: "sub_admin", feature_access: grants });
+    expect(canAccessRoute(subAdmin, "/org/hr-letters")).toBe(true);
+    expect(canAccessRoute(subAdmin, "/org/letter-templates")).toBe(true);
+    expect(hasGranularPermission(subAdmin, "hr_letters.view", "hr_letters")).toBe(true);
+  });
+
+  it("denies shared templates unless the sub-admin has Entire Organization scope", () => {
+    const subAdmin = user({
+      org_role: "sub_admin",
+      feature_access: {
+        granular_permissions: { "hr_letters.view": true },
+        data_scopes: { hr_letters: "own_records" },
+      } as unknown as AuthUser["feature_access"],
+    });
+    expect(canAccessRoute(subAdmin, "/org/hr-letters")).toBe(true);
+    expect(canAccessRoute(subAdmin, "/org/letter-templates")).toBe(false);
+  });
+});
 
 const everyFlagOn = ALL_FEATURES.reduce<Record<FeatureKey, boolean>>(
   (acc, k) => ({ ...acc, [k]: true }),
@@ -112,11 +160,29 @@ describe("canAccessRoute — honours its own table exactly", () => {
   it.each(combos)("$name matches the table row for every route", ({ u }) => {
     for (const [path, rule] of Object.entries(ROUTE_ACCESS)) {
       const roleOk = rule.roles.includes(u.org_role as OrgRole);
+      const legacyForGranular: Record<string, FeatureKey> = {
+        "employees.view": "manage_employees",
+        "attendance.view": "attendance",
+        "leave_management.view": "leave",
+        "payroll.view": "payroll",
+        "document_verification.generate_request": "generate_request",
+        "document_verification.view_requests": "approve_request",
+      };
+      const access = u.feature_access as unknown as Record<string, unknown> | null;
+      const scopes = access?.data_scopes;
+      const scopeAllowed =
+        !rule.scope ||
+        rule.always?.includes(u.org_role as OrgRole) ||
+        (!!scopes &&
+          typeof scopes === "object" &&
+          !Array.isArray(scopes) &&
+          (scopes as Record<string, unknown>)[rule.scope] === "entire_organization");
       const expected =
         roleOk &&
-        (!rule.feature ||
-          !!rule.always?.includes(u.org_role as OrgRole) ||
-          !!u.feature_access?.[rule.feature]);
+        scopeAllowed &&
+        (!!rule.always?.includes(u.org_role as OrgRole) ||
+          (rule.feature ? !!u.feature_access?.[rule.feature] :
+            rule.granular ? !!u.feature_access?.[legacyForGranular[rule.granular]] : true));
       expect(canAccessRoute(u, path), `path=${path} rule=${JSON.stringify(rule)}`).toBe(expected);
     }
   });
@@ -208,11 +274,59 @@ describe("canAccessRoute — sub_admin", () => {
       "/org/team",
       "/org/leaves",
       "/org/attendance",
-      "/org/salary-components",
       "/org/payroll",
+      "/my-expenses",
     ]) {
       expect(canAccessRoute(s, p), p).toBe(false);
     }
+  });
+
+  it("opens My Expenses only for sub-admins granted Create Own Expense", () => {
+    const granted = user({
+      org_role: "sub_admin",
+      feature_access: {
+        granular_permissions: { "expenses.create_own": true },
+      } as unknown as AuthUser["feature_access"],
+    });
+    const denied = user({
+      org_role: "sub_admin",
+      feature_access: {
+        granular_permissions: { "expenses.create_own": false },
+      } as unknown as AuthUser["feature_access"],
+    });
+
+    expect(canAccessRoute(granted, "/my-expenses")).toBe(true);
+    expect(canAccessRoute(denied, "/my-expenses")).toBe(false);
+  });
+
+  it("uses an explicitly saved granular matrix instead of legacy broad flags", () => {
+    const granted = user({
+      org_role: "sub_admin",
+      feature_access: {
+        manage_employees: true,
+        approve_expenses: true,
+        granular_permissions: { "employees.view": true, "document_verification.generate_request": true },
+      } as unknown as AuthUser["feature_access"],
+    });
+    expect(canAccessRoute(granted, "/org/team")).toBe(true);
+    expect(canAccessRoute(granted, "/requests")).toBe(true);
+
+    const denied = user({
+      org_role: "sub_admin",
+      feature_access: {
+        manage_employees: true,
+        generate_request: true,
+        approve_expenses: true,
+        granular_permissions: {
+          "employees.view": false,
+          "document_verification.generate_request": false,
+          "expenses.view": false,
+        },
+      } as unknown as AuthUser["feature_access"],
+    });
+    expect(canAccessRoute(denied, "/org/team")).toBe(false);
+    expect(canAccessRoute(denied, "/requests")).toBe(false);
+    expect(canAccessRoute(denied, "/org/expense-claims")).toBe(false);
   });
 
   it("is always denied org_admin-only pages", () => {
@@ -237,7 +351,6 @@ describe("canAccessRoute — sub_admin", () => {
       ["manage_employees", "/org/team"],
       ["leave", "/org/leaves"],
       ["attendance", "/org/attendance"],
-      ["payroll", "/org/salary-components"],
       ["payroll", "/org/payroll"],
     ];
     for (const [flag, path] of cases) {

@@ -25,16 +25,13 @@ export const orgService = {
       page?: number;
       limit?: number;
       search?: string;
+      department?: string;
+      designation?: string;
+      employment_status?: "current_employee" | "active" | "inactive";
       reference?: boolean;
       /**
-       * "org" widens the list to the whole organization roster.
-       *
-       * By default an org_admin sees only the employee records they personally
-       * added. That is right for the Employees page (a work queue of what I
-       * imported) and wrong for a picker over the company, so anything choosing
-       * a person to hand company property to must pass this — otherwise a
-       * colleague another admin onboarded simply does not exist as far as the
-       * picker is concerned. It never widens past your own organization.
+       * Retained for existing roster-picker callers. The API always enforces the
+       * caller's organization and role/data-scope permissions.
        */
       scope?: "org";
     } = {},
@@ -43,7 +40,7 @@ export const orgService = {
     api.get<{ employee: EmployeeRecord }>(`/org/employees/${uuid}`).then((r) => r.data.employee),
   createEmployee: (data: Record<string, unknown>) =>
     api
-      .post<{ employee: EmployeeRecord; _email_warning?: string }>("/org/employees", data)
+      .post<{ employee: EmployeeRecord; _email_warning?: string; linked_existing_account?: boolean }>("/org/employees", data)
       .then((r) => r.data),
   createReference: (data: { full_name: string; cnic: string }) =>
     api
@@ -63,7 +60,9 @@ export const orgService = {
       .post<{ employee: EmployeeRecord }>(`/org/employees/${uuid}/archive-reference`)
       .then((r) => r.data.employee),
   resendInvite: (uuid: UUID) =>
-    api.post<{ message?: string }>(`/org/employees/${uuid}/resend-invite`).then((r) => r.data),
+    api
+      .post<{ linked_existing_account?: boolean }>(`/org/employees/${uuid}/resend-invite`)
+      .then((r) => r.data),
   departments: {
     list: () => api.get<{ items: ManagedOption[] }>("/org/departments").then((r) => r.data.items),
     create: (name: string) =>
@@ -108,10 +107,8 @@ export const orgService = {
       email: string;
       cnic: string;
       phone?: string;
-      feature_access: Pick<
-        FeatureAccess,
-        "manage_employees" | "generate_request" | "approve_request"
-      >;
+      granular_permissions: Record<string, boolean>;
+      data_scopes: Record<string, "own_records" | "entire_organization">;
     }) =>
       api
         .post<{ user: OrgAdminUserRecord; _email_warning?: string }>("/org/admin-users", data)
@@ -124,13 +121,13 @@ export const orgService = {
         .then((r) => r.data.user),
     update: (
       uuid: UUID,
-      feature_access: Pick<
-        FeatureAccess,
-        "manage_employees" | "generate_request" | "approve_request"
-      >,
+      permissions: {
+        granular_permissions: Record<string, boolean>;
+        data_scopes: Record<string, "own_records" | "entire_organization">;
+      },
     ) =>
       api
-        .patch<{ user: OrgAdminUserRecord }>(`/org/admin-users/${uuid}`, { feature_access })
+        .patch<{ user: OrgAdminUserRecord }>(`/org/admin-users/${uuid}`, permissions)
         .then((r) => r.data.user),
     /**
      * Cancel a pending invitation. Only valid while is_verified === 'no'; the

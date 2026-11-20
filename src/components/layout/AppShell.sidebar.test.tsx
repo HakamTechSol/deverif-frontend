@@ -5,6 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { SidebarInner } from "@/components/layout/AppShell";
 import { accountItemsFor, primaryNavItemsFor } from "@/lib/navItems";
 import { canAccessRoute } from "@/lib/routeAccess";
+import { ROUTE_MODULES } from "@/lib/routeModules";
 import type { AuthUser } from "@/lib/auth";
 import { FEATURE_KEYS, type FeatureAccessMap } from "@/lib/featureKeys";
 
@@ -43,10 +44,12 @@ vi.mock("@tanstack/react-router", () => ({
   ),
 }));
 
-/** The plan context is only used by the upgrade affordance, which these tests avoid. */
+/** The plan picker is a no-op default here; the plan-lock tests assert on its spy. */
+const { openPicker } = vi.hoisted(() => ({ openPicker: vi.fn() }));
+
 vi.mock("@/components/common/PlanPickerProvider", () => ({
   PlanPickerProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  usePlanPicker: () => ({ openPicker: vi.fn() }),
+  usePlanPicker: () => ({ openPicker }),
 }));
 
 function user(over: Partial<AuthUser> = {}): AuthUser {
@@ -110,21 +113,45 @@ function renderSidebarFor(u: AuthUser) {
   );
 }
 
+/**
+ * The same sidebar, but with the given paths reporting a module the current
+ * plan excludes. This is the state a Free-plan org is in for every module it
+ * has not bought, and the behaviour under test is what the menu offers when a
+ * link would otherwise lead to a page showing only a lock card.
+ */
+function renderSidebarWithPlanLocks(u: AuthUser, lockedPaths: string[]) {
+  const primary = primaryNavItemsFor(u.org_role).filter((it) => canAccessRoute(u, it.to));
+  const account =
+    u.role === "admin" ? [] : accountItemsFor(u).filter((it) => canAccessRoute(u, it.to));
+
+  return render(
+    <SidebarInner
+      items={primary}
+      accountItems={account}
+      pathname="/dashboard"
+      onNavigate={() => {}}
+      onLogout={() => {}}
+      locked={false}
+      moduleOffPaths={new Set(lockedPaths)}
+      blanketLockedPaths={new Set()}
+      pathModule={ROUTE_MODULES}
+    />,
+  );
+}
+
 /** The primary nav is the <nav> element; the footer groups sit outside it. */
 function primaryNav() {
   return screen.getByRole("navigation");
 }
 
 /**
- * Pages that need an employee record of their own, so they cannot appear in a staff
- * member's menu.
+ * Personal pages unavailable to an org_admin.
  *
- * /my-assets, /my-expenses and /my-resignation resolve the caller to an employee row;
- * `callerEmployee` returns null for an org_admin and the handler answers with an EMPTY
- * list rather than a 403. /requests is here only because it is the assertion's subject
- * below — it needs no employee record and IS shown to everyone.
+ * Org-admins cannot file personal claims; /my-expenses is shown to employees and to
+ * sub-admins with Create Own Expense. /requests is not in this list because it needs
+ * no employee record and is shown to everyone.
  */
-const ROSTER_ONLY_PATHS = ["/my-assets", "/my-expenses", "/my-resignation"];
+const ORG_ADMIN_PERSONAL_PATHS = ["/my-assets", "/my-expenses", "/my-resignation"];
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -150,9 +177,31 @@ describe("the org_admin sidebar renders management modules only", () => {
   it("shows NO personal employee link in the primary nav", () => {
     renderSidebarFor(orgAdmin);
     const nav = primaryNav();
-    for (const p of ROSTER_ONLY_PATHS) {
+    for (const p of ORG_ADMIN_PERSONAL_PATHS) {
       expect(within(nav).queryByTestId(`link-${p}`), `${p} is in the primary nav`).toBeNull();
     }
+  });
+
+  it("shows My Expenses to a sub-admin with Create Own Expense", () => {
+    const subAdmin = user({
+      org_role: "sub_admin",
+      feature_access: {
+        granular_permissions: { "expenses.create_own": true },
+      } as unknown as AuthUser["feature_access"],
+    });
+    renderSidebarFor(subAdmin);
+    expect(within(primaryNav()).getByTestId("link-/my-expenses")).toBeInTheDocument();
+  });
+
+  it("hides My Expenses from a sub-admin without Create Own Expense", () => {
+    const subAdmin = user({
+      org_role: "sub_admin",
+      feature_access: {
+        granular_permissions: { "expenses.create_own": false },
+      } as unknown as AuthUser["feature_access"],
+    });
+    renderSidebarFor(subAdmin);
+    expect(within(primaryNav()).queryByTestId("link-/my-expenses")).toBeNull();
   });
 
   it("shows My Requests in the primary nav, plainly and not in a dropdown", async () => {
@@ -275,5 +324,47 @@ describe("the account group renders its own links and collapses like the others"
     for (const p of ["/settings", "/payments", "/org/support"]) {
       expect(within(nav).queryByTestId(`link-${p}`), `${p} still in the primary nav`).toBeNull();
     }
+  });
+});
+
+/**
+ * A PLAN IS A SECOND AXIS, SEPARATE FROM ROLE.
+ *
+ * The complaint that prompted these tests: some modules excluded by the plan
+ * showed an "Upgrade" badge in the sidebar, while others opened their page and
+ * only then showed the lock card. Nothing was insecure -- every page gates
+ * itself -- but the same situation looked like two different bugs depending on
+ * which link the user happened to click. The badge must be offered for every
+ * gated link, not the subset that happened to be listed in AppShell.
+ */
+describe("plan-locked modules are offered where the user meets them", () => {
+  const orgPaths = Object.keys(ROUTE_MODULES).filter((p) => p.startsWith("/org/"));
+  const selfServicePaths = Object.keys(ROUTE_MODULES).filter((p) => !p.startsWith("/org/"));
+
+  it("badges EVERY gated management link for an org_admin", () => {
+    renderSidebarWithPlanLocks(orgAdmin, orgPaths);
+    const nav = primaryNav();
+    for (const p of orgPaths) {
+      const link = within(nav).getByTestId(`link-${p}`);
+      expect(within(link).getByText("Upgrade"), `${p} has no upgrade badge`).toBeInTheDocument();
+    }
+  });
+
+  it("badges EVERY gated self-service link for an employee", () => {
+    renderSidebarWithPlanLocks(employee, selfServicePaths);
+    const nav = primaryNav();
+    for (const p of selfServicePaths) {
+      const link = within(nav).getByTestId(`link-${p}`);
+      expect(within(link).getByText("Upgrade"), `${p} has no upgrade badge`).toBeInTheDocument();
+    }
+  });
+
+  it("opens the plan chooser for the link's module instead of navigating", async () => {
+    const user_ = userEvent.setup();
+    renderSidebarWithPlanLocks(orgAdmin, ["/org/assets"]);
+
+    await user_.click(within(primaryNav()).getByTestId("link-/org/assets"));
+
+    expect(openPicker).toHaveBeenCalledWith("asset_management");
   });
 });

@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Archive, Contact, Download, Eye, FileUp, Lock, Mail, Plus, RefreshCw, Send, Trash2, Users } from "lucide-react";
 
 import { useAuth } from "@/lib/auth";
+import { hasGranularPermission } from "@/lib/permissions";
 import { PageHeader } from "@/components/common/PageHeader";
 import { SearchInput } from "@/components/common/SearchInput";
 import { Pagination } from "@/components/common/Pagination";
@@ -49,12 +50,12 @@ import { CONTACT_VALIDATION_LABEL, cnicError, formatCNIC, normalizeCNIC, phoneEr
 import { formatDate, formatFileSize, normalizeDateInputValue } from "@/lib/utils";
 
 type EmployeeApi = {
-  list: (params: { page?: number; limit?: number; search?: string; reference?: boolean }) => Promise<{
+  list: (params: { page?: number; limit?: number; search?: string; department?: string; designation?: string; employment_status?: "current_employee" | "active" | "inactive"; reference?: boolean }) => Promise<{
     items: EmployeeRecord[];
     total: number;
     totalPages: number;
   }>;
-  create: (data: Record<string, unknown>) => Promise<{ employee: EmployeeRecord; _email_warning?: string }>;
+  create: (data: Record<string, unknown>) => Promise<{ employee: EmployeeRecord; _email_warning?: string; linked_existing_account?: boolean }>;
   update: (uuid: UUID, data: Record<string, unknown>) => Promise<EmployeeRecord>;
   remove: (uuid: UUID) => Promise<unknown>;
   archiveReference?: (uuid: UUID) => Promise<EmployeeRecord>;
@@ -172,21 +173,28 @@ export function EmployeeManager({
   userManagementLocked?: boolean;
 }) {
   const { user } = useAuth();
+  const canCreateEmployee = user?.role === "admin" || hasGranularPermission(user, "employees.create", "manage_employees");
+  const canArchiveEmployee = user?.role === "admin" || hasGranularPermission(user, "employees.archive", "manage_employees");
   const { t } = useTranslation();
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [listMode, setListMode] = useState<"roster" | "reference">("roster");
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
+  const [department, setDepartment] = useState("");
+  const [designation, setDesignation] = useState("");
+  const [employmentStatus, setEmploymentStatus] = useState<"current_employee" | "active" | "inactive" | "">("");
   const [openForm, setOpenForm] = useState(false);
   const [editing, setEditing] = useState<EmployeeRecord | null>(null);
   const [toDelete, setToDelete] = useState<UUID | null>(null);
 
   const isReferenceMode = listMode === "reference";
 
+  const departmentsQ = useQuery({ queryKey: ["employee-filter-departments"], queryFn: () => orgService.departments.list() });
+  const designationsQ = useQuery({ queryKey: ["employee-filter-designations"], queryFn: () => orgService.designations.list() });
   const list = useQuery({
-    queryKey: [queryKey, page, search, isReferenceMode],
-    queryFn: () => api.list({ page, limit: 10, search, reference: isReferenceMode || undefined }),
+    queryKey: [queryKey, page, search, isReferenceMode, department, designation, employmentStatus],
+    queryFn: () => api.list({ page, limit: 10, search, department: department || undefined, designation: designation || undefined, employment_status: isReferenceMode ? undefined : (employmentStatus || undefined), reference: isReferenceMode || undefined }),
   });
 
   const invalidate = () => qc.invalidateQueries({ queryKey: [queryKey] });
@@ -194,16 +202,20 @@ export function EmployeeManager({
   const del = useMutation({
     mutationFn: (uuid: UUID) => api.remove(uuid),
     onSuccess: () => {
-      toast.success("Employee deleted");
+      toast.success("Employee archived");
       invalidate();
     },
-    onError: (e) => toast.error(apiErrorMessage(e, "Delete failed")),
+    onError: (e) => toast.error(apiErrorMessage(e, "Archive failed")),
   });
 
   const resendInviteMut = useMutation({
     mutationFn: (uuid: UUID) => orgService.resendInvite(uuid),
-    onSuccess: () => {
-      toast.success("Invite resent. Fresh set-password link sent.");
+    onSuccess: (res) => {
+      toast.success(
+        res?.linked_existing_account
+          ? "Existing platform account linked."
+          : "Invite resent. Fresh set-password link sent.",
+      );
       invalidate();
     },
     onError: (e) => toast.error(apiErrorMessage(e, "Resend failed")),
@@ -220,7 +232,7 @@ export function EmployeeManager({
           !isReferenceMode ? (
             <Button
               size="sm"
-              disabled={locked}
+              disabled={locked || !canCreateEmployee}
               onClick={() => {
                 setEditing(null);
                 setOpenForm(true);
@@ -258,15 +270,31 @@ export function EmployeeManager({
 
       <Card className="border-border/70 shadow-none">
         <CardContent className="p-0">
-          <div className="border-b border-border p-4">
+          <div className="flex flex-wrap items-center gap-2 border-b border-border p-4">
+            <div className="min-w-56 flex-1">
             <SearchInput
               value={search}
               onChange={(v) => {
                 setSearch(v);
                 setPage(1);
               }}
-              placeholder={isReferenceMode ? "Search ex-employee records..." : "Search by name, email, CNIC, designation or department..."}
+              placeholder={isReferenceMode ? "Search ex-employee records..." : "Search by name, email or CNIC..."}
             />
+            </div>
+            {!isReferenceMode ? <>
+              <Select value={department || "all"} onValueChange={(v) => { setDepartment(v === "all" ? "" : v); setPage(1); }}>
+                <SelectTrigger className="w-44"><SelectValue placeholder="All departments" /></SelectTrigger>
+                <SelectContent><SelectItem value="all">All departments</SelectItem>{(departmentsQ.data ?? []).map((d) => <SelectItem key={d.uuid} value={d.name}>{d.name}</SelectItem>)}</SelectContent>
+              </Select>
+              <Select value={designation || "all"} onValueChange={(v) => { setDesignation(v === "all" ? "" : v); setPage(1); }}>
+                <SelectTrigger className="w-44"><SelectValue placeholder="All designations" /></SelectTrigger>
+                <SelectContent><SelectItem value="all">All designations</SelectItem>{(designationsQ.data ?? []).map((d) => <SelectItem key={d.uuid} value={d.name}>{d.name}</SelectItem>)}</SelectContent>
+              </Select>
+              <Select value={employmentStatus || "all"} onValueChange={(v) => { setEmploymentStatus(v === "all" ? "" : v as typeof employmentStatus); setPage(1); }}>
+                <SelectTrigger className="w-44"><SelectValue placeholder="All employment statuses" /></SelectTrigger>
+                <SelectContent><SelectItem value="all">All employment statuses</SelectItem><SelectItem value="current_employee">Current Employee</SelectItem><SelectItem value="active">Active</SelectItem><SelectItem value="inactive">Inactive</SelectItem></SelectContent>
+              </Select>
+            </> : null}
           </div>
 
           {list.isLoading ? (
@@ -410,11 +438,19 @@ export function EmployeeManager({
                             }
                             return null;
                           })()}
-                          {/* The Archive button was removed: turning someone into an
-                              ex-employee is now just setting their status to
-                              "Ex-Employee" in the edit form, which is where every
-                              other status change happens. A second control for the
-                              same field is how the two drifted apart before. */}
+                          {!isRef && canArchiveEmployee && (
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                              onClick={() => setToDelete(emp.uuid)}
+                              aria-label={`Archive ${emp.full_name}`}
+                              title="Archive employee"
+                            >
+                              <Archive className="h-4 w-4" />
+                            </Button>
+                          )}
                           <Button
                             type="button"
                             size="icon"
@@ -463,8 +499,9 @@ export function EmployeeManager({
       <ConfirmDialog
         open={!!toDelete}
         onOpenChange={(o) => !o && setToDelete(null)}
-        title="Delete this employee?"
-        description="This will permanently remove the HR record. Employees linked to a platform user cannot be deleted."
+        title="Archive this employee?"
+        description="This moves the employee to archived ex-employee records. Their HR history and audit trail are preserved."
+        confirmLabel="Archive"
         onConfirm={() => {
           if (toDelete) del.mutate(toDelete);
           setToDelete(null);
@@ -494,7 +531,10 @@ function EmployeeFormDialog({
 }) {
   const isEdit = !!editing;
   const { user } = useAuth();
-  const canDelete = user?.org_role === "org_admin";
+  const canEdit = user?.role === "admin" || hasGranularPermission(user, "employees.edit", "manage_employees");
+  const canManageDepartments = user?.role === "admin" || hasGranularPermission(user, "employees.manage_departments", "manage_employees");
+  const canManageDesignations = user?.role === "admin" || hasGranularPermission(user, "employees.manage_designations", "manage_employees");
+  const canManagePayroll = user?.role === "admin" || hasGranularPermission(user, "payroll.manage_settings", "payroll");
 
   const [form, setForm] = useState({
     full_name: editing?.full_name ?? "",
@@ -647,7 +687,9 @@ function EmployeeFormDialog({
         // decided.
         cnic: normalizeCNIC(form.cnic),
         email: form.email.trim() || undefined,
-        send_invite: !isEdit && Boolean(form.email.trim()),
+        // Respect the checkbox: an email alone only makes the employee
+        // contactable. Portal access is opt-in, exactly as the field explains.
+        send_invite: !isEdit && form.send_invite,
         phone: form.phone.trim() || undefined,
         designation: form.designation.trim() || undefined,
         department: form.department.trim() || undefined,
@@ -675,10 +717,13 @@ function EmployeeFormDialog({
         const newUuid = createdRes?.employee?.uuid;
         // Saving an employee that carries an email already created their
         // platform account and emailed a set-password link, so there is no
-        // separate "invite" step any more.
-        const created = form.email.trim()
-          ? "Employee created — set-password link emailed to them."
-          : "Employee created.";
+        // separate "invite" step any more. A returning employee is different:
+        // their existing account was linked, so no email was sent.
+        const created = createdRes?.linked_existing_account
+          ? "Employee created — existing platform account linked."
+          : form.email.trim()
+            ? "Employee created — set-password link emailed to them."
+            : "Employee created.";
 
         if (stagedDocs.length && newUuid) {
           try {
@@ -807,13 +852,13 @@ function EmployeeFormDialog({
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <Label>Designation</Label>
-                <button
+                {canManageDesignations ? <button
                   type="button"
                   className="text-xs text-primary hover:underline"
                   onClick={() => setManageType("designation")}
                 >
                   Manage
-                </button>
+                </button> : null}
               </div>
               <Select value={form.designation} onValueChange={(v) => setForm({ ...form, designation: v })}>
                 <SelectTrigger>
@@ -829,13 +874,13 @@ function EmployeeFormDialog({
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <Label>Department</Label>
-                <button
+                {canManageDepartments ? <button
                   type="button"
                   className="text-xs text-primary hover:underline"
                   onClick={() => setManageType("department")}
                 >
                   Manage
-                </button>
+                </button> : null}
               </div>
               <Select value={form.department} onValueChange={(v) => setForm({ ...form, department: v })}>
                 <SelectTrigger>
@@ -893,9 +938,9 @@ function EmployeeFormDialog({
               Workdays and payroll rules follow the confirmed organization schedule.
             </p>
           )}
-          {!isEdit ? <h3 className="border-b pb-1 pt-1 text-sm font-semibold">Payroll Setup</h3> : null}
+          {!isEdit && canManagePayroll ? <h3 className="border-b pb-1 pt-1 text-sm font-semibold">Payroll Setup</h3> : null}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {!isEdit && (
+            {!isEdit && canManagePayroll && (
               <div className="space-y-1.5">
                 <Label>Starting Basic Salary</Label>
                 <Input
@@ -906,7 +951,6 @@ function EmployeeFormDialog({
                   onChange={(e) => setForm({ ...form, current_salary: e.target.value })}
                   placeholder="0.00"
                 />
-                <p className="text-xs text-muted-foreground">Leave blank if compensation is not agreed yet. A positive amount is saved effective on the joining date and payroll uses the organization currency/pay-frequency policy.</p>
                 {errors.current_salary ? <p className="text-xs text-destructive">{errors.current_salary}</p> : null}
               </div>
             )}
@@ -1005,7 +1049,7 @@ function EmployeeFormDialog({
                           <Download className="h-4 w-4" />
                         </ProtectedDocumentLink>
                       </Button>
-                      {canDelete ? (
+                      {canEdit ? (
                         <Button
                           type="button"
                           size="icon"
@@ -1045,8 +1089,6 @@ function EmployeeFormDialog({
     </Dialog>
   );
 }
-
-
 
 
 

@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
   FileSignature,
+  FileText,
   Plus,
   Download,
   ShieldCheck,
@@ -13,6 +14,7 @@ import {
   Send,
   Trash2,
   RotateCcw,
+  Pencil,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -29,6 +31,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { apiErrorMessage } from "@/lib/utils";
+import { usePermissions } from "@/lib/permissions";
 import { ModuleGate } from "@/components/hr/ModuleGate";
 import { DataTable, DataTableToolbar, type DataTableColumn } from "@/components/hr/DataTable";
 import { FormDialog } from "@/components/hr/FormDialog";
@@ -38,9 +41,8 @@ import type { HrLetter, HrLetterListItem, HrLetterStatus, UUID } from "@/service
 /**
  * Issued and draft HR letters.
  *
- * Plan gating is ModuleGate (hr_letters_management), NOT RequireOrgFeature:
- * letters are not delegable to sub-admins via feature_access, so the only axis
- * here is the plan. See the ROUTE_ACCESS comment for why.
+ * The plan gate controls module availability; granular permissions control
+ * which letter actions a sub-admin may perform.
  */
 export const Route = createFileRoute("/_app/org/hr-letters")({
   component: HrLettersPage,
@@ -55,6 +57,8 @@ const STATUS_VARIANT: Record<HrLetterStatus, "default" | "secondary" | "destruct
 function HrLettersPage() {
   const { t } = useTranslation();
   const qc = useQueryClient();
+  const permissions = usePermissions();
+  const canCreateLetter = permissions.hasGranular("hr_letters.create_draft", "hr_letters");
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"" | HrLetterStatus>("");
@@ -97,8 +101,9 @@ function HrLettersPage() {
       key: "letter_type",
       header: t("letters.type"),
       render: (r) => (
-        <span className="text-sm">
-          {HR_LETTER_TYPES.find((x) => x.key === r.letter_type)?.label ?? r.letter_type}
+        <span className="inline-flex min-w-0 items-center gap-2 text-sm">
+          {r.status === "draft" ? <FileText className="h-4 w-4 shrink-0 text-muted-foreground" aria-label="Draft document" /> : null}
+          <span className="truncate">{HR_LETTER_TYPES.find((x) => x.key === r.letter_type)?.label ?? r.letter_type}</span>
         </span>
       ),
     },
@@ -147,12 +152,12 @@ function HrLettersPage() {
         <PageHeader
           title={t("letters.title")}
           description={t("letters.description")}
-          actions={
+          actions={canCreateLetter ? (
             <Button onClick={() => setCreateOpen(true)}>
               <Plus className="h-4 w-4" />
               {t("letters.newLetter")}
             </Button>
-          }
+          ) : undefined}
         />
 
         <DataTableToolbar>
@@ -198,16 +203,18 @@ function HrLettersPage() {
             emptyIcon={FileSignature}
             emptyTitle={t("letters.emptyTitle")}
             emptyDescription={t("letters.emptyDescription")}
-            emptyAction={
+            emptyAction={canCreateLetter ? (
               <Button onClick={() => setCreateOpen(true)}>
                 <Plus className="h-4 w-4" />
                 {t("letters.newLetter")}
               </Button>
-            }
+            ) : undefined}
           />
         )}
 
-        <CreateLetterDialog open={createOpen} onOpenChange={setCreateOpen} onDone={invalidate} />
+        {canCreateLetter ? (
+          <CreateLetterDialog open={createOpen} onOpenChange={setCreateOpen} onDone={invalidate} />
+        ) : null}
       </div>
     </ModuleGate>
   );
@@ -244,6 +251,10 @@ type CreateLetterFormValues = {
 export function RowActions({ row }: { row: HrLetterListItem }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
+  const permissions = usePermissions();
+  const canEditDraft = permissions.hasGranular("hr_letters.edit_draft", "hr_letters");
+  const canIssue = permissions.hasGranular("hr_letters.issue", "hr_letters");
+  const canRevoke = permissions.hasGranular("hr_letters.revoke", "hr_letters");
   const [confirm, setConfirm] = useState<null | "delete" | "revoke" | "revert">(null);
   /**
    * Issue opens a dialog rather than firing straight at the API. The backend
@@ -251,6 +262,7 @@ export function RowActions({ row }: { row: HrLetterListItem }) {
    * 400 for any draft using a manual tag (e.g. $new_salary).
    */
   const [issuing, setIssuing] = useState(false);
+  const [editing, setEditing] = useState(false);
 
   const download = useMutation({
     mutationFn: () => hrLettersService.downloadPdf(row.uuid),
@@ -289,81 +301,103 @@ export function RowActions({ row }: { row: HrLetterListItem }) {
 
   const busy = download.isPending || remove.isPending || revoke.isPending || revert.isPending;
   const error = remove.error ?? revoke.error ?? revert.error ?? download.error;
+  const hasActions = row.status !== "draft" || canEditDraft || canIssue || permissions.isOrgAdmin;
 
   return (
     <>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" disabled={busy} title={t("common.actions")}>
-            <MoreHorizontal className="h-4 w-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          {row.status === "draft" ? (
-            <>
-              <DropdownMenuItem onSelect={() => setIssuing(true)}>
-                <Send className="mr-2 h-4 w-4" />
-                {t("letters.issueLetter")}
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                className="text-destructive focus:text-destructive"
-                onSelect={() => setConfirm("delete")}
-              >
-                <Trash2 className="mr-2 h-4 w-4" />
-                {t("letters.deleteDraft")}
-              </DropdownMenuItem>
-            </>
-          ) : null}
+      {hasActions ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" disabled={busy} title={t("common.actions")}>
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {row.status === "draft" ? (
+              <>
+                {canEditDraft ? (
+                  <DropdownMenuItem onSelect={() => setEditing(true)}>
+                    <Pencil className="mr-2 h-4 w-4" />
+                    Edit Draft
+                  </DropdownMenuItem>
+                ) : null}
+                {canIssue ? (
+                  <DropdownMenuItem onSelect={() => setIssuing(true)}>
+                    <Send className="mr-2 h-4 w-4" />
+                    {t("letters.issueLetter")}
+                  </DropdownMenuItem>
+                ) : null}
+                {permissions.isOrgAdmin ? (
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    onSelect={() => setConfirm("delete")}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    {t("letters.deleteDraft")}
+                  </DropdownMenuItem>
+                ) : null}
+              </>
+            ) : null}
 
-          {row.status === "issued" ? (
-            <>
-              <DropdownMenuItem onSelect={() => download.mutate()}>
-                <Download className="mr-2 h-4 w-4" />
-                {t("letters.downloadPdf")}
-              </DropdownMenuItem>
-              {row.verify_url ? (
-                <DropdownMenuItem asChild>
-                  <a href={row.verify_url} target="_blank" rel="noreferrer">
-                    <ShieldCheck className="mr-2 h-4 w-4" />
-                    {t("letters.viewVerification")}
-                  </a>
+            {row.status === "issued" ? (
+              <>
+                <DropdownMenuItem onSelect={() => download.mutate()}>
+                  <Download className="mr-2 h-4 w-4" />
+                  {t("letters.downloadPdf")}
                 </DropdownMenuItem>
-              ) : null}
-              <DropdownMenuItem
-                className="text-destructive focus:text-destructive"
-                onSelect={() => setConfirm("revoke")}
-              >
-                <Ban className="mr-2 h-4 w-4" />
-                {t("letters.revoke")}
-              </DropdownMenuItem>
-            </>
-          ) : null}
+                {row.verify_url ? (
+                  <DropdownMenuItem asChild>
+                    <a href={row.verify_url} target="_blank" rel="noreferrer">
+                      <ShieldCheck className="mr-2 h-4 w-4" />
+                      {t("letters.viewVerification")}
+                    </a>
+                  </DropdownMenuItem>
+                ) : null}
+                {canRevoke ? (
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    onSelect={() => setConfirm("revoke")}
+                  >
+                    <Ban className="mr-2 h-4 w-4" />
+                    {t("letters.revoke")}
+                  </DropdownMenuItem>
+                ) : null}
+              </>
+            ) : null}
 
-          {row.status === "revoked" ? (
-            <>
-              <DropdownMenuItem onSelect={() => download.mutate()}>
-                <Download className="mr-2 h-4 w-4" />
-                {t("letters.downloadRevokedPdf")}
-              </DropdownMenuItem>
-              {/* Revocation was one-way, which left HR unable to fix a letter
-                  revoked over a typo: a revoked letter could be neither edited
-                  into a correct draft nor issued. This is the way back. It only
-                  returns the letter to draft — issuing stays a separate,
-                  deliberate step with its own preview. */}
-              <DropdownMenuItem onSelect={() => setConfirm("revert")}>
-                <RotateCcw className="mr-2 h-4 w-4" />
-                {t("letters.revertToDraft")}
-              </DropdownMenuItem>
-            </>
-          ) : null}
-        </DropdownMenuContent>
-      </DropdownMenu>
+            {row.status === "revoked" ? (
+              <>
+                <DropdownMenuItem onSelect={() => download.mutate()}>
+                  <Download className="mr-2 h-4 w-4" />
+                  {t("letters.downloadRevokedPdf")}
+                </DropdownMenuItem>
+                {/* Reverting restores draft state; issuing remains a separate permission. */}
+                {canEditDraft ? (
+                  <DropdownMenuItem onSelect={() => setConfirm("revert")}>
+                    <RotateCcw className="mr-2 h-4 w-4" />
+                    {t("letters.revertToDraft")}
+                  </DropdownMenuItem>
+                ) : null}
+              </>
+            ) : null}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : null}
+
+      <EditDraftDialog
+        row={row}
+        open={editing}
+        onOpenChange={setEditing}
+        onDone={() => qc.invalidateQueries({ queryKey: ["hr-letters"] })}
+      />
 
       <IssueLetterDialog
         letter={row}
         open={issuing}
+        canSaveDraft={canEditDraft}
         onOpenChange={setIssuing}
         onIssued={() => qc.invalidateQueries({ queryKey: ["hr-letters"] })}
+        onDraftSaved={() => qc.invalidateQueries({ queryKey: ["hr-letters"] })}
       />
 
       <ConfirmDialog
@@ -405,6 +439,101 @@ export function RowActions({ row }: { row: HrLetterListItem }) {
         </p>
       ) : null}
     </>
+  );
+}
+
+function EditDraftDialog({
+  row,
+  open,
+  onOpenChange,
+  onDone,
+}: {
+  row: HrLetterListItem;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onDone: () => void;
+}) {
+  const { t } = useTranslation();
+  const form = useForm<{ title: string; template_uuid: string; letter_type: string }>({
+    defaultValues: {
+      title: row.title,
+      template_uuid: row.template_uuid ?? "",
+      letter_type: row.letter_type,
+    },
+  });
+
+  useEffect(() => {
+    if (open) {
+      form.reset({
+        title: row.title,
+        template_uuid: row.template_uuid ?? "",
+        letter_type: row.letter_type,
+      });
+    }
+  }, [open, row, form]);
+
+  const options = useQuery({
+    queryKey: ["hr-letter-edit-templates"],
+    enabled: open,
+    queryFn: () => letterTemplatesService.list(),
+  });
+
+  const update = useMutation({
+    mutationFn: (values: { title: string; template_uuid: string; letter_type: string }) =>
+      hrLettersService.update(row.uuid, {
+        title: values.title,
+        template_uuid: values.template_uuid || null,
+        letter_type: values.letter_type as HrLetter["letter_type"],
+      }),
+    onSuccess: () => {
+      onDone();
+      onOpenChange(false);
+    },
+  });
+
+  return (
+    <FormDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      form={form}
+      title="Edit Draft"
+      description="Changes are saved to this draft only. Issued letters cannot be edited."
+      submitLabel={t("common.save")}
+      cancelLabel={t("common.cancel")}
+      onSubmit={(values) => update.mutateAsync(values)}
+    >
+      <label className="block space-y-1 text-sm">
+        <span className="font-medium">Letter title</span>
+        <input
+          {...form.register("title", { required: "Title is required" })}
+          className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground"
+        />
+      </label>
+      <label className="block space-y-1 text-sm">
+        <span className="font-medium">{t("letters.type")}</span>
+        <select
+          {...form.register("letter_type", { required: true })}
+          className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground"
+        >
+          {HR_LETTER_TYPES.map((type) => <option key={type.key} value={type.key}>{type.label}</option>)}
+        </select>
+      </label>
+      <label className="block space-y-1 text-sm">
+        <span className="font-medium">{t("letters.template")}</span>
+        <select
+          {...form.register("template_uuid")}
+          className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground"
+        >
+          <option value="">{t("letters.noTemplate")}</option>
+          {(options.data?.items ?? []).map((template) => (
+            <option key={template.uuid} value={template.uuid}>{template.name}</option>
+          ))}
+        </select>
+      </label>
+      {update.isError ? (
+        <p className="text-xs text-destructive">{apiErrorMessage(update.error, t("letters.saveFailed"))}</p>
+      ) : null}
+    </FormDialog>
   );
 }
 

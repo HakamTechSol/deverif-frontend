@@ -660,15 +660,53 @@ export const MODULE_FEATURES: { key: keyof ModuleFlags; label: string }[] = [
 ];
 
 /**
- * Presentation-only grouping of MODULE_FEATURES for the plan editor.
+ * Modules that actually exist in the app today: each one has a page, a
+ * ROUTE_MODULES entry for its sidebar links, and server-side enforcement.
  *
- * Eighteen flat toggles on one screen is unusable, so the plan editor renders
- * one collapsible section per group. This carries NO enforcement meaning: the
- * plan's `module_flags` is the only source of truth for access, and this
- * grouping must never be consulted to decide it.
+ * MODULE_FEATURES deliberately keeps the full future HR suite so the stored
+ * contract stays stable, but the plan editor must only offer toggles for the
+ * modules above. A switch for a module with no page is a switch that changes a
+ * boolean nothing reads: the plan looks richer than it is, and the admin has no
+ * way to tell which toggles are real.
  *
- * Every key must appear in exactly one group. `MODULE_GROUPS_ARE_COMPLETE` below
- * is asserted in tests so a newly added module cannot be forgotten here.
+ * Keep this list in sync with ROUTE_MODULES; lib/routeModules.test.ts asserts
+ * that the two describe exactly the same set of modules.
+ */
+export const IMPLEMENTED_MODULE_KEYS = [
+  "employee_management",
+  "attendance_management",
+  "user_management",
+  "leave_management",
+  "payroll_management",
+  "recruitment_management",
+  "separation_management",
+  "expense_management",
+  "asset_management",
+  "hr_letters_management",
+] as const satisfies readonly (keyof ModuleFlags)[];
+
+/**
+ * The plan-editor view of MODULE_FEATURES: implemented modules only, in the
+ * registry's order. The editor and the plan list both use this, so a plan can
+ * never advertise a module the product cannot open.
+ */
+export const IMPLEMENTED_MODULE_FEATURES = MODULE_FEATURES.filter(({ key }) =>
+  (IMPLEMENTED_MODULE_KEYS as readonly (keyof ModuleFlags)[]).includes(key),
+);
+
+/**
+ * Presentation-only grouping of MODULE_FEATURES.
+ *
+ * Available for grouped presentations such as a pricing comparison table. The
+ * plan editor currently renders the smaller IMPLEMENTED_MODULE_FEATURES list
+ * flat, because only modules that exist in the app are worth toggling.
+ *
+ * This carries NO enforcement meaning: the plan's `module_flags` is the only
+ * source of truth for access, and this grouping must never be consulted to
+ * decide it.
+ *
+ * Every key must appear in exactly one group. moduleFlags.test.ts asserts the
+ * partition so a newly added module cannot be forgotten here.
  */
 export const MODULE_GROUPS: {
   key: string;
@@ -899,7 +937,14 @@ export type LeaveRequest = {
   start_date: string;
   end_date: string;
   reason?: string | null;
-  status: "pending" | "approved" | "rejected";
+  status: "pending" | "approved" | "rejected" | "cancelled";
+  day_portion?: "full" | "half";
+  approved_days?: number | string | null;
+  cancelled_by?: UUID | null;
+  cancelled_at?: string | null;
+  working_days?: number;
+  requested_treatment?: "paid" | "unpaid";
+  approved_treatment?: "paid" | "unpaid" | null;
   approved_by?: string | null;
   approved_at?: string | null;
   created_at: string;
@@ -910,18 +955,18 @@ export type LeaveRequest = {
 export type LeaveBalance = {
   id: number;
   year: number;
-  total_allocated: number;
-  used: number;
-  remaining: number;
+  total_allocated: number | string;
+  used: number | string;
+  remaining: number | string;
   leave_type_id: number;
   leave_type_name: string;
 };
 
 export type LeaveAllocation = {
   leave_type_id: number;
-  allocated_days: number;
-  used_days: number;
-  remaining_days: number;
+  allocated_days: number | string;
+  used_days: number | string;
+  remaining_days: number | string;
 };
 
 export type EmployeeLeaveAllocation = {
@@ -937,11 +982,25 @@ export type EmployeeLeaveAllocation = {
 
 export type EmployeeLeaveAllocationHistory = {
   year: number;
-  allocated_days: number;
-  used_days: number;
-  remaining_days: number;
+  allocated_days: number | string;
+  used_days: number | string;
+  remaining_days: number | string;
   leave_type_id: number;
   leave_type_name: string;
+};
+
+export type LeaveBalanceLedgerEntry = {
+  id: number;
+  leave_type_id: number;
+  transaction_type: "opening_balance" | "allocation" | "leave_approved" | "leave_cancelled" | "admin_adjustment";
+  credited_days: number | string;
+  debited_days: number | string;
+  previous_balance: number | string;
+  updated_balance: number | string;
+  related_leave_request_uuid: UUID | null;
+  transaction_at: string;
+  performed_by: UUID | null;
+  reason: string;
 };
 
 /* Platform user leaves */
@@ -960,6 +1019,12 @@ export type AttendanceRecord = {
   check_out_at: string | null;
   check_in_ip: string | null;
   check_out_ip: string | null;
+  checkout_source?: "self" | "admin" | "auto" | null;
+  break_duration_minutes?: number | null;
+  elapsed_minutes?: number | null;
+  worked_minutes?: number | null;
+  regular_minutes?: number | null;
+  overtime_minutes?: number | null;
   date: string;
   status: "checked_in" | "checked_out";
   created_at: string;
@@ -968,6 +1033,13 @@ export type AttendanceRecord = {
   designation?: string | null;
   organization_uuid?: UUID | null;
   organization_name?: string | null;
+};
+
+export type MissingAttendanceRecord = {
+  employee_uuid: UUID;
+  employee_name: string;
+  employee_email: string | null;
+  date: string;
 };
 
 export type IpRule = {
@@ -997,7 +1069,9 @@ export type SalaryRecordLine = {
     | "auto_absenteeism"
     | "auto_late"
     | "auto_overtime"
+    | "manual_overtime"
     | "auto_expense"
+    | "monthly_variable"
     | "manual";
   amount: string | number;
   basis_value?: string | number | null;
@@ -1014,6 +1088,21 @@ export type SalaryRecord = {
   deductions: string | number;
   expense_reimbursement: string | number;
   net_salary: string | number;
+  payroll_policy_snapshot?: {
+    salary_calculation_method: "hours" | "days";
+    calculate_overtime: boolean;
+    shift_start_time: string;
+    shift_end_time: string;
+    overtime_multiplier: number;
+    deduct_salary_for_late_arrivals?: boolean;
+    late_arrival_threshold?: number;
+    late_grace_minutes?: number;
+  } | string | null;
+  payroll_schedule_snapshot?:
+    | { date: string; day_type: "working" | "off" }[]
+    | { days: { date: string; day_type: "working" | "off" }[]; leave_calculation?: unknown }
+    | string
+    | null;
   notes?: string | null;
   created_at?: string;
   employee_name?: string | null;

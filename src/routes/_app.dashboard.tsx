@@ -60,6 +60,59 @@ export const Route = createFileRoute("/_app/dashboard")({
   component: DashboardPage,
 });
 
+type DashboardRangePreset = "today" | "this_week" | "this_month" | "last_month" | "custom";
+function localDateInput(d: Date) { return [d.getFullYear(),String(d.getMonth()+1).padStart(2,"0"),String(d.getDate()).padStart(2,"0")].join("-"); }
+function dashboardRange(p: DashboardRangePreset, cf: string, ct: string) { const n=new Date(); const s=new Date(n.getFullYear(),n.getMonth(),n.getDate()); let a=new Date(s), b=new Date(s); if(p==="this_week") a.setDate(a.getDate()-((a.getDay()+6)%7)); else if(p==="this_month") a=new Date(s.getFullYear(),s.getMonth(),1); else if(p==="last_month"){a=new Date(s.getFullYear(),s.getMonth()-1,1);b=new Date(s.getFullYear(),s.getMonth(),0);} else if(p==="custom") return {from:cf,to:ct}; return {from:localDateInput(a),to:localDateInput(b)}; }
+function DashboardDateRangeFilter(p: {preset:DashboardRangePreset;onPresetChange:(v:DashboardRangePreset)=>void;from:string;to:string;onFromChange:(v:string)=>void;onToChange:(v:string)=>void}) {
+  return (
+    <div className="flex w-fit max-w-full justify-start" dir="ltr">
+      <Card className="w-fit max-w-full border-border/70 shadow-none">
+        <CardContent className="flex flex-wrap items-end gap-3 p-3">
+          <div className="w-[240px] max-w-full space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">Dashboard Date Range</label>
+            <select
+              value={p.preset}
+              onChange={(e) => p.onPresetChange(e.target.value as DashboardRangePreset)}
+              className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+            >
+              <option value="today">Today</option>
+              <option value="this_week">This Week</option>
+              <option value="this_month">This Month</option>
+              <option value="last_month">Last Month</option>
+              <option value="custom">Custom Range</option>
+            </select>
+          </div>
+          {p.preset === "custom" && (
+            <>
+              <div className="w-[150px] max-w-full space-y-1">
+                <label className="text-xs text-muted-foreground">From</label>
+                <input
+                  type="date"
+                  value={p.from}
+                  max={p.to || undefined}
+                  onChange={(e) => p.onFromChange(e.target.value)}
+                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                />
+              </div>
+              <div className="w-[150px] max-w-full space-y-1">
+                <label className="text-xs text-muted-foreground">To</label>
+                <input
+                  type="date"
+                  value={p.to}
+                  min={p.from || undefined}
+                  max={localDateInput(new Date())}
+                  onChange={(e) => p.onToChange(e.target.value)}
+                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                />
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 type Stat = {
   label: string;
   value: number | string;
@@ -510,6 +563,12 @@ function TopOrgsChart({ data }: { data: AdminAnalytics["top_organizations_by_req
 /* ------------------------------------------------------------------ */
 function OrgAdminDashboard({ firstName }: { firstName: string }) {
   const { t } = useTranslation();
+  const [rangePreset,setRangePreset]=useState<DashboardRangePreset>("this_month");
+  const [customFrom,setCustomFrom]=useState(localDateInput(new Date(new Date().getFullYear(),new Date().getMonth(),1)));
+  const [customTo,setCustomTo]=useState(localDateInput(new Date()));
+  const selectedRange=dashboardRange(rangePreset,customFrom,customTo);
+  const rangeReady=!!selectedRange.from && !!selectedRange.to && selectedRange.from<=selectedRange.to;
+
   const { isLocked } = useOrgSubscription();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -523,8 +582,8 @@ function OrgAdminDashboard({ firstName }: { firstName: string }) {
   });
 
   const analyticsQ = useQuery({
-    queryKey: ["org-dashboard-analytics"],
-    queryFn: () => dashboardService.orgAnalytics(),
+    queryKey: ["org-dashboard-analytics", selectedRange.from, selectedRange.to],
+    queryFn: () => dashboardService.orgAnalytics({from:selectedRange.from,to:selectedRange.to}),
     enabled: mounted,
     retry: false,
     refetchInterval: 60_000,
@@ -597,10 +656,14 @@ function OrgAdminDashboard({ firstName }: { firstName: string }) {
 
   return (
     <div>
-      <PageHeader
-        title={`${t("dashboard.welcomeBack")}${firstName}`}
-        description={isLocked ? t("dashboard.lockedSub") : t("dashboard.trackSub")}
-      />
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between" dir="ltr">
+        <PageHeader
+          title={`${t("dashboard.welcomeBack")}${firstName}`}
+          description={isLocked ? t("dashboard.lockedSub") : t("dashboard.trackSub")}
+          className="pb-0"
+        />
+        <DashboardDateRangeFilter preset={rangePreset} onPresetChange={setRangePreset} from={customFrom} to={customTo} onFromChange={setCustomFrom} onToChange={setCustomTo} />
+      </div>
 
       {/* Verification request stats */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -972,6 +1035,12 @@ function OrgLeaveUtilChart({ data }: { data: OrgDashboardAnalytics["leave_utiliz
 /* ------------------------------------------------------------------ */
 function SubAdminDashboard() {
   const { t } = useTranslation();
+  const [rangePreset,setRangePreset]=useState<DashboardRangePreset>("this_month");
+  const [customFrom,setCustomFrom]=useState(localDateInput(new Date(new Date().getFullYear(),new Date().getMonth(),1)));
+  const [customTo,setCustomTo]=useState(localDateInput(new Date()));
+  const selectedRange=dashboardRange(rangePreset,customFrom,customTo);
+  const rangeReady=!!selectedRange.from && !!selectedRange.to && selectedRange.from<=selectedRange.to;
+
   const { isLocked } = useOrgSubscription();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -993,8 +1062,8 @@ function SubAdminDashboard() {
   });
 
   const analyticsQ = useQuery({
-    queryKey: ["org-dashboard-analytics"],
-    queryFn: () => dashboardService.orgAnalytics(),
+    queryKey: ["org-dashboard-analytics", selectedRange.from, selectedRange.to],
+    queryFn: () => dashboardService.orgAnalytics({from:selectedRange.from,to:selectedRange.to}),
     enabled: mounted,
     retry: false,
     refetchInterval: 60_000,
@@ -1021,10 +1090,14 @@ function SubAdminDashboard() {
 
   return (
     <div>
-      <PageHeader
-        title={t("dashboardSubAdmin.title")}
-        description={isLocked ? t("dashboard.lockedSub") : t("dashboardSubAdmin.subtitle")}
-      />
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between" dir="ltr">
+        <PageHeader
+          title={t("dashboardSubAdmin.title")}
+          description={isLocked ? t("dashboard.lockedSub") : t("dashboardSubAdmin.subtitle")}
+          className="pb-0"
+        />
+        <DashboardDateRangeFilter preset={rangePreset} onPresetChange={setRangePreset} from={customFrom} to={customTo} onFromChange={setCustomFrom} onToChange={setCustomTo} />
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {(pendingLeaves.isLoading || allLeaves.isLoading || analyticsQ.isLoading
