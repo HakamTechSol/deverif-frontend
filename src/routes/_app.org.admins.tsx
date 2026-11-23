@@ -18,6 +18,10 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  validatePermissionSelection,
+  type PermissionValidationError,
+} from "@/lib/permissionValidation";
+import {
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -94,31 +98,12 @@ const PERMISSION_MODULES = [
   { key: "payroll", label: "Payroll", actions: [["view","View"],["generate","Generate"],["manage_settings","Manage Payroll Settings"],["manage_employee_components","Manage Employee Salary Components"],["adjust_salary","Adjust Employee Salary"]] },
   { key: "expenses", label: "Expenses", actions: [["view","View"],["create_own","Create Own Expense"],["approve_employee","Approve Employee Expenses"],["process_payment","Process Payment"]] },
   { key: "hr_letters", label: "HR Letters", actions: [["view","View"],["create_draft","Create Letter"],["edit_draft","Edit Draft"],["issue","Issue"],["revoke","Revoke"],["manage_templates","Manage Templates"]] },
-  { key: "assets", label: "Assets", actions: [["view","View"],["create","Create"],["edit","Edit"],["assign","Assign"],["return","Return"],["retire","Retire"],["manage_categories","Manage Categories"]] },
-  { key: "offboarding", label: "Offboarding", actions: [["view","View"],["initiate","Initiate"],["manage_checklist","Manage Checklist"],["draft_settlement","Draft Settlement"],["approve_settlement","Approve Settlement"],["complete_exit","Complete Exit"]] },
-  { key: "recruitment", label: "Recruitment", actions: [["view","View"],["create_job","Create Job"],["edit_job","Edit Job"],["manage_candidates","Manage Candidates"],["schedule_interview","Schedule Interview"],["record_feedback","Record Feedback"],["manage_offers","Manage Offers"],["hire","Hire"]] },
-  { key: "reports", label: "Reports", actions: [["view","View Reports"],["export","Export Reports"],["view_org_analytics","View Organization-wide Analytics"]] },
-  { key: "organization_settings", label: "Organization Settings", actions: [["view","View Settings"],["edit","Edit Settings"]] },
+  { key: "assets", label: "Assets", actions: [["view","View"],["create","Create"],["edit","Edit"],["assign","Assign"],["return","Return"],["retire","Retire"]] },
+  { key: "offboarding", label: "Offboarding", actions: [["view","View Exit Requests"],["initiate","Create Exit Request"],["manage_checklist","Manage Clearance Checklist"],["draft_settlement","Draft Final Settlement"],["approve_settlement","Approve / Pay Settlement"],["complete_exit","Complete Exit"]] },
+  { key: "recruitment", label: "Recruitment", actions: [["view","View Recruitment"],["create_job","Create Job Opening"],["edit_job","Edit Job Opening"],["manage_candidates","Manage Candidates"],["schedule_interview","Schedule Interviews"],["record_feedback","Record Interview Feedback"],["manage_offers","Manage / Send Offers"],["hire","Hire Candidates"]] },
 ] as const;
 
 const ALL_GRANULAR_KEYS = PERMISSION_MODULES.flatMap((module) => module.actions.map(([action]) => `${module.key}.${action}`));
-const ACTION_REQUIRES_VIEW: Record<string, string> = {
-  "employees.create": "employees.view",
-  "document_verification.generate_request": "document_verification.view_requests",
-  "leave_management.allocate_balance": "leave_management.view",
-  "payroll.generate": "payroll.view",
-  "payroll.manage_settings": "payroll.view",
-  "payroll.manage_employee_components": "payroll.view",
-  "payroll.adjust_salary": "payroll.view",
-  "expenses.create_own": "expenses.view",
-  "hr_letters.create_draft": "hr_letters.view",
-  "hr_letters.edit_draft": "hr_letters.view",
-  "hr_letters.issue": "hr_letters.view",
-  "hr_letters.revoke": "hr_letters.view",
-  "hr_letters.manage_templates": "hr_letters.view",
-  "assets.create": "assets.view",
-  "recruitment.create_job": "recruitment.view",
-};
 const EMPTY_PERMISSION_PAYLOAD: PermissionPayload = {
   granular_permissions: Object.fromEntries(ALL_GRANULAR_KEYS.map((key) => [key, false])),
   data_scopes: Object.fromEntries(PERMISSION_MODULES.map((module) => [module.key, "own_records" as DataScope])),
@@ -140,16 +125,13 @@ function permissionAccess(raw?: OrgAdminUserRecord["feature_access"]): Permissio
     "payroll.view":"payroll","payroll.generate":"payroll","payroll.manage_settings":"payroll","payroll.manage_employee_components":"payroll","payroll.adjust_salary":"payroll",
     "expenses.view":"approve_expenses","expenses.create_own":"create_expenses","expenses.approve_employee":"approve_expenses","expenses.process_payment":"approve_expenses",
     "hr_letters.view":"hr_letters","hr_letters.create_draft":"hr_letters","hr_letters.edit_draft":"hr_letters","hr_letters.issue":"hr_letters","hr_letters.revoke":"hr_letters","hr_letters.manage_templates":"hr_letters",
-    "assets.view":"manage_assets","assets.create":"manage_assets","assets.edit":"manage_assets","assets.assign":"manage_assets","assets.return":"manage_assets","assets.retire":"manage_assets","assets.manage_categories":"manage_assets",
+    "assets.view":"manage_assets","assets.create":"manage_assets","assets.edit":"manage_assets","assets.assign":"manage_assets","assets.return":"manage_assets","assets.retire":"manage_assets",
     "offboarding.view":"manage_separation","offboarding.initiate":"manage_separation","offboarding.manage_checklist":"manage_separation","offboarding.draft_settlement":"manage_separation","offboarding.approve_settlement":"manage_separation","offboarding.complete_exit":"manage_separation",
     "recruitment.view":"manage_recruitment","recruitment.create_job":"manage_recruitment","recruitment.edit_job":"manage_recruitment","recruitment.manage_candidates":"manage_recruitment","recruitment.schedule_interview":"manage_recruitment","recruitment.record_feedback":"manage_recruitment","recruitment.manage_offers":"manage_recruitment","recruitment.hire":"manage_recruitment",
   };
   const granular_permissions = Object.fromEntries(ALL_GRANULAR_KEYS.map((key) => [
     key, parsed.granular_permissions ? grants[key] === true : Boolean(parsed[legacy[key]]),
   ]));
-  for (const [action, view] of Object.entries(ACTION_REQUIRES_VIEW)) {
-    if (granular_permissions[action]) granular_permissions[view] = true;
-  }
   const data_scopes = Object.fromEntries(PERMISSION_MODULES.map((module) => {
     const scope = scopes[module.key];
     return [module.key, scope === "entire_organization" ? scope : "own_records"];
@@ -529,21 +511,17 @@ function OrgAdminsPage() {
   );
 }
 
-function FeatureCheckboxes({ value, onChange }: { value: PermissionPayload; onChange: (v: PermissionPayload) => void }) {
+function FeatureCheckboxes({
+  value,
+  onChange,
+  validationErrors = [],
+}: {
+  value: PermissionPayload;
+  onChange: (v: PermissionPayload) => void;
+  validationErrors?: PermissionValidationError[];
+}) {
   const toggleAction = (key: string, checked: boolean) => {
     const next = { ...value.granular_permissions, [key]: checked };
-    const requiredView = ACTION_REQUIRES_VIEW[key];
-    if (requiredView && checked) next[requiredView] = true;
-    for (const [action, view] of Object.entries(ACTION_REQUIRES_VIEW)) {
-      if (key === view && !checked) next[action] = false;
-    }
-    onChange({ ...value, granular_permissions: next });
-  };
-  const toggleModule = (moduleKey: string, checked: boolean) => {
-    const module = PERMISSION_MODULES.find((item) => item.key === moduleKey);
-    if (!module) return;
-    const next = { ...value.granular_permissions };
-    module.actions.forEach(([action]) => { next[`${moduleKey}.${action}`] = checked; });
     onChange({ ...value, granular_permissions: next });
   };
   return <Accordion type="multiple" className="w-full">
@@ -553,7 +531,9 @@ function FeatureCheckboxes({ value, onChange }: { value: PermissionPayload; onCh
       return <AccordionItem key={module.key} value={module.key}>
         <div className="flex items-center gap-3 py-2">
           <Checkbox checked={count === keys.length ? true : count ? "indeterminate" : false}
-            onCheckedChange={(checked) => toggleModule(module.key, checked === true)} />
+            disabled
+            aria-label={`${module.label} module selection`}
+          />
           <div className="min-w-0 flex-1">
             <AccordionTrigger className="py-1 hover:no-underline">
               <span className="flex items-center gap-2"><span>{module.label}</span>
@@ -565,10 +545,17 @@ function FeatureCheckboxes({ value, onChange }: { value: PermissionPayload; onCh
           <div className="grid gap-3 border-l-2 border-border pl-5 sm:grid-cols-2">
             {module.actions.map(([action,label]) => {
               const key = `${module.key}.${action}`;
+              const missingDependency = validationErrors.some(
+                (error) => error.permission === key,
+              );
+              const missingRequiredPermission = validationErrors.some(
+                (error) => error.requiredPermission === key,
+              );
               return <label key={key} className="flex cursor-pointer items-center gap-2 text-sm">
                 <Checkbox checked={value.granular_permissions[key] === true}
-                  onCheckedChange={(checked) => toggleAction(key, checked === true)} />
-                <span>{label}</span>
+                  onCheckedChange={(checked) => toggleAction(key, checked === true)}
+                  aria-invalid={missingDependency} />
+                <span className={(missingDependency || missingRequiredPermission) ? "font-medium text-destructive" : undefined}>{label}</span>
               </label>;
             })}
           </div>
@@ -604,6 +591,7 @@ function EditSubAdminPermissionsDialog({
 }) {
   const [access, setAccess] = useState<PermissionPayload>(EMPTY_PERMISSION_PAYLOAD);
   const [seedKey, setSeedKey] = useState("");
+  const validationErrors = validatePermissionSelection(access.granular_permissions);
 
   // Seed the checkboxes from the selected sub-admin whenever it changes.
   const key = subAdmin?.uuid ?? "";
@@ -613,7 +601,9 @@ function EditSubAdminPermissionsDialog({
   }
 
   const submit = async () => {
+    if (validatePermissionSelection(access.granular_permissions).length) return;
     if (!subAdmin) return;
+    if (validationErrors.length) return;
     try {
       await onSubmit({ uuid: subAdmin.uuid, permissions: access });
       toast.success("Sub-admin permissions updated");
@@ -638,14 +628,24 @@ function EditSubAdminPermissionsDialog({
           )}
           <div className="space-y-2 rounded-lg border border-border p-3">
             <Label className="text-sm font-medium">Permissions</Label>
-            <FeatureCheckboxes value={access} onChange={setAccess} />
+            <FeatureCheckboxes value={access} onChange={setAccess} validationErrors={validationErrors} />
+            {validationErrors.length ? (
+              <div role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm">
+                <p className="mb-1 font-medium text-destructive">Permission configuration has conflicts</p>
+                <ul className="list-disc space-y-1 pl-5 text-destructive">
+                  {validationErrors.map((error) => (
+                    <li key={`${error.permission}-${error.requiredPermission}`}>{error.message}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
           </div>
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onOpenChange} disabled={submitting}>
             Cancel
           </Button>
-          <Button onClick={submit} loading={submitting} disabled={!subAdmin}>
+          <Button onClick={submit} loading={submitting} disabled={!subAdmin || validationErrors.length > 0}>
             Save Permissions
           </Button>
         </DialogFooter>
@@ -668,6 +668,7 @@ function CreateSubAdminDialog({
   const [cnic, setCnic] = useState("");
   const [phone, setPhone] = useState("");
   const [access, setAccess] = useState<PermissionPayload>(EMPTY_PERMISSION_PAYLOAD);
+  const validationErrors = validatePermissionSelection(access.granular_permissions);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
 
@@ -680,6 +681,7 @@ function CreateSubAdminDialog({
     if (phone && !/^[0-9+\-() ]{6,30}$/.test(phone)) e.phone = "Invalid phone number";
     setErrors(e);
     if (Object.keys(e).length) return;
+    if (validationErrors.length) return;
 
     setSubmitting(true);
     try {
@@ -752,7 +754,17 @@ function CreateSubAdminDialog({
             <p className="text-xs text-muted-foreground">
               Sub-admins never get full Org Admin power — they gain exactly the action permissions you grant here.
             </p>
-            <FeatureCheckboxes value={access} onChange={setAccess} />
+            <FeatureCheckboxes value={access} onChange={setAccess} validationErrors={validationErrors} />
+            {validationErrors.length ? (
+              <div role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm">
+                <p className="mb-1 font-medium text-destructive">Permission configuration has conflicts</p>
+                <ul className="list-disc space-y-1 pl-5 text-destructive">
+                  {validationErrors.map((error) => (
+                    <li key={`${error.permission}-${error.requiredPermission}`}>{error.message}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
           </div>
 
           <p className="text-xs text-muted-foreground">
@@ -763,7 +775,7 @@ function CreateSubAdminDialog({
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={submitting}>
             Cancel
           </Button>
-          <Button onClick={submit} loading={submitting}>
+          <Button onClick={submit} loading={submitting} disabled={validationErrors.length > 0}>
             Create Sub-Admin
           </Button>
         </DialogFooter>

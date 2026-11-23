@@ -1248,7 +1248,7 @@ function SalaryComponentsCard({ uuid }: { uuid: UUID }) {
     qc.invalidateQueries({ queryKey: ["org-monthly-salary-variables", uuid] });
   };
 
-  const addMut = useMutation({
+  const addMut = useMutation<EmployeeSalaryComponent[] | MonthlySalaryVariable, Error, void>({
     mutationFn: () => {
       if (monthlyOnly) {
         if (!selectedMonthlyCatalog || !period) throw new Error("Select a salary component and applicable month.");

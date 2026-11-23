@@ -200,7 +200,6 @@ export const ROUTE_ACCESS: Readonly<Record<string, RouteRule>> = {
     roles: STAFF_ROLES,
     granular: "hr_letters.view",
     always: ["org_admin"],
-    scope: "hr_letters",
   },
   "/org/hr-letters": { roles: STAFF_ROLES, granular: "hr_letters.view", always: ["org_admin"] },
 
@@ -382,23 +381,7 @@ export function canAccessRoute(user: AuthUser | null | undefined, path: string):
       if (matrix && typeof matrix === "object" && !Array.isArray(matrix)) {
         const grants = matrix as Record<string, unknown>;
         if (grants[rule.granular] === true) return true;
-        if (
-          rule.granular === "hr_letters.view" &&
-          [
-            "hr_letters.create_draft",
-            "hr_letters.edit_draft",
-            "hr_letters.issue",
-            "hr_letters.revoke",
-            "hr_letters.manage_templates",
-          ].some((permission) => grants[permission] === true)
-        ) return true;
-        return rule.granular === "payroll.view"
-          && (
-            grants["payroll.generate"] === true
-            || grants["payroll.manage_settings"] === true
-            || grants["payroll.manage_employee_components"] === true
-            || grants["payroll.adjust_salary"] === true
-          );
+        return false;
       }
     }
     // Existing accounts without a granular matrix keep the legacy route decision

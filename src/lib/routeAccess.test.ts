@@ -52,13 +52,13 @@ describe("payroll route action dependencies", () => {
     "payroll.manage_settings",
     "payroll.manage_employee_components",
     "payroll.adjust_salary",
-  ])("%s also grants Payroll View", (action) => {
+  ])("%s does not grant Payroll View", (action) => {
     const grants = {
       granular_permissions: { [action]: true, "payroll.view": false },
     } as unknown as AuthUser["feature_access"];
     const subAdmin = user({ org_role: "sub_admin", feature_access: grants });
-    expect(canAccessRoute(subAdmin, "/org/payroll")).toBe(true);
-    expect(hasGranularPermission(subAdmin, "payroll.view", "payroll")).toBe(true);
+    expect(canAccessRoute(subAdmin, "/org/payroll")).toBe(false);
+    expect(hasGranularPermission(subAdmin, "payroll.view", "payroll")).toBe(false);
   });
 });
 
@@ -69,18 +69,18 @@ describe("HR letter route action dependencies", () => {
     "hr_letters.issue",
     "hr_letters.revoke",
     "hr_letters.manage_templates",
-  ])("%s also grants HR Letters View", (action) => {
+  ])("%s does not grant HR Letters View", (action) => {
     const grants = {
       granular_permissions: { [action]: true, "hr_letters.view": false },
       data_scopes: { hr_letters: "entire_organization" },
     } as unknown as AuthUser["feature_access"];
     const subAdmin = user({ org_role: "sub_admin", feature_access: grants });
-    expect(canAccessRoute(subAdmin, "/org/hr-letters")).toBe(true);
-    expect(canAccessRoute(subAdmin, "/org/letter-templates")).toBe(true);
-    expect(hasGranularPermission(subAdmin, "hr_letters.view", "hr_letters")).toBe(true);
+    expect(canAccessRoute(subAdmin, "/org/hr-letters")).toBe(false);
+    expect(canAccessRoute(subAdmin, "/org/letter-templates")).toBe(false);
+    expect(hasGranularPermission(subAdmin, "hr_letters.view", "hr_letters")).toBe(false);
   });
 
-  it("denies shared templates unless the sub-admin has Entire Organization scope", () => {
+  it("allows shared templates for a sub-admin with HR Letters View regardless of employee scope", () => {
     const subAdmin = user({
       org_role: "sub_admin",
       feature_access: {
@@ -89,7 +89,7 @@ describe("HR letter route action dependencies", () => {
       } as unknown as AuthUser["feature_access"],
     });
     expect(canAccessRoute(subAdmin, "/org/hr-letters")).toBe(true);
-    expect(canAccessRoute(subAdmin, "/org/letter-templates")).toBe(false);
+    expect(canAccessRoute(subAdmin, "/org/letter-templates")).toBe(true);
   });
 });
 
